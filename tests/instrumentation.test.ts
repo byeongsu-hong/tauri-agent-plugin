@@ -53,6 +53,10 @@ describe('WebviewAgentInstrumentation', () => {
         route: '/agents'
       }
     })
+    const screenshot = instrumentation.screenshot()
+    expect(screenshot.mime).toBe('image/svg+xml')
+    expect(screenshot.dataUrl).toMatch(/^data:image\/svg\+xml;base64,/)
+    expect(decodeDataUrl(screenshot.dataUrl ?? '')).toContain('Ducktape')
     expect(instrumentation.record('get')).toEqual({
       recording: true,
       entries: [
@@ -65,3 +69,8 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.dispose()
   })
 })
+
+function decodeDataUrl(dataUrl: string): string {
+  const [, encoded = ''] = dataUrl.split(',', 2)
+  return Buffer.from(encoded, 'base64').toString('utf8')
+}

@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -7,6 +8,7 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -88,9 +90,7 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
         "tree" | "click" | "fill" | "press" | "logs" | "events" | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
-        "shot" => Err(Error::BridgeUnavailable(
-            "agent_screenshot will use native capture after the bridge is wired".into(),
-        )),
+        "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
         method => {
             return error_response(
                 id,
@@ -237,6 +237,61 @@ fn handle_attach(
     }))
 }
 
+fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let result = backend.bridge_call("shot", params)?;
+    let Some(path) = path else {
+        return Ok(result);
+    };
+
+    let data_url = result
+        .get("dataUrl")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::BridgeUnavailable("screenshot bridge returned no dataUrl".into()))?;
+    let mime = result
+        .get("mime")
+        .and_then(Value::as_str)
+        .unwrap_or("application/octet-stream");
+    write_data_url_to_path(data_url, &path)?;
+    Ok(json!({
+        "path": path,
+        "mime": mime
+    }))
+}
+
+fn write_data_url_to_path(data_url: &str, path: &str) -> crate::Result<()> {
+    let bytes = decode_base64_data_url(data_url)?;
+    if let Some(parent) = Path::new(path)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            Error::BridgeUnavailable(format!("failed to create screenshot directory: {error}"))
+        })?;
+    }
+    std::fs::write(path, bytes)
+        .map_err(|error| Error::BridgeUnavailable(format!("failed to write screenshot: {error}")))
+}
+
+fn decode_base64_data_url(data_url: &str) -> crate::Result<Vec<u8>> {
+    let Some((metadata, body)) = data_url.split_once(',') else {
+        return Err(Error::BridgeUnavailable(
+            "invalid screenshot data URL".into(),
+        ));
+    };
+    if !metadata.starts_with("data:") || !metadata.contains(";base64") {
+        return Err(Error::BridgeUnavailable(
+            "screenshot data URL must be base64 encoded".into(),
+        ));
+    }
+    BASE64_STANDARD
+        .decode(body)
+        .map_err(|error| Error::BridgeUnavailable(format!("invalid screenshot data URL: {error}")))
+}
+
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
     serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|_| {
         Error::BridgeUnavailable("invalid JSON-RPC params for inline Rust server method".into())
@@ -302,6 +357,29 @@ mod tests {
                 Some("main") | None => Ok(()),
                 Some(label) => Err(Error::WindowNotFound(label.to_string())),
             }
+        }
+    }
+
+    struct FakeScreenshotBackend {
+        expected_path: String,
+    }
+
+    impl InlineDebuggerBackend for FakeScreenshotBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "shot");
+            assert_eq!(params["path"], self.expected_path);
+            Ok(serde_json::json!({
+                "dataUrl": "data:image/svg+xml;base64,PHN2Zz5zaG90PC9zdmc+",
+                "mime": "image/svg+xml"
+            }))
         }
     }
 
@@ -382,5 +460,40 @@ mod tests {
                 }]
             })
         );
+    }
+
+    #[test]
+    fn inline_server_writes_bridged_screenshot_data_url_to_path() {
+        let path = std::env::temp_dir().join("tauri-agent-bridge-shot.svg");
+        let _ = std::fs::remove_file(&path);
+        let path_string = path.to_string_lossy().into_owned();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "shot",
+            "params": { "path": path_string }
+        })
+        .to_string();
+
+        let response = respond_to_json_rpc_line(
+            &FakeScreenshotBackend {
+                expected_path: path_string.clone(),
+            },
+            &request,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "result": {
+                    "path": path_string,
+                    "mime": "image/svg+xml"
+                }
+            })
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "<svg>shot</svg>");
+        let _ = std::fs::remove_file(path);
     }
 }

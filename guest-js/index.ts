@@ -9,6 +9,7 @@ import {
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
+import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -17,7 +18,9 @@ export {
   fillRef,
   pressKey,
   resolveRef,
+  screenshotDocument,
   snapshotDocument,
+  type ScreenshotOptions,
   type SnapshotOptions,
   type SnapshotResult
 }

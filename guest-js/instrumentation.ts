@@ -8,7 +8,8 @@ import {
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
-import type { AgentEvent, AgentMethod, LogEntry, RecordingEntry } from '../protocol/types'
+import { screenshotDocument, type ScreenshotOptions } from './screenshot'
+import type { AgentEvent, AgentMethod, LogEntry, RecordingEntry, ScreenshotResult } from '../protocol/types'
 
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
 
@@ -124,6 +125,10 @@ export class WebviewAgentInstrumentation {
     }
   }
 
+  screenshot(options: ScreenshotOptions = {}): ScreenshotResult {
+    return screenshotDocument(document, options)
+  }
+
   logs(): LogEntry[] {
     return [...this.capturedLogs]
   }
@@ -199,6 +204,8 @@ export class WebviewAgentInstrumentation {
         })
       case 'press':
         return this.action({ action: 'press', value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '' })
+      case 'shot':
+        return this.screenshot({ path: stringParam(params, 'path') })
       case 'logs':
         return this.logs()
       case 'events':
