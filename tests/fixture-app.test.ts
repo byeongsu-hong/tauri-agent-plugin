@@ -14,17 +14,31 @@ describe('example fixture Tauri app', () => {
     const cargoToml = readFileSync('examples/fixture-app/src-tauri/Cargo.toml', 'utf8')
     expect(cargoToml).toContain('tauri-plugin-agent = { path = "../../.." }')
 
+    const tauriConfig = JSON.parse(
+      readFileSync('examples/fixture-app/src-tauri/tauri.conf.json', 'utf8')
+    )
+    expect(tauriConfig.app.windows.map((window: { label?: string }) => window.label ?? 'main')).toEqual([
+      'main',
+      'secondary'
+    ])
+
     const libRs = readFileSync('examples/fixture-app/src-tauri/src/lib.rs', 'utf8')
     expect(libRs).toContain('.plugin(tauri_plugin_agent::init())')
 
-    const capability = readFileSync(
-      'examples/fixture-app/src-tauri/capabilities/default.json',
-      'utf8'
+    const capability = JSON.parse(
+      readFileSync('examples/fixture-app/src-tauri/capabilities/default.json', 'utf8')
     )
-    expect(capability).toContain('agent:default')
+    expect(capability.windows).toEqual(['main', 'secondary'])
+    expect(capability.permissions).toContain('agent:default')
 
     const appTs = readFileSync('examples/fixture-app/src/main.ts', 'utf8')
     expect(appTs).toContain('new WebviewAgentInstrumentation')
+    expect(appTs).toContain('getCurrentWindow')
+    expect(appTs).toContain('fixtureWindowLabel')
+    expect(appTs).toContain('windowLabel: fixtureWindowLabel')
+    expect(appTs).toContain('windowLabel: () => fixtureWindowLabel')
+    expect(appTs).toContain('agentSnapshot({ window: fixtureWindowLabel, scope: \'main\' })')
+    expect(appTs).toContain('agentState({ window: fixtureWindowLabel })')
     expect(appTs).toContain('agentAction')
     expect(appTs).toContain('agentBlur')
     expect(appTs).toContain('agentCheck')

@@ -12,9 +12,18 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Tauri Agent Fixture",
+        "url": "/?fixtureWindow=main",
         "width": 900,
         "height": 700
+      },
+      {
+        "label": "secondary",
+        "title": "Tauri Agent Secondary",
+        "url": "/?fixtureWindow=secondary",
+        "width": 720,
+        "height": 560
       }
     ],
     "security": {

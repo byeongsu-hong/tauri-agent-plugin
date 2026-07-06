@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime};
 
 use crate::{commands, Error};
 
@@ -45,10 +45,12 @@ impl AgentBridge {
     ) -> crate::Result<serde_json::Value> {
         commands::ensure_window(app, window)?;
         let target = target_window(app, window)?;
+        let target_label = target.label().to_string();
         let id = format!("bridge-{}", self.next_id.fetch_add(1, Ordering::SeqCst));
         let pending = self.insert_pending(id.clone());
 
-        target.emit(
+        app.emit_to(
+            EventTarget::window(target_label),
             BRIDGE_REQUEST_EVENT,
             AgentBridgeRequest {
                 id: id.clone(),
@@ -111,11 +113,11 @@ fn target_window<R: Runtime>(
     label: Option<&str>,
 ) -> crate::Result<tauri::WebviewWindow<R>> {
     let mut windows = app.webview_windows().into_iter().collect::<Vec<_>>();
-    windows.sort_by(|a, b| a.0.cmp(&b.0));
+    windows.sort_by(|a, b| a.1.label().cmp(b.1.label()));
     if let Some(label) = label {
         return windows
             .into_iter()
-            .find(|(window_label, _)| window_label == label)
+            .find(|(_, window)| window.label() == label)
             .map(|(_, window)| window)
             .ok_or_else(|| Error::WindowNotFound(label.to_string()));
     }

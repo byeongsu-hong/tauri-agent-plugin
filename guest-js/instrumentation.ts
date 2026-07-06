@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   blurRef,
   checkRef,
@@ -33,6 +34,7 @@ import type {
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
 
 export interface InstrumentationOptions {
+  windowLabel?: string
   state?: Record<string, () => unknown>
 }
 
@@ -270,15 +272,29 @@ export class WebviewAgentInstrumentation {
       return
     }
     this.bridgeInstalled = true
-    void listen<AgentBridgeRequest>(BRIDGE_REQUEST_EVENT, (event) => {
-      void this.handleBridgeRequest(event.payload)
-    })
-      .then((unlisten) => {
-        this.bridgeUnlisten = unlisten
-      })
-      .catch(() => {
-        this.bridgeInstalled = false
-      })
+    try {
+      const bridgeListener = this.options.windowLabel
+        ? listen<AgentBridgeRequest>(
+            BRIDGE_REQUEST_EVENT,
+            (event) => {
+              void this.handleBridgeRequest(event.payload)
+            },
+            { target: { kind: 'Window', label: this.options.windowLabel } }
+          )
+        : getCurrentWindow().listen<AgentBridgeRequest>(BRIDGE_REQUEST_EVENT, (event) => {
+            void this.handleBridgeRequest(event.payload)
+          })
+
+      void bridgeListener
+        .then((unlisten) => {
+          this.bridgeUnlisten = unlisten
+        })
+        .catch(() => {
+          this.bridgeInstalled = false
+        })
+    } catch {
+      this.bridgeInstalled = false
+    }
   }
 
   private async handleBridgeRequest(request: AgentBridgeRequest): Promise<void> {
