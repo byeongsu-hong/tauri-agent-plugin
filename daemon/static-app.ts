@@ -6,12 +6,13 @@ import { JSDOM } from 'jsdom'
 import {
   clickRef,
   fillRef,
+  inspectRef,
   pressKey,
   snapshotDocument,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
-import type { AgentEvent, AgentWindow, LogEntry, ScreenshotResult } from '../protocol/types'
+import type { AgentEvent, AgentWindow, InspectResult, LogEntry, ScreenshotResult } from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
   html: string
@@ -69,6 +70,11 @@ export class StaticHtmlAppAdapter {
     fillRef(ref, text)
     this.pushEvent('fill', { ref, text })
     return { ok: true }
+  }
+
+  async inspect(ref: string): Promise<InspectResult> {
+    this.bindGlobals()
+    return inspectRef(ref)
   }
 
   async press(key: string): Promise<{ ok: true }> {

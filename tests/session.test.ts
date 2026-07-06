@@ -27,6 +27,19 @@ describe('DebuggerSession', () => {
     await expect(session.execute('tree', { window: 'main' })).resolves.toEqual({
       text: ['main "Ducktape"', '@1 button "Forge"', '@2 textbox "Agent name" empty'].join('\n')
     })
+    await expect(session.execute('inspect', { ref: '@2' })).resolves.toEqual({
+      ref: '@2',
+      role: 'textbox',
+      name: 'Agent name',
+      tagName: 'input',
+      text: '',
+      value: '',
+      attributes: {
+        'aria-label': 'Agent name',
+        value: ''
+      },
+      states: ['empty']
+    })
 
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })

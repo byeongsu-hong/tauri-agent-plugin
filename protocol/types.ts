@@ -6,6 +6,7 @@ export type AgentMethod =
   | 'tree'
   | 'click'
   | 'fill'
+  | 'inspect'
   | 'press'
   | 'shot'
   | 'logs'
@@ -61,6 +62,8 @@ export interface FillParams extends RefActionParams {
   text: string
 }
 
+export interface InspectParams extends RefActionParams {}
+
 export interface PressParams extends WindowTarget {
   key: string
 }
@@ -99,6 +102,17 @@ export interface AgentWindow {
 
 export interface TreeResult {
   text: string
+}
+
+export interface InspectResult {
+  ref: string
+  role: string
+  name: string
+  tagName: string
+  text: string
+  value?: string
+  attributes: Record<string, string>
+  states: string[]
 }
 
 export interface LogEntry {

@@ -17,6 +17,7 @@ describe('agent debug protocol', () => {
       'tree',
       'click',
       'fill',
+      'inspect',
       'press',
       'shot',
       'logs',
@@ -30,12 +31,12 @@ describe('agent debug protocol', () => {
   })
 
   it('creates request, success, and error messages with stable JSON-RPC 2.0 shape', () => {
-    const request = createRequest(7, 'tree', { window: 'main' })
+    const request = createRequest(7, 'inspect', { window: 'main', ref: '@1' })
     expect(request).toEqual({
       jsonrpc: '2.0',
       id: 7,
-      method: 'tree',
-      params: { window: 'main' }
+      method: 'inspect',
+      params: { window: 'main', ref: '@1' }
     })
 
     expect(createSuccessResponse(7, { text: '@1 button "Forge"' })).toEqual({

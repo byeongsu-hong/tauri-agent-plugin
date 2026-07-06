@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-inspect"
+description = "Enables the agent_inspect command without any pre-configured scope."
+commands.allow = ["agent_inspect"]
+
+[[permission]]
+identifier = "deny-agent-inspect"
+description = "Denies the agent_inspect command without any pre-configured scope."
+commands.deny = ["agent_inspect"]

@@ -67,6 +67,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_tree',
       'tauri_click',
       'tauri_fill',
+      'tauri_inspect',
       'tauri_press',
       'tauri_shot',
       'tauri_logs',
@@ -175,6 +176,35 @@ describe('tauri-agent MCP server', () => {
         },
         isError: false
       }
+    })
+
+    const inspected = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 7,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_inspect',
+              arguments: { html, ref: '@1' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(inspected.result.structuredContent).toEqual({
+      ref: '@1',
+      role: 'textbox',
+      name: 'Agent name',
+      tagName: 'input',
+      text: '',
+      value: '',
+      attributes: {
+        'aria-label': 'Agent name'
+      },
+      states: ['empty']
     })
   })
 

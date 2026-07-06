@@ -6,14 +6,14 @@ Headless agent debugger for Tauri apps.
 
 ## Architecture
 
-- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
+- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `inspect`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
 - **MCP Server**: stdio Model Context Protocol wrapper exposing debugger tools for agents.
-- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` actions, console log capture, event capture, state probes, text waiters, and action recording.
+- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` inspection/actions, console log capture, event capture, state probes, text waiters, and action recording.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
+The live bridge supports `windows`, `tree`, `click`, `fill`, `inspect`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -34,6 +34,7 @@ Prototype against static HTML:
 bun run build
 bun bin/tauri-agent.ts windows --from-html ./screen.html
 bun bin/tauri-agent.ts tree --from-html ./screen.html
+bun bin/tauri-agent.ts inspect @4 --from-html ./screen.html
 bun bin/tauri-agent.ts fill @4 worker-a --from-html ./screen.html
 bun bin/tauri-agent.ts wait "Registered" --from-html ./screen.html
 bun bin/tauri-agent.ts state --from-html ./screen.html
@@ -58,6 +59,7 @@ Control a live app through endpoint discovery:
 ```bash
 tauri-agent windows --app dev.byeongsu.tauri-agent.fixture
 tauri-agent tree --app dev.byeongsu.tauri-agent.fixture
+tauri-agent inspect @4 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent fill @4 worker-a --app dev.byeongsu.tauri-agent.fixture
 tauri-agent click @5 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent wait "Registered worker-a" --app dev.byeongsu.tauri-agent.fixture
@@ -72,6 +74,7 @@ tauri-agent windows
 tauri-agent tree --window main
 tauri-agent click @3
 tauri-agent fill @4 worker-a
+tauri-agent inspect @4
 tauri-agent press Enter
 tauri-agent shot /tmp/app.svg
 tauri-agent logs --follow
@@ -96,6 +99,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_tree`
 - `tauri_click`
 - `tauri_fill`
+- `tauri_inspect`
 - `tauri_press`
 - `tauri_shot`
 - `tauri_logs`
@@ -127,6 +131,7 @@ import {
   WebviewAgentInstrumentation,
   agentEvents,
   agentLogs,
+  agentInspect,
   agentRecord,
   agentSnapshot,
   agentState,
@@ -162,6 +167,7 @@ Direct Tauri command helpers use the same bridge:
 
 ```ts
 await agentSnapshot({ scope: 'main' })
+await agentInspect({ ref: '@4' })
 await agentLogs()
 await agentEvents()
 await agentWait({ text: 'Ready', timeoutMs: 1000 })
@@ -202,6 +208,7 @@ Rust command names:
 - `agent_attach`
 - `agent_snapshot`
 - `agent_action`
+- `agent_inspect`
 - `agent_screenshot`
 - `agent_logs`
 - `agent_events`

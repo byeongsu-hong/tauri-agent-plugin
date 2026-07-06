@@ -32,6 +32,18 @@ describe('tauri-agent CLI', () => {
     expect(runCli(['tree', '--from-html', path])).toBe(
       'main "Ducktape"\n@1 button "Forge"\n@2 textbox "Agent name" empty'
     )
+    expect(JSON.parse(runCli(['inspect', '@2', '--from-html', path]))).toEqual({
+      ref: '@2',
+      role: 'textbox',
+      name: 'Agent name',
+      tagName: 'input',
+      text: '',
+      value: '',
+      attributes: {
+        'aria-label': 'Agent name'
+      },
+      states: ['empty']
+    })
     expect(JSON.parse(runCli(['fill', '@2', 'worker-a', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['state', '--from-html', path]))).toEqual({
       url: 'tauri-agent://static',

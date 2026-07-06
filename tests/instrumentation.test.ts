@@ -32,6 +32,18 @@ describe('WebviewAgentInstrumentation', () => {
     })
 
     expect(tree.text).toBe('main "Ducktape"\n@1 button "Forge"\n@2 textbox "Agent name" empty')
+    expect(instrumentation.inspect('@2')).toEqual({
+      ref: '@2',
+      role: 'textbox',
+      name: 'Agent name',
+      tagName: 'input',
+      text: '',
+      value: 'worker-a',
+      attributes: {
+        'aria-label': 'Agent name'
+      },
+      states: []
+    })
     expect(instrumentation.logs()).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
     ])

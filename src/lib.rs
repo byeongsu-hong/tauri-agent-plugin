@@ -102,6 +102,7 @@ impl Builder {
                 commands::agent_attach,
                 commands::agent_snapshot,
                 commands::agent_action,
+                commands::agent_inspect,
                 commands::agent_screenshot,
                 commands::agent_logs,
                 commands::agent_events,

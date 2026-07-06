@@ -108,6 +108,9 @@ async function executeTool(
     case 'tauri_fill':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('fill', pick(args, ['window', 'ref', 'text']))
+    case 'tauri_inspect':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('inspect', pick(args, ['window', 'ref']))
     case 'tauri_press':
       return client.call('press', { ...windowParams(args), key: stringField(args, 'key') })
     case 'tauri_shot':
@@ -199,6 +202,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
+  tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'key'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow'])),
