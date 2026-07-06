@@ -9,10 +9,10 @@ Headless agent debugger for Tauri apps.
 - **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
 - **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` actions, console log capture, event capture, state probes, text waiters, and action recording.
-- **Tauri Plugin**: Rust-side command names, permissions, window discovery, and protocol-shaped bridge placeholders.
+- **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The current live Tauri bridge still needs to connect Rust webview evaluation and native screenshot/input capture to the protocol. Static HTML mode exists so the protocol, CLI, and instrumentation can be tuned deterministically while that app bridge is built.
+The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. Native screenshot capture is still a separate platform-specific fallback path; `shot` currently returns an explicit unavailable error in the inline server.
 
 ## Bun + TypeScript
 
@@ -48,9 +48,20 @@ bun bin/tauri-agent.ts serve --from-html ./screen.html --port 45127
 Endpoint policy:
 
 - Do not use one global `/tmp/tauri-mcp.sock`.
-- Prefer an app-specific endpoint under the runtime directory, for example `.../tauri-agent/<app-id>/<pid>.sock`.
-- Use localhost TCP as the portable fallback and for deterministic tests.
+- Publish an app-specific registry under the runtime directory, for example `.../tauri-agent/<app-id>/endpoint.json`.
+- Use localhost TCP as the portable fallback and current inline-server transport.
 - CLI and MCP wrappers should discover the app endpoint by app id instead of assuming a singleton socket.
+
+Control a live app through endpoint discovery:
+
+```bash
+tauri-agent windows --app dev.byeongsu.tauri-agent.fixture
+tauri-agent tree --app dev.byeongsu.tauri-agent.fixture
+tauri-agent fill @4 worker-a --app dev.byeongsu.tauri-agent.fixture
+tauri-agent click @5 --app dev.byeongsu.tauri-agent.fixture
+tauri-agent wait "Registered worker-a" --app dev.byeongsu.tauri-agent.fixture
+tauri-agent state --app dev.byeongsu.tauri-agent.fixture
+```
 
 Core command surface:
 
@@ -81,7 +92,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 bun run tauri:dev
 ```
 
-Use it as the first real target for live bridge work. Its UI intentionally exposes agent-testable semantics: `Status` and `Agents` navitems, `Forge`, `Agent name`, `Register`, `Roster`, and `Inspect backing`.
+Use it as the first real target for live bridge work. Its plugin config enables the inline server with an ephemeral loopback port and endpoint publication. Its UI intentionally exposes agent-testable semantics: `Status` and `Agents` navitems, `Forge`, `Agent name`, `Register`, `Roster`, and `Inspect backing`.
 
 ## Package Exports
 
@@ -120,8 +131,26 @@ tauri::Builder::default()
   .run(tauri::generate_context!())?;
 ```
 
+Enable the inline server in `tauri.conf.json`:
+
+```json
+{
+  "plugins": {
+    "agent": {
+      "inlineServer": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 0,
+        "publishEndpoint": true
+      }
+    }
+  }
+}
+```
+
 Rust command names:
 
+- `agent_bridge_response`
 - `agent_attach`
 - `agent_snapshot`
 - `agent_action`
