@@ -8,6 +8,7 @@ Headless agent debugger for Tauri apps.
 
 - **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
+- **MCP Server**: stdio Model Context Protocol wrapper exposing debugger tools for agents.
 - **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` actions, console log capture, event capture, state probes, text waiters, and action recording.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
@@ -80,6 +81,31 @@ tauri-agent state
 tauri-agent record --action start
 ```
 
+## MCP
+
+Run the MCP server over stdio:
+
+```bash
+tauri-agent-mcp
+```
+
+It exposes named tools mirroring the debugger protocol:
+
+- `tauri_attach`
+- `tauri_windows`
+- `tauri_tree`
+- `tauri_click`
+- `tauri_fill`
+- `tauri_press`
+- `tauri_shot`
+- `tauri_logs`
+- `tauri_events`
+- `tauri_wait`
+- `tauri_state`
+- `tauri_record`
+
+Each tool accepts the same connection inputs as the CLI: `app` for endpoint discovery, `port`/`host` for a known debugger daemon, or `html`/`fromHtml` for deterministic static prototyping. MCP never assumes a singleton `/tmp/tauri-mcp.sock`; live calls should use the app-scoped endpoint registry.
+
 ## Fixture App
 
 `examples/fixture-app` is a minimal Bun + TypeScript + Tauri v2 app wired to this plugin by local path.
@@ -108,6 +134,7 @@ import {
   snapshotDocument
 } from '@byeongsu-hong/tauri-plugin-agent'
 import { DebuggerClient, SocketTransport } from '@byeongsu-hong/tauri-plugin-agent/daemon'
+import { createMcpRequestHandler } from '@byeongsu-hong/tauri-plugin-agent/mcp'
 import { AGENT_METHODS } from '@byeongsu-hong/tauri-plugin-agent/protocol'
 ```
 

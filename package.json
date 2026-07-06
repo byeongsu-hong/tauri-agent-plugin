@@ -27,10 +27,16 @@
       "types": "./dist-js/protocol.d.ts",
       "import": "./dist-js/protocol.js",
       "require": "./dist-js/protocol.cjs"
+    },
+    "./mcp": {
+      "types": "./dist-js/mcp.d.ts",
+      "import": "./dist-js/mcp.js",
+      "require": "./dist-js/mcp.cjs"
     }
   },
   "bin": {
-    "tauri-agent": "./dist-cli/tauri-agent.js"
+    "tauri-agent": "./dist-cli/tauri-agent.js",
+    "tauri-agent-mcp": "./dist-cli/tauri-agent-mcp.js"
   },
   "files": [
     "dist-js",
