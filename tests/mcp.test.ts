@@ -411,6 +411,42 @@ describe('tauri-agent MCP server', () => {
 
     expect(dragged.result.structuredContent).toEqual({ ok: true })
 
+    const logs = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 21,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_logs',
+              arguments: { html, clear: true }
+            }
+          })
+        )
+      )
+    )
+
+    expect(logs.result.structuredContent).toEqual({ result: [] })
+
+    const events = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 22,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_events',
+              arguments: { html, clear: true }
+            }
+          })
+        )
+      )
+    )
+
+    expect(events.result.structuredContent).toEqual({ result: [] })
+
     const network = JSON.parse(
       await requiredResponse(
         handler(

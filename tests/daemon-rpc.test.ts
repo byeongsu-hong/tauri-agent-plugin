@@ -55,6 +55,14 @@ describe('debugger JSON-RPC transport', () => {
 
     await expect(writeClient.call('click', { ref: '@1' })).rejects.toThrow('read ECONNRESET')
     expect(writeTransport.messages.map((message) => message.method)).toEqual(['click'])
+
+    for (const method of ['logs', 'events'] as const) {
+      const clearTransport = new FlakyResetTransport([])
+      const clearClient = new DebuggerClient(clearTransport)
+
+      await expect(clearClient.call(method, { clear: true })).rejects.toThrow('read ECONNRESET')
+      expect(clearTransport.messages.map((message) => message.method)).toEqual([method])
+    }
   })
 })
 

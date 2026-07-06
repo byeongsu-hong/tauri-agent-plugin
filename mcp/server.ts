@@ -141,9 +141,9 @@ async function executeTool(
     case 'tauri_shot':
       return client.call('shot', pick(args, ['window', 'path']))
     case 'tauri_logs':
-      return client.call('logs', pick(args, ['window', 'follow']))
+      return client.call('logs', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_events':
-      return client.call('events', pick(args, ['window', 'follow']))
+      return client.call('events', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_network':
       return client.call('network', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_storage':
@@ -257,8 +257,8 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'key'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
-  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow'])),
-  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow'])),
+  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear'])),
+  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),

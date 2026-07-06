@@ -119,10 +119,12 @@ export interface ShotParams extends WindowTarget {
 
 export interface LogsParams extends WindowTarget {
   follow?: boolean
+  clear?: boolean
 }
 
 export interface EventsParams extends WindowTarget {
   follow?: boolean
+  clear?: boolean
 }
 
 export interface NetworkParams extends WindowTarget {

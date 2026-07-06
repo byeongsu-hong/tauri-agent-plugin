@@ -59,9 +59,9 @@ describe('plugin command helpers', () => {
     await agentAction({ window: 'main', action: 'click', ref: '@1' })
     await agentAction({ window: 'main', action: 'press', value: 'Enter' })
     await agentScreenshot({ window: 'main', path: '/tmp/app.svg' })
-    await agentLogs({ window: 'main' })
+    await agentLogs({ window: 'main', clear: true })
     await agentNetwork({ window: 'main', clear: true })
-    await agentEvents({ window: 'main' })
+    await agentEvents({ window: 'main', clear: true })
     await agentStorage({ window: 'main', action: 'set', key: 'agent.token', value: 'ready' })
     await agentLocation({ window: 'main', action: 'push', url: '/agents' })
     await agentWait({ window: 'main', text: 'Ready', timeoutMs: 250 })
@@ -85,9 +85,9 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'click', ref: '@1' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter' } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'main', path: '/tmp/app.svg' } }],
-      ['plugin:agent|agent_logs', { request: { window: 'main' } }],
+      ['plugin:agent|agent_logs', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_network', { request: { window: 'main', clear: true } }],
-      ['plugin:agent|agent_events', { request: { window: 'main' } }],
+      ['plugin:agent|agent_events', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_storage', { request: { window: 'main', action: 'set', key: 'agent.token', value: 'ready' } }],
       ['plugin:agent|agent_location', { request: { window: 'main', action: 'push', url: '/agents' } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', text: 'Ready', timeoutMs: 250 } }],
