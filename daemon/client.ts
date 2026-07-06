@@ -48,6 +48,7 @@ function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {
     case 'find':
     case 'inspect':
     case 'state':
+    case 'wait':
       return true
     case 'logs':
     case 'events':
