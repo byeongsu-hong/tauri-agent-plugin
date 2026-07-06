@@ -7,6 +7,7 @@ import {
   checkRef,
   clickRef,
   fillRef,
+  hoverRef,
   inspectRef,
   pressKey,
   selectRef,
@@ -65,6 +66,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     clickRef(ref)
     this.pushEvent('click', { ref })
+    return { ok: true }
+  }
+
+  async hover(ref: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    hoverRef(ref)
+    this.pushEvent('hover', { ref })
     return { ok: true }
   }
 
@@ -194,6 +202,7 @@ export class StaticHtmlAppAdapter {
     globalThis.HTMLSelectElement = this.dom.window.HTMLSelectElement
     globalThis.HTMLTextAreaElement = this.dom.window.HTMLTextAreaElement
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent
+    globalThis.MouseEvent = this.dom.window.MouseEvent
     globalThis.Node = this.dom.window.Node
   }
 }

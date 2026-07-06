@@ -109,6 +109,13 @@ export function clickRef(ref: string): void {
   element.click()
 }
 
+export function hoverRef(ref: string): void {
+  const element = resolveRef(ref)
+  for (const eventName of ['mouseover', 'mouseenter', 'mousemove']) {
+    element.dispatchEvent(new MouseEvent(eventName, { bubbles: eventName !== 'mouseenter', cancelable: true }))
+  }
+}
+
 export function checkRef(ref: string, checked = true): void {
   const normalized = normalizeRef(ref)
   const element = resolveRef(normalized)

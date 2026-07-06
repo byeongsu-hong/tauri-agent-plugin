@@ -5,7 +5,7 @@ use tauri::{AppHandle, Manager, Runtime, State};
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentCheckRequest,
-    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentInspectRequest,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentHoverRequest, AgentInspectRequest,
     AgentInspectResponse, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
     AgentScreenshotRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentWaitRequest, AgentWaitResponse, WindowInfo,
@@ -112,6 +112,16 @@ pub async fn agent_check<R: Runtime>(
     request: AgentCheckRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "check", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_hover<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentHoverRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "hover", &request)?;
     Ok(())
 }
 

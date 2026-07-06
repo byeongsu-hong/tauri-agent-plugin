@@ -367,6 +367,18 @@
           "markdownDescription": "Denies the agent_events command without any pre-configured scope."
         },
         {
+          "description": "Enables the agent_hover command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-hover",
+          "markdownDescription": "Enables the agent_hover command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_hover command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-hover",
+          "markdownDescription": "Denies the agent_hover command without any pre-configured scope."
+        },
+        {
           "description": "Enables the agent_inspect command without any pre-configured scope.",
           "type": "string",
           "const": "allow-agent-inspect",
@@ -475,10 +487,10 @@
           "markdownDescription": "Denies the agent_windows command without any pre-configured scope."
         },
         {
-          "description": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, select controls, checked controls, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-inspect`\n- `allow-agent-eval`\n- `allow-agent-select`\n- `allow-agent-check`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`",
+          "description": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, hover events, select controls, checked controls, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-inspect`\n- `allow-agent-eval`\n- `allow-agent-select`\n- `allow-agent-check`\n- `allow-agent-hover`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, select controls, checked controls, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-inspect`\n- `allow-agent-eval`\n- `allow-agent-select`\n- `allow-agent-check`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`"
+          "markdownDescription": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, hover events, select controls, checked controls, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-inspect`\n- `allow-agent-eval`\n- `allow-agent-select`\n- `allow-agent-check`\n- `allow-agent-hover`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`"
         }
       ]
     }

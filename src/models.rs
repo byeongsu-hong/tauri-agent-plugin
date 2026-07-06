@@ -132,6 +132,14 @@ pub struct AgentCheckRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentHoverRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -318,6 +326,15 @@ mod tests {
         assert_eq!(
             serde_json::to_value(check).unwrap(),
             serde_json::json!({"window": "main", "ref": "@6", "checked": true})
+        );
+
+        let hover = AgentHoverRequest {
+            window: Some("main".into()),
+            ref_id: "@1".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(hover).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@1"})
         );
 
         let record = AgentRecordRequest {
