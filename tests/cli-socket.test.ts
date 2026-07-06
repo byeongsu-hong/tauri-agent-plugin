@@ -186,6 +186,37 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
   })
 
+  it('streams changed semantic trees in interactive mode', async () => {
+    const first = { text: 'main "Ducktape"\n@1 status "Loading"' }
+    const second = { text: 'main "Ducktape"\n@1 status "Ready"' }
+    const { port, requests } = await startCapturingRpcServer({
+      tree: (callIndex: number) => (callIndex === 0 ? first : second)
+    })
+
+    const output = await runCliAsync([
+      'tree',
+      '--port',
+      String(port),
+      '--window',
+      'secondary',
+      '--scope',
+      'main',
+      '--interactive',
+      '--poll-ms',
+      '10',
+      '--timeout-ms',
+      '35'
+    ])
+
+    expect(output.split('\n').map((line) => JSON.parse(line))).toEqual([first, second])
+    const treeRequests = requests.filter((request) => request.method === 'tree')
+    expect(treeRequests.length).toBeGreaterThanOrEqual(2)
+    expect(treeRequests.every((request) => JSON.stringify(request.params) === JSON.stringify({
+      window: 'secondary',
+      scope: 'main'
+    }))).toBe(true)
+  })
+
   it.each([
     {
       command: 'logs',
