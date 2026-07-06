@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, JavaScript eval, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage access, location control, and window discovery.
+Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, JavaScript eval, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage and cookie access, location control, and window discovery.
 
 #### This default permission set includes the following:
 
@@ -23,6 +23,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-events`
 - `allow-agent-network`
 - `allow-agent-storage`
+- `allow-agent-cookies`
 - `allow-agent-location`
 - `allow-agent-windows`
 - `allow-agent-wait`
@@ -164,6 +165,32 @@ Enables the agent_check command without any pre-configured scope.
 <td>
 
 Denies the agent_check command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-cookies`
+
+</td>
+<td>
+
+Enables the agent_cookies command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-cookies`
+
+</td>
+<td>
+
+Denies the agent_cookies command without any pre-configured scope.
 
 </td>
 </tr>

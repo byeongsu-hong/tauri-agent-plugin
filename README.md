@@ -6,14 +6,14 @@ Headless agent debugger for Tauri apps.
 
 ## Architecture
 
-- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `location`, `wait`, `state`, and `record`.
+- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `cookies`, `location`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
 - **MCP Server**: stdio Model Context Protocol wrapper exposing debugger tools for agents.
-- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` finding/inspection/actions, hover, focus, blur, scroll, and drag events, select and checked control changes, JavaScript evaluation, console log capture, event capture, fetch network metadata capture, local/session storage access, SPA location control, state probes, text and semantic waiters, and action recording.
+- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` finding/inspection/actions, hover, focus, blur, scroll, and drag events, select and checked control changes, JavaScript evaluation, console log capture, event capture, fetch network metadata capture, local/session storage access, webview-visible cookie access, SPA location control, state probes, text and semantic waiters, and action recording.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `location`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `find` refreshes the semantic snapshot and returns inspect-shaped matches by role, accessible-name substring, visible-text substring, and optional limit so agents can obtain refs without parsing tree text. `wait` can poll for plain text or for the first semantic match by scope, role, accessible-name substring, and visible-text substring; semantic waits return the matched inspect-shaped entry under `match`. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `network` captures non-Tauri-IPC fetch metadata only: method, URL, status, timing, error text, and request/response byte sizes when measurable without consuming the returned response. `storage` reads or mutates `localStorage`/`sessionStorage` with `get`, `set`, `remove`, and `clear`, returning the resulting key/value entries. `location` returns `{ href, origin, pathname, search, hash }` and can `push` or `replace` SPA routes without reloading the webview. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
+The live bridge supports `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `cookies`, `location`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `find` refreshes the semantic snapshot and returns inspect-shaped matches by role, accessible-name substring, visible-text substring, and optional limit so agents can obtain refs without parsing tree text. `wait` can poll for plain text or for the first semantic match by scope, role, accessible-name substring, and visible-text substring; semantic waits return the matched inspect-shaped entry under `match`. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `network` captures non-Tauri-IPC fetch metadata only: method, URL, status, timing, error text, and request/response byte sizes when measurable without consuming the returned response. `storage` reads or mutates `localStorage`/`sessionStorage` with `get`, `set`, `remove`, and `clear`, returning the resulting key/value entries. `cookies` reads or mutates webview-visible `document.cookie` entries with `get`, `set`, `remove`, and `clear`, returning parsed `{ name, value }` entries; native and HttpOnly cookie-store access is outside this webview bridge path. `location` returns `{ href, origin, pathname, search, hash }` and can `push` or `replace` SPA routes without reloading the webview. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -52,6 +52,7 @@ bun bin/tauri-agent.ts network --from-html ./screen.html
 bun bin/tauri-agent.ts logs --clear --from-html ./screen.html
 bun bin/tauri-agent.ts events --clear --from-html ./screen.html
 bun bin/tauri-agent.ts storage --action set --key agent.token --value ready --from-html ./screen.html
+bun bin/tauri-agent.ts cookies --action set --name agent.cookie --value ready --from-html ./screen.html
 bun bin/tauri-agent.ts location --action push --url /agents --from-html ./screen.html
 bun bin/tauri-agent.ts record --from-html ./screen.html
 ```
@@ -93,6 +94,7 @@ tauri-agent network --app dev.byeongsu.tauri-agent.fixture
 tauri-agent logs --clear --app dev.byeongsu.tauri-agent.fixture
 tauri-agent events --clear --app dev.byeongsu.tauri-agent.fixture
 tauri-agent storage --action set --key fixture:lastSelfTest --value main --app dev.byeongsu.tauri-agent.fixture
+tauri-agent cookies --action set --name fixture:lastSelfTest --value main --app dev.byeongsu.tauri-agent.fixture
 tauri-agent location --action push --url '/agents?bridge=1' --app dev.byeongsu.tauri-agent.fixture
 ```
 
@@ -122,6 +124,7 @@ tauri-agent events --follow
 tauri-agent events --clear
 tauri-agent network --follow
 tauri-agent storage --area session --action get
+tauri-agent cookies --action get
 tauri-agent location --action push --url /agents
 tauri-agent wait "Registered"
 tauri-agent wait --role button --name Forge
@@ -163,6 +166,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_events`
 - `tauri_network`
 - `tauri_storage`
+- `tauri_cookies`
 - `tauri_location`
 - `tauri_wait`
 - `tauri_state`
@@ -191,6 +195,7 @@ import {
   WebviewAgentInstrumentation,
   agentBlur,
   agentCheck,
+  agentCookies,
   agentDrag,
   agentEvents,
   agentEval,
@@ -244,6 +249,7 @@ agent.logs()
 agent.events()
 agent.network({ clear: true })
 agent.storage({ action: 'set', key: 'agent.token', value: 'ready' })
+agent.cookies({ action: 'set', name: 'agent.cookie', value: 'ready' })
 agent.location({ action: 'push', url: '/agents' })
 agent.state()
 ```
@@ -266,6 +272,7 @@ await agentLogs({ clear: true })
 await agentEvents({ clear: true })
 await agentNetwork({ clear: true })
 await agentStorage({ action: 'set', key: 'agent.token', value: 'ready' })
+await agentCookies({ action: 'set', name: 'agent.cookie', value: 'ready' })
 await agentLocation({ action: 'push', url: '/agents' })
 await agentWait({ text: 'Ready', timeoutMs: 1000 })
 await agentWait({ role: 'button', name: 'Forge', timeoutMs: 1000 })
@@ -321,6 +328,7 @@ Rust command names:
 - `agent_events`
 - `agent_network`
 - `agent_storage`
+- `agent_cookies`
 - `agent_location`
 - `agent_windows`
 - `agent_wait`

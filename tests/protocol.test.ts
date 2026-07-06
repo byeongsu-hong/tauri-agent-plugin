@@ -33,6 +33,7 @@ describe('agent debug protocol', () => {
       'events',
       'network',
       'storage',
+      'cookies',
       'location',
       'wait',
       'state',

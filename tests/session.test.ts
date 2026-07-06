@@ -156,6 +156,34 @@ describe('DebuggerSession', () => {
       area: 'local',
       entries: []
     })
+    await expect(
+      session.execute('cookies', { action: 'set', name: 'agent.cookie', value: 'ready' })
+    ).resolves.toEqual({
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
+    })
+    await expect(session.execute('cookies', { name: 'agent.cookie' })).resolves.toEqual({
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
+    })
+    await expect(session.execute('eval', { code: 'document.cookie.includes("agent.cookie=ready")' })).resolves.toEqual({
+      type: 'boolean',
+      value: true,
+      text: 'true'
+    })
+    await expect(
+      session.execute('eval', { code: 'document.cookie = "agent.eval=seen; path=/"; document.cookie' })
+    ).resolves.toEqual({
+      type: 'string',
+      value: expect.stringContaining('agent.eval=seen'),
+      text: expect.stringContaining('agent.eval=seen')
+    })
+    await expect(session.execute('cookies', { name: 'agent.eval' })).resolves.toEqual({
+      entries: [{ name: 'agent.eval', value: 'seen' }]
+    })
+    await expect(session.execute('cookies', { action: 'remove', name: 'agent.cookie' })).resolves.toEqual({ entries: [] })
+    await expect(session.execute('cookies', {})).resolves.toEqual({
+      entries: [{ name: 'agent.eval', value: 'seen' }]
+    })
+    await expect(session.execute('cookies', { action: 'clear' })).resolves.toEqual({ entries: [] })
     await expect(session.execute('location', {})).resolves.toEqual({
       href: 'tauri-agent://static',
       origin: 'null',
@@ -221,5 +249,36 @@ describe('DebuggerSession', () => {
     await expect(session.execute('wait', { text: 'Never appears', timeoutMs: 1 })).rejects.toThrow(
       'wait timed out for text: Never appears'
     )
+  })
+
+  it('removes path-scoped cookies visible on the current route', async () => {
+    const session = new DebuggerSession(
+      new StaticHtmlAppAdapter({
+        html: '<main aria-label="Cookies"></main>',
+        url: 'https://app.test/agents/list'
+      })
+    )
+
+    await session.execute('eval', {
+      code: [
+        'document.cookie = "agent.path=seen; path=/agents"',
+        'document.cookie = "agent.deep=ready; path=/agents/list"',
+        'document.cookie'
+      ].join('; ')
+    })
+
+    await expect(session.execute('cookies', {})).resolves.toEqual({
+      entries: [
+        { name: 'agent.deep', value: 'ready' },
+        { name: 'agent.path', value: 'seen' }
+      ]
+    })
+    await expect(session.execute('cookies', { action: 'remove', name: 'agent.path' })).resolves.toEqual({
+      entries: []
+    })
+    await expect(session.execute('cookies', {})).resolves.toEqual({
+      entries: [{ name: 'agent.deep', value: 'ready' }]
+    })
+    await expect(session.execute('cookies', { action: 'clear' })).resolves.toEqual({ entries: [] })
   })
 })

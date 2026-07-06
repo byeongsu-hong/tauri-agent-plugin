@@ -76,6 +76,12 @@ export class DebuggerSession {
           key: stringParam(params.key),
           value: stringParam(params.value)
         })
+      case 'cookies':
+        return this.app.cookies({
+          action: cookieActionParam(params.action),
+          name: stringParam(params.name),
+          value: stringParam(params.value)
+        })
       case 'location':
         return this.app.location({
           action: locationActionParam(params.action),
@@ -159,6 +165,10 @@ function storageAreaParam(value: unknown): 'local' | 'session' | undefined {
 }
 
 function storageActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
+  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+}
+
+function cookieActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
   return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
 }
 

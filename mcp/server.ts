@@ -148,6 +148,8 @@ async function executeTool(
       return client.call('network', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
+    case 'tauri_cookies':
+      return client.call('cookies', pick(args, ['window', 'action', 'name', 'value']))
     case 'tauri_location':
       return client.call('location', pick(args, ['window', 'action', 'url']))
     case 'tauri_wait':
@@ -261,6 +263,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
+  tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
@@ -303,6 +306,13 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
 function storageSchema(): JsonSchema {
   const inputSchema = schema(['window', 'area', 'key', 'value'])
   inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  return inputSchema
+}
+
+function cookieSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'name', 'value'])
+  inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  inputSchema.properties.name = { type: 'string', description: 'Cookie name.' }
   return inputSchema
 }
 

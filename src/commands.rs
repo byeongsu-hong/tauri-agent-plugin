@@ -5,13 +5,13 @@ use tauri::{AppHandle, Manager, Runtime, State};
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
-    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentLocationRequest, AgentLocationResponse, AgentLogEntry,
-    AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest, AgentRecordRequest,
-    AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
-    AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest, AgentStorageResponse,
-    AgentWaitRequest, AgentWaitResponse, WindowInfo,
+    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFindRequest, AgentFindResponse,
+    AgentFocusRequest, AgentHoverRequest, AgentInspectRequest, AgentInspectResponse,
+    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
+    AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentStorageRequest, AgentStorageResponse, AgentWaitRequest, AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -236,6 +236,22 @@ pub async fn agent_storage<R: Runtime>(
         &app,
         request.window.as_deref(),
         "storage",
+        &request,
+    )?;
+    decode_bridge_result(result)
+}
+
+#[tauri::command]
+pub async fn agent_cookies<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentCookiesRequest,
+) -> Result<AgentCookiesResponse> {
+    let result = request_bridge(
+        &bridge,
+        &app,
+        request.window.as_deref(),
+        "cookies",
         &request,
     )?;
     decode_bridge_result(result)
