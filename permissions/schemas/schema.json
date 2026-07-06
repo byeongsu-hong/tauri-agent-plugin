@@ -307,6 +307,30 @@
           "markdownDescription": "Denies the agent_action command without any pre-configured scope."
         },
         {
+          "description": "Enables the agent_attach command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-attach",
+          "markdownDescription": "Enables the agent_attach command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_attach command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-attach",
+          "markdownDescription": "Denies the agent_attach command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the agent_bridge_response command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-bridge-response",
+          "markdownDescription": "Enables the agent_bridge_response command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_bridge_response command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-bridge-response",
+          "markdownDescription": "Denies the agent_bridge_response command without any pre-configured scope."
+        },
+        {
           "description": "Enables the agent_events command without any pre-configured scope.",
           "type": "string",
           "const": "allow-agent-events",
@@ -317,6 +341,30 @@
           "type": "string",
           "const": "deny-agent-events",
           "markdownDescription": "Denies the agent_events command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the agent_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-logs",
+          "markdownDescription": "Enables the agent_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_logs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-logs",
+          "markdownDescription": "Denies the agent_logs command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the agent_record command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-record",
+          "markdownDescription": "Enables the agent_record command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_record command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-record",
+          "markdownDescription": "Denies the agent_record command without any pre-configured scope."
         },
         {
           "description": "Enables the agent_screenshot command without any pre-configured scope.",
@@ -343,6 +391,30 @@
           "markdownDescription": "Denies the agent_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the agent_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-state",
+          "markdownDescription": "Enables the agent_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-state",
+          "markdownDescription": "Denies the agent_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the agent_wait command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-agent-wait",
+          "markdownDescription": "Enables the agent_wait command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the agent_wait command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-agent-wait",
+          "markdownDescription": "Denies the agent_wait command without any pre-configured scope."
+        },
+        {
           "description": "Enables the agent_windows command without any pre-configured scope.",
           "type": "string",
           "const": "allow-agent-windows",
@@ -355,10 +427,10 @@
           "markdownDescription": "Denies the agent_windows command without any pre-configured scope."
         },
         {
-          "description": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref actions, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-screenshot`\n- `allow-agent-events`\n- `allow-agent-windows`",
+          "description": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref actions, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref actions, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-screenshot`\n- `allow-agent-events`\n- `allow-agent-windows`"
+          "markdownDescription": "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref actions, screenshots, event streams, and window discovery.\n#### This default permission set includes:\n\n- `allow-agent-bridge-response`\n- `allow-agent-attach`\n- `allow-agent-snapshot`\n- `allow-agent-action`\n- `allow-agent-screenshot`\n- `allow-agent-logs`\n- `allow-agent-events`\n- `allow-agent-windows`\n- `allow-agent-wait`\n- `allow-agent-state`\n- `allow-agent-record`"
         }
       ]
     }

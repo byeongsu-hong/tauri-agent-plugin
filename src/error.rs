@@ -5,7 +5,7 @@ pub enum Error {
     #[error("stale ref {0}; run tree again")]
     StaleRef(String),
     #[error("live bridge unavailable: {0}")]
-    BridgeUnavailable(&'static str),
+    BridgeUnavailable(String),
     #[error("window not found: {0}")]
     WindowNotFound(String),
     #[error("{0}")]

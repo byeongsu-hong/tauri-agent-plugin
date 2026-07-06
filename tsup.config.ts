@@ -2,7 +2,11 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig([
   {
-    entry: ['guest-js/index.ts'],
+    entry: {
+      index: 'guest-js/index.ts',
+      daemon: 'daemon/index.ts',
+      protocol: 'protocol/index.ts'
+    },
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,

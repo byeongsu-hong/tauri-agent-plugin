@@ -17,6 +17,16 @@
       "types": "./dist-js/index.d.ts",
       "import": "./dist-js/index.js",
       "require": "./dist-js/index.cjs"
+    },
+    "./daemon": {
+      "types": "./dist-js/daemon.d.ts",
+      "import": "./dist-js/daemon.js",
+      "require": "./dist-js/daemon.cjs"
+    },
+    "./protocol": {
+      "types": "./dist-js/protocol.d.ts",
+      "import": "./dist-js/protocol.js",
+      "require": "./dist-js/protocol.cjs"
     }
   },
   "bin": {

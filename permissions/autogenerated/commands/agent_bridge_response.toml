@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-bridge-response"
+description = "Enables the agent_bridge_response command without any pre-configured scope."
+commands.allow = ["agent_bridge_response"]
+
+[[permission]]
+identifier = "deny-agent-bridge-response"
+description = "Denies the agent_bridge_response command without any pre-configured scope."
+commands.deny = ["agent_bridge_response"]

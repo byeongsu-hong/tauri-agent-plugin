@@ -9,6 +9,7 @@ import {
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
+export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
   clickRef,
