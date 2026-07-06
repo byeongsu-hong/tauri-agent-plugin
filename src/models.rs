@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    /// Enables future release-build socket support. The v0 scaffold does not open a socket.
+    /// Allows the inline debugger server to bind a local socket in release builds.
     #[serde(default)]
     pub allow_release_socket: bool,
     #[serde(default)]
