@@ -45,6 +45,13 @@ Serve the JSON-RPC daemon:
 bun bin/tauri-agent.ts serve --from-html ./screen.html --port 45127
 ```
 
+Endpoint policy:
+
+- Do not use one global `/tmp/tauri-mcp.sock`.
+- Prefer an app-specific endpoint under the runtime directory, for example `.../tauri-agent/<app-id>/<pid>.sock`.
+- Use localhost TCP as the portable fallback and for deterministic tests.
+- CLI and MCP wrappers should discover the app endpoint by app id instead of assuming a singleton socket.
+
 Core command surface:
 
 ```bash
