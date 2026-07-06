@@ -4,6 +4,7 @@ mod commands;
 mod endpoint;
 mod error;
 mod models;
+mod server;
 
 pub use endpoint::{
     endpoint_registry_path, endpoint_runtime_dir, read_endpoint_registry, remove_endpoint_registry,
@@ -14,7 +15,8 @@ pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
     AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordEntry, AgentRecordRequest,
     AgentRecordResponse, AgentScreenshotRequest, AgentSnapshotRequest, AgentStateRequest,
-    AgentWaitRequest, AgentWaitResponse, Config, RecordAction, SnapshotMode, WindowInfo,
+    AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig, RecordAction, SnapshotMode,
+    WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -22,11 +24,16 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Clone, Debug)]
 pub struct Agent {
     config: Config,
+    endpoint: Option<AgentEndpointDescriptor>,
 }
 
 impl Agent {
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub fn endpoint(&self) -> Option<&AgentEndpointDescriptor> {
+        self.endpoint.as_ref()
     }
 }
 
@@ -51,7 +58,19 @@ impl Builder {
         tauri::plugin::Builder::<R, Option<Config>>::new("agent")
             .setup(|app, api| {
                 let config = api.config().clone().unwrap_or_default();
-                app.manage(Agent { config });
+                let endpoint = if config.inline_server.enabled {
+                    let server = server::start_inline_debugger_server(
+                        app.clone(),
+                        app.config().identifier.clone(),
+                        &config.inline_server,
+                    )?;
+                    let descriptor = server.descriptor().clone();
+                    app.manage(server);
+                    Some(descriptor)
+                } else {
+                    None
+                };
+                app.manage(Agent { config, endpoint });
                 Ok(())
             })
             .invoke_handler(tauri::generate_handler![

@@ -6,6 +6,40 @@ pub struct Config {
     /// Enables future release-build socket support. The v0 scaffold does not open a socket.
     #[serde(default)]
     pub allow_release_socket: bool,
+    #[serde(default)]
+    pub inline_server: InlineServerConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineServerConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_inline_server_host")]
+    pub host: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(default = "default_publish_endpoint")]
+    pub publish_endpoint: bool,
+}
+
+impl Default for InlineServerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: default_inline_server_host(),
+            port: 0,
+            publish_endpoint: default_publish_endpoint(),
+        }
+    }
+}
+
+fn default_inline_server_host() -> String {
+    "127.0.0.1".into()
+}
+
+fn default_publish_endpoint() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -164,6 +198,23 @@ mod tests {
 
     #[test]
     fn serializes_headless_debugger_models_with_camel_case_fields() {
+        let config = Config::default();
+        assert!(!config.inline_server.enabled);
+        assert_eq!(config.inline_server.host, "127.0.0.1");
+        assert_eq!(config.inline_server.port, 0);
+        assert!(config.inline_server.publish_endpoint);
+
+        let parsed: Config = serde_json::from_value(serde_json::json!({
+            "inlineServer": {
+                "enabled": true,
+                "port": 45127
+            }
+        }))
+        .unwrap();
+        assert!(parsed.inline_server.enabled);
+        assert_eq!(parsed.inline_server.host, "127.0.0.1");
+        assert_eq!(parsed.inline_server.port, 45127);
+
         let attach = AgentAttachRequest {
             app: Some("ducktape".into()),
             window: Some("main".into()),

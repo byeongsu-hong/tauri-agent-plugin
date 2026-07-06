@@ -116,7 +116,7 @@ pub async fn agent_record<R: Runtime>(
     ))
 }
 
-fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
+pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
     let mut windows = app
         .webview_windows()
         .into_values()
@@ -131,7 +131,7 @@ fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
     windows
 }
 
-fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {
+pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {
     if let Some(label) = label {
         if !app.webview_windows().contains_key(label) {
             return Err(Error::WindowNotFound(label.to_string()));

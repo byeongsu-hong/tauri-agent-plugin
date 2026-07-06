@@ -21,6 +21,16 @@
       "csp": null
     }
   },
+  "plugins": {
+    "agent": {
+      "inlineServer": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 0,
+        "publishEndpoint": true
+      }
+    }
+  },
   "bundle": {
     "active": false,
     "targets": "all"
