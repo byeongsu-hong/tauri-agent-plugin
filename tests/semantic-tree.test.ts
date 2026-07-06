@@ -10,6 +10,7 @@ import {
   pressKey,
   resolveRef,
   selectRef,
+  scrollRef,
   snapshotDocument
 } from '../guest-js/semantic-tree'
 
@@ -207,6 +208,24 @@ describe('snapshotDocument', () => {
 
     expect(document.activeElement).not.toBe(input)
     expect(seen).toEqual(['blur', 'focusout'])
+  })
+
+  it('scrolls refs through the current snapshot ref registry', () => {
+    const seen: string[] = []
+    document.body.innerHTML = `
+      <div role="list" aria-label="Roster" style="width: 20px; height: 20px; overflow: auto;">
+        <div style="width: 100px; height: 100px;">Workers</div>
+      </div>
+    `
+    const list = document.querySelector<HTMLElement>('[role="list"]')
+    list?.addEventListener('scroll', () => seen.push('scroll'))
+
+    snapshotDocument(document)
+    scrollRef('@1', { y: 12, x: 3 })
+
+    expect(list?.scrollTop).toBe(12)
+    expect(list?.scrollLeft).toBe(3)
+    expect(seen).toEqual(['scroll'])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

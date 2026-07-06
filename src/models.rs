@@ -156,6 +156,16 @@ pub struct AgentBlurRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentScrollRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -369,6 +379,17 @@ mod tests {
         assert_eq!(
             serde_json::to_value(blur).unwrap(),
             serde_json::json!({"window": "main", "ref": "@2"})
+        );
+
+        let scroll = AgentScrollRequest {
+            window: Some("main".into()),
+            ref_id: "@7".into(),
+            x: Some(3.0),
+            y: Some(12.0),
+        };
+        assert_eq!(
+            serde_json::to_value(scroll).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@7", "x": 3.0, "y": 12.0})
         );
 
         let record = AgentRecordRequest {

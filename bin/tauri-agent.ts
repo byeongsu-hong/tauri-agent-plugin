@@ -135,6 +135,23 @@ program
   })
 
 program
+  .command('scroll')
+  .description('Scroll a snapshot-local ref by x/y deltas.')
+  .argument('<ref>', 'snapshot-local ref, for example @7')
+  .argument('[y]', 'vertical scroll delta', parseNumber, 0)
+  .argument('[x]', 'horizontal scroll delta', parseNumber, 0)
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+  .action(async (ref: string, y: number, x: number, options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', { scope: options.scope })
+    printJson(await client.call('scroll', { ref, y, x }))
+  })
+
+program
   .command('fill')
   .description('Fill a snapshot-local ref.')
   .argument('<ref>', 'snapshot-local ref, for example @4')
@@ -331,6 +348,14 @@ function parseBoolean(value: string): boolean {
   if (value === 'true') return true
   if (value === 'false') return false
   throw new Error(`expected true or false, got ${value}`)
+}
+
+function parseNumber(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`invalid number: ${value}`)
+  }
+  return parsed
 }
 
 function exitBridgePending(): never {

@@ -32,6 +32,11 @@ export class DebuggerSession {
         return this.app.focus(requiredString(params.ref, 'ref'))
       case 'blur':
         return this.app.blur(requiredString(params.ref, 'ref'))
+      case 'scroll':
+        return this.app.scroll(requiredString(params.ref, 'ref'), {
+          x: numberParam(params.x),
+          y: numberParam(params.y)
+        })
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':
@@ -83,7 +88,7 @@ export class DebuggerSession {
     if (!this.recording || method === 'record') {
       return
     }
-    if (!['click', 'hover', 'focus', 'blur', 'fill', 'press'].includes(method)) {
+    if (!['click', 'hover', 'focus', 'blur', 'scroll', 'fill', 'press'].includes(method)) {
       return
     }
     this.recordingEntries.push({
