@@ -13,6 +13,7 @@ import type { AgentMethod } from '../protocol/types'
 interface ConnectionOptions {
   app?: string
   fromHtml?: string
+  mode?: 'compact' | 'verbose'
   scope?: string
   window?: string
   host?: string
@@ -83,6 +84,7 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+  .option('--mode <mode>', 'tree output mode: compact or verbose', parseTreeMode)
   .option('--interactive', 'poll and stream changed semantic tree snapshots as newline-delimited JSON')
   .option('--poll-ms <ms>', 'interactive polling interval in milliseconds', parseNumber, 250)
   .option('--timeout-ms <ms>', 'stop interactive polling after this many milliseconds', parseNumber)
@@ -439,7 +441,7 @@ function targetParams(options: ConnectionOptions): Record<string, unknown> {
 }
 
 function treeParams(options: ConnectionOptions): Record<string, unknown> {
-  return { ...targetParams(options), scope: options.scope }
+  return { ...targetParams(options), scope: options.scope, mode: options.mode }
 }
 
 function refActionParams(
@@ -492,6 +494,13 @@ function parseNumber(value: string): number {
     throw new Error(`invalid number: ${value}`)
   }
   return parsed
+}
+
+function parseTreeMode(value: string): 'compact' | 'verbose' {
+  if (value === 'compact' || value === 'verbose') {
+    return value
+  }
+  throw new Error(`expected compact or verbose, got ${value}`)
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {
