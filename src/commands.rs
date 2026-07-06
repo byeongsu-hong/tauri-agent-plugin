@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State, WebviewWindow};
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
@@ -11,7 +11,8 @@ use crate::models::{
     AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
     AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
     AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
-    AgentStorageRequest, AgentStorageResponse, AgentWaitRequest, AgentWaitResponse, WindowInfo,
+    AgentStorageRequest, AgentStorageResponse, AgentWaitRequest, AgentWaitResponse,
+    AgentWindowRequest, WindowAction, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -279,6 +280,14 @@ pub async fn agent_windows<R: Runtime>(app: AppHandle<R>) -> Result<Vec<WindowIn
 }
 
 #[tauri::command]
+pub async fn agent_window<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentWindowRequest,
+) -> Result<WindowInfo> {
+    control_window(&app, request)
+}
+
+#[tauri::command]
 pub async fn agent_wait<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
@@ -353,20 +362,83 @@ pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo>
     let mut windows = app
         .webview_windows()
         .into_values()
-        .map(|window| WindowInfo {
-            label: window.label().to_string(),
-            title: window.title().ok(),
-            focused: window.is_focused().unwrap_or(false),
-            visible: window.is_visible().unwrap_or(false),
-            minimized: window.is_minimized().ok(),
-            maximized: window.is_maximized().ok(),
-            scale_factor: window.scale_factor().ok(),
-            inner_bounds: window_bounds(window.inner_position().ok(), window.inner_size().ok()),
-            outer_bounds: window_bounds(window.outer_position().ok(), window.outer_size().ok()),
-        })
+        .map(|window| window_info(&window))
         .collect::<Vec<_>>();
     windows.sort_by(|a, b| a.label.cmp(&b.label));
     windows
+}
+
+pub(crate) fn control_window<R: Runtime>(
+    app: &AppHandle<R>,
+    request: AgentWindowRequest,
+) -> Result<WindowInfo> {
+    let window = target_webview_window(app, request.window.as_deref())?;
+    match request.action.unwrap_or(WindowAction::Get) {
+        WindowAction::Get => {}
+        WindowAction::Focus => window.set_focus()?,
+        WindowAction::Show => window.show()?,
+        WindowAction::Hide => window.hide()?,
+        WindowAction::Minimize => window.minimize()?,
+        WindowAction::Unminimize => window.unminimize()?,
+        WindowAction::Maximize => window.maximize()?,
+        WindowAction::Unmaximize => window.unmaximize()?,
+        WindowAction::SetSize => window.set_size(required_window_size(&request)?)?,
+        WindowAction::SetPosition => window.set_position(required_window_position(&request)?)?,
+    }
+    Ok(window_info(&window))
+}
+
+fn target_webview_window<R: Runtime>(
+    app: &AppHandle<R>,
+    label: Option<&str>,
+) -> Result<WebviewWindow<R>> {
+    if let Some(label) = label {
+        return app
+            .get_webview_window(label)
+            .ok_or_else(|| Error::WindowNotFound(label.to_string()));
+    }
+
+    let mut windows = app.webview_windows().into_values().collect::<Vec<_>>();
+    windows.sort_by(|a, b| a.label().cmp(b.label()));
+    windows
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::WindowNotFound("default".into()))
+}
+
+fn required_window_size(request: &AgentWindowRequest) -> Result<PhysicalSize<u32>> {
+    let width = request
+        .width
+        .filter(|width| *width > 0)
+        .ok_or_else(|| Error::BridgeUnavailable("window setSize requires positive width".into()))?;
+    let height = request.height.filter(|height| *height > 0).ok_or_else(|| {
+        Error::BridgeUnavailable("window setSize requires positive height".into())
+    })?;
+    Ok(PhysicalSize { width, height })
+}
+
+fn required_window_position(request: &AgentWindowRequest) -> Result<PhysicalPosition<i32>> {
+    let x = request
+        .x
+        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires x".into()))?;
+    let y = request
+        .y
+        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires y".into()))?;
+    Ok(PhysicalPosition { x, y })
+}
+
+fn window_info<R: Runtime>(window: &WebviewWindow<R>) -> WindowInfo {
+    WindowInfo {
+        label: window.label().to_string(),
+        title: window.title().ok(),
+        focused: window.is_focused().unwrap_or(false),
+        visible: window.is_visible().unwrap_or(false),
+        minimized: window.is_minimized().ok(),
+        maximized: window.is_maximized().ok(),
+        scale_factor: window.scale_factor().ok(),
+        inner_bounds: window_bounds(window.inner_position().ok(), window.inner_size().ok()),
+        outer_bounds: window_bounds(window.outer_position().ok(), window.outer_size().ok()),
+    }
 }
 
 fn window_bounds(

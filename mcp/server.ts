@@ -100,6 +100,8 @@ async function executeTool(
       return client.call('attach', windowParams(args))
     case 'tauri_windows':
       return client.call('windows')
+    case 'tauri_window':
+      return client.call('window', pick(args, ['window', 'action', 'x', 'y', 'width', 'height']))
     case 'tauri_tree':
       return client.call('tree', pick(args, ['window', 'scope', 'mode']))
     case 'tauri_find':
@@ -231,6 +233,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   key: { type: 'string', description: 'Keyboard key, for example Enter, or storage key.' },
   x: { type: 'number', description: 'Horizontal scroll delta.' },
   y: { type: 'number', description: 'Vertical scroll delta.' },
+  width: { type: 'number', description: 'Width in physical pixels.' },
+  height: { type: 'number', description: 'Height in physical pixels.' },
   limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
@@ -244,6 +248,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_attach', 'Attach', 'Attach to a debuggable Tauri app.', schema(['window'])),
   tool('tauri_windows', 'Windows', 'List known Tauri windows with focus, visibility, state, scale, and bounds metadata.', baseSchema()),
+  tool('tauri_window', 'Window', 'Inspect or control one Tauri window.', windowControlSchema()),
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
   tool('tauri_find', 'Find', 'Find current snapshot refs by semantic role, name, or text.', schema(['window', 'scope', 'role', 'name', 'text', 'limit'])),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
@@ -319,6 +324,17 @@ function cookieSchema(): JsonSchema {
 function locationSchema(): JsonSchema {
   const inputSchema = schema(['window', 'url'])
   inputSchema.properties.action = { type: 'string', enum: ['get', 'push', 'replace'] }
+  return inputSchema
+}
+
+function windowControlSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'x', 'y', 'width', 'height'])
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['get', 'focus', 'show', 'hide', 'minimize', 'unminimize', 'maximize', 'unmaximize', 'setSize', 'setPosition']
+  }
+  inputSchema.properties.x = { type: 'number', description: 'Window x position for setPosition.' }
+  inputSchema.properties.y = { type: 'number', description: 'Window y position for setPosition.' }
   return inputSchema
 }
 

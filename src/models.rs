@@ -59,6 +59,32 @@ pub struct AgentAttachResponse {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentWindowRequest {
+    pub window: Option<String>,
+    pub action: Option<WindowAction>,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowAction {
+    Get,
+    Focus,
+    Show,
+    Hide,
+    Minimize,
+    Unminimize,
+    Maximize,
+    Unmaximize,
+    SetSize,
+    SetPosition,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSnapshotRequest {
     pub window: Option<String>,
     pub scope: Option<String>,
@@ -511,6 +537,26 @@ mod tests {
                 "scaleFactor": 2.0,
                 "innerBounds": {"x": 10, "y": 20, "width": 800, "height": 600},
                 "outerBounds": {"x": 4, "y": 12, "width": 824, "height": 648}
+            })
+        );
+
+        let window_request = AgentWindowRequest {
+            window: Some("main".into()),
+            action: Some(WindowAction::SetSize),
+            x: None,
+            y: None,
+            width: Some(800),
+            height: Some(600),
+        };
+        assert_eq!(
+            serde_json::to_value(window_request).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "action": "setSize",
+                "x": null,
+                "y": null,
+                "width": 800,
+                "height": 600
             })
         );
 

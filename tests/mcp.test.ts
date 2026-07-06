@@ -64,6 +64,7 @@ describe('tauri-agent MCP server', () => {
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
       'tauri_attach',
       'tauri_windows',
+      'tauri_window',
       'tauri_tree',
       'tauri_find',
       'tauri_click',
@@ -189,6 +190,28 @@ describe('tauri-agent MCP server', () => {
         },
         isError: false
       }
+    })
+
+    const windowResult = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 17,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_window',
+              arguments: { html, action: 'setSize', width: 800, height: 600 }
+            }
+          })
+        )
+      )
+    )
+
+    expect(windowResult.result.structuredContent).toEqual({
+      ...staticWindowInfo('Tauri App'),
+      innerBounds: { x: 0, y: 0, width: 800, height: 600 },
+      outerBounds: { x: 0, y: 0, width: 800, height: 600 }
     })
 
     const found = JSON.parse(

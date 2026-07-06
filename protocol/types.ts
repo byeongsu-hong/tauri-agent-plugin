@@ -3,6 +3,7 @@ export type JsonRpcId = string | number
 export type AgentMethod =
   | 'attach'
   | 'windows'
+  | 'window'
   | 'tree'
   | 'find'
   | 'click'
@@ -60,6 +61,26 @@ export interface AttachParams {
 
 export interface WindowTarget {
   window?: string
+}
+
+export type WindowAction =
+  | 'get'
+  | 'focus'
+  | 'show'
+  | 'hide'
+  | 'minimize'
+  | 'unminimize'
+  | 'maximize'
+  | 'unmaximize'
+  | 'setSize'
+  | 'setPosition'
+
+export interface WindowParams extends WindowTarget {
+  action?: WindowAction
+  x?: number
+  y?: number
+  width?: number
+  height?: number
 }
 
 export interface TreeParams extends WindowTarget {

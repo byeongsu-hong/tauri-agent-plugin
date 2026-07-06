@@ -200,6 +200,44 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
   })
 
+  it('forwards window control options to protocol calls', async () => {
+    const response = {
+      label: 'secondary',
+      title: 'Secondary',
+      focused: true,
+      visible: true,
+      minimized: false,
+      maximized: false,
+      scaleFactor: 2,
+      innerBounds: { x: 0, y: 0, width: 640, height: 480 },
+      outerBounds: { x: 0, y: 0, width: 640, height: 480 }
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      window: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'window',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--action',
+          'setSize',
+          '--width',
+          '640',
+          '--height',
+          '480'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      { method: 'window', params: { window: 'secondary', action: 'setSize', width: 640, height: 480 } }
+    ])
+  })
+
   it('forwards semantic wait filters to protocol calls', async () => {
     const response = {
       matched: true,

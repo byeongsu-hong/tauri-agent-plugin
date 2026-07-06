@@ -14,6 +14,7 @@ describe('agent debug protocol', () => {
     expect(AGENT_METHODS).toEqual([
       'attach',
       'windows',
+      'window',
       'tree',
       'find',
       'click',

@@ -36,6 +36,7 @@ import {
   agentState,
   agentStorage,
   agentWait,
+  agentWindow,
   agentWindows
 } from '../guest-js/index'
 
@@ -70,6 +71,7 @@ describe('plugin command helpers', () => {
     await agentWait({ window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 })
     await agentState({ window: 'main' })
     await agentRecord({ window: 'main', action: 'start' })
+    await agentWindow({ window: 'main', action: 'setSize', width: 800, height: 600 })
     await agentWindows()
 
     expect(invokeMock.mock.calls).toEqual([
@@ -97,6 +99,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_wait', { request: { window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'main' } }],
       ['plugin:agent|agent_record', { request: { window: 'main', action: 'start' } }],
+      ['plugin:agent|agent_window', { request: { window: 'main', action: 'setSize', width: 800, height: 600 } }],
       ['plugin:agent|agent_windows']
     ])
   })
@@ -125,6 +128,7 @@ describe('plugin command helpers', () => {
     await agentWait({ text: 'Ready', timeoutMs: 250 })
     await agentState()
     await agentRecord({ action: 'start' })
+    await agentWindow({ action: 'focus' })
 
     expect(invokeMock.mock.calls).toEqual([
       ['plugin:agent|agent_snapshot', { request: { window: 'secondary', scope: 'main' } }],
@@ -149,7 +153,8 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_location', { request: { window: 'secondary', url: '/status' } }],
       ['plugin:agent|agent_wait', { request: { window: 'secondary', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'secondary' } }],
-      ['plugin:agent|agent_record', { request: { window: 'secondary', action: 'start' } }]
+      ['plugin:agent|agent_record', { request: { window: 'secondary', action: 'start' } }],
+      ['plugin:agent|agent_window', { request: { window: 'secondary', action: 'focus' } }]
     ])
   })
 })

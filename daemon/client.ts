@@ -44,6 +44,9 @@ export class DebuggerClient {
 function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {}): boolean {
   switch (method) {
     case 'windows':
+      return true
+    case 'window':
+      return params.action === undefined || params.action === 'get'
     case 'tree':
     case 'find':
     case 'inspect':

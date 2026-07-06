@@ -8,7 +8,7 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod } from '../protocol/types'
+import type { AgentMethod, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -56,6 +56,14 @@ interface CookieOptions extends ConnectionOptions {
 interface LocationOptions extends ConnectionOptions {
   action?: 'get' | 'push' | 'replace'
   url?: string
+}
+
+interface WindowOptions extends ConnectionOptions {
+  action?: WindowAction
+  x?: number
+  y?: number
+  width?: number
+  height?: number
 }
 
 interface WaitOptions extends ConnectionOptions {
@@ -106,6 +114,21 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .action(async (options: ConnectionOptions) => printJson(await call(options, 'windows')))
+
+program
+  .command('window')
+  .description('Inspect or control a Tauri window.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--action <action>', 'window action: get, focus, show, hide, minimize, unminimize, maximize, unmaximize, setSize, or setPosition', parseWindowAction, 'get')
+  .option('--x <x>', 'x position for setPosition', parseNumber)
+  .option('--y <y>', 'y position for setPosition', parseNumber)
+  .option('--width <width>', 'width for setSize', parseNumber)
+  .option('--height <height>', 'height for setSize', parseNumber)
+  .action(async (options: WindowOptions) => printJson(await call(options, 'window', windowParams(options))))
 
 program
   .command('tree')
@@ -557,6 +580,17 @@ function targetParams(options: ConnectionOptions): Record<string, unknown> {
   return { window: options.window }
 }
 
+function windowParams(options: WindowOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    action: options.action,
+    x: options.x,
+    y: options.y,
+    width: options.width,
+    height: options.height
+  }
+}
+
 function treeParams(options: ConnectionOptions): Record<string, unknown> {
   return { ...targetParams(options), scope: options.scope, mode: options.mode }
 }
@@ -695,6 +729,24 @@ function parseLocationAction(value: string): 'get' | 'push' | 'replace' {
     return value
   }
   throw new Error(`expected get, push, or replace, got ${value}`)
+}
+
+function parseWindowAction(value: string): WindowAction {
+  if (
+    value === 'get' ||
+    value === 'focus' ||
+    value === 'show' ||
+    value === 'hide' ||
+    value === 'minimize' ||
+    value === 'unminimize' ||
+    value === 'maximize' ||
+    value === 'unmaximize' ||
+    value === 'setSize' ||
+    value === 'setPosition'
+  ) {
+    return value
+  }
+  throw new Error(`expected a window action, got ${value}`)
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {

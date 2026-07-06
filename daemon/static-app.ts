@@ -40,7 +40,8 @@ import type {
   StorageParams,
   StorageResult,
   WaitParams,
-  WaitResult
+  WaitResult,
+  WindowParams
 } from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
@@ -59,6 +60,7 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private windowState: AgentWindow
   private storageAreas = {
     local: createMemoryStorage(),
     session: createMemoryStorage()
@@ -73,6 +75,7 @@ export class StaticHtmlAppAdapter {
       runScripts: 'outside-only',
       url: this.url
     })
+    this.windowState = this.createInitialWindowState()
     this.bindGlobals()
     this.installRuntimeLogCapture()
   }
@@ -86,13 +89,67 @@ export class StaticHtmlAppAdapter {
   }
 
   async windows(): Promise<AgentWindow[]> {
+    return [this.windowInfo()]
+  }
+
+  async window(options: WindowParams = {}): Promise<AgentWindow> {
+    if (options.window && options.window !== this.label) {
+      throw new Error(`window not found: ${options.window}`)
+    }
+
+    const action = options.action ?? 'get'
+    switch (action) {
+      case 'get':
+        break
+      case 'focus':
+        this.windowState.focused = true
+        this.windowState.visible = true
+        this.windowState.minimized = false
+        break
+      case 'show':
+        this.windowState.visible = true
+        break
+      case 'hide':
+        this.windowState.visible = false
+        this.windowState.focused = false
+        break
+      case 'minimize':
+        this.windowState.minimized = true
+        this.windowState.focused = false
+        break
+      case 'unminimize':
+        this.windowState.minimized = false
+        break
+      case 'maximize':
+        this.windowState.maximized = true
+        break
+      case 'unmaximize':
+        this.windowState.maximized = false
+        break
+      case 'setSize':
+        this.setWindowSize(requiredPositiveNumber(options.width, 'width'), requiredPositiveNumber(options.height, 'height'))
+        break
+      case 'setPosition':
+        this.setWindowPosition(requiredFiniteNumber(options.x, 'x'), requiredFiniteNumber(options.y, 'y'))
+        break
+      default:
+        throw new Error(`unknown window action: ${String(action)}`)
+    }
+
+    if (action !== 'get') {
+      this.pushEvent('window', { action })
+    }
+    return this.windowInfo()
+  }
+
+  private createInitialWindowState(): AgentWindow {
     const innerBounds = {
       x: 0,
       y: 0,
       width: this.dom.window.innerWidth,
       height: this.dom.window.innerHeight
     }
-    return [{
+    return {
       label: this.label,
       title: this.title,
       focused: true,
@@ -107,7 +164,27 @@ export class StaticHtmlAppAdapter {
         width: this.dom.window.outerWidth || innerBounds.width,
         height: this.dom.window.outerHeight || innerBounds.height
       }
-    }]
+    }
+  }
+
+  private windowInfo(): AgentWindow {
+    return {
+      ...this.windowState,
+      innerBounds: this.windowState.innerBounds ? { ...this.windowState.innerBounds } : undefined,
+      outerBounds: this.windowState.outerBounds ? { ...this.windowState.outerBounds } : undefined
+    }
+  }
+
+  private setWindowSize(width: number, height: number): void {
+    this.windowState.innerBounds = { ...(this.windowState.innerBounds ?? { x: 0, y: 0, width, height }), width, height }
+    this.windowState.outerBounds = { ...(this.windowState.outerBounds ?? { x: 0, y: 0, width, height }), width, height }
+  }
+
+  private setWindowPosition(x: number, y: number): void {
+    const inner = this.windowState.innerBounds ?? { x, y, width: this.dom.window.innerWidth, height: this.dom.window.innerHeight }
+    const outer = this.windowState.outerBounds ?? { x, y, width: inner.width, height: inner.height }
+    this.windowState.innerBounds = { ...inner, x, y }
+    this.windowState.outerBounds = { ...outer, x, y }
   }
 
   async tree(options: SnapshotOptions = {}): Promise<{ text: string }> {
@@ -406,6 +483,21 @@ function actionDetail(detail: Record<string, string | number | undefined>): Reco
   return Object.fromEntries(
     Object.entries(detail).filter((entry): entry is [string, string | number] => entry[1] !== undefined)
   )
+}
+
+function requiredFiniteNumber(value: number | undefined, name: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`window action requires finite ${name}`)
+  }
+  return value
+}
+
+function requiredPositiveNumber(value: number | undefined, name: string): number {
+  const number = requiredFiniteNumber(value, name)
+  if (number <= 0) {
+    throw new Error(`window action requires positive ${name}`)
+  }
+  return number
 }
 
 function storageArea(area: StorageParams['area']): 'local' | 'session' {

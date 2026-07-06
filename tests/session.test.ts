@@ -251,6 +251,28 @@ describe('DebuggerSession', () => {
     )
   })
 
+  it('controls static window state and bounds', async () => {
+    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html, title: 'Ducktape' }))
+
+    await expect(session.execute('window', { action: 'setSize', width: 800, height: 600 })).resolves.toEqual({
+      ...staticWindowInfo('Ducktape'),
+      innerBounds: { x: 0, y: 0, width: 800, height: 600 },
+      outerBounds: { x: 0, y: 0, width: 800, height: 600 }
+    })
+    await expect(session.execute('window', { action: 'setPosition', x: 20, y: 30 })).resolves.toMatchObject({
+      innerBounds: { x: 20, y: 30, width: 800, height: 600 },
+      outerBounds: { x: 20, y: 30, width: 800, height: 600 }
+    })
+    await expect(session.execute('window', { action: 'hide' })).resolves.toMatchObject({ visible: false })
+    await expect(session.execute('window', { action: 'show' })).resolves.toMatchObject({ visible: true })
+    await expect(session.execute('window', { action: 'minimize' })).resolves.toMatchObject({ minimized: true })
+    await expect(session.execute('window', { action: 'unminimize' })).resolves.toMatchObject({ minimized: false })
+    await expect(session.execute('window', { action: 'maximize' })).resolves.toMatchObject({ maximized: true })
+    await expect(session.execute('window', { action: 'unmaximize' })).resolves.toMatchObject({ maximized: false })
+    await expect(session.execute('window', { action: 'focus' })).resolves.toMatchObject({ focused: true })
+    await expect(session.execute('window', { action: 'teleport' })).rejects.toThrow('unknown window action: teleport')
+  })
+
   it('removes path-scoped cookies visible on the current route', async () => {
     const session = new DebuggerSession(
       new StaticHtmlAppAdapter({

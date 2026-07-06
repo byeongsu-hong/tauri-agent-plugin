@@ -31,6 +31,13 @@ describe('tauri-agent CLI', () => {
     expect(JSON.parse(runCli(['windows', '--from-html', path]))).toEqual([
       staticWindowInfo('Tauri App')
     ])
+    expect(
+      JSON.parse(runCli(['window', '--action', 'setSize', '--width', '800', '--height', '600', '--from-html', path]))
+    ).toEqual({
+      ...staticWindowInfo('Tauri App'),
+      innerBounds: { x: 0, y: 0, width: 800, height: 600 },
+      outerBounds: { x: 0, y: 0, width: 800, height: 600 }
+    })
     expect(runCli(['tree', '--from-html', path])).toBe(
       [
         'main "Ducktape"',
