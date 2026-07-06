@@ -5,7 +5,10 @@ mod endpoint;
 mod error;
 mod models;
 
-pub use endpoint::{endpoint_registry_path, endpoint_runtime_dir, AgentEndpointDescriptor};
+pub use endpoint::{
+    endpoint_registry_path, endpoint_runtime_dir, read_endpoint_registry, remove_endpoint_registry,
+    write_endpoint_registry, AgentEndpointDescriptor, EndpointRegistryError,
+};
 pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
