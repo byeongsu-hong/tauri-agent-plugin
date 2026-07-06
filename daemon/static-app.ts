@@ -7,6 +7,7 @@ import {
   checkRef,
   clickRef,
   fillRef,
+  focusRef,
   hoverRef,
   inspectRef,
   pressKey,
@@ -73,6 +74,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     hoverRef(ref)
     this.pushEvent('hover', { ref })
+    return { ok: true }
+  }
+
+  async focus(ref: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    focusRef(ref)
+    this.pushEvent('focus', { ref })
     return { ok: true }
   }
 

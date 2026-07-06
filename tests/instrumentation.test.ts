@@ -29,6 +29,7 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.record('start')
     instrumentation.action({ action: 'click', ref: '@1' })
     instrumentation.hover('@1')
+    instrumentation.focus('@2')
     instrumentation.action({ action: 'fill', ref: '@2', value: 'worker-a' })
     instrumentation.select('@3', 'remote')
     instrumentation.check('@6', true)
@@ -60,7 +61,7 @@ describe('WebviewAgentInstrumentation', () => {
       attributes: {
         'aria-label': 'Agent name'
       },
-      states: []
+      states: ['focused']
     })
     expect(instrumentation.logs()).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
@@ -69,6 +70,7 @@ describe('WebviewAgentInstrumentation', () => {
       expect.arrayContaining([
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
         expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } }),
+        expect.objectContaining({ kind: 'focus', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ kind: 'press', detail: { value: 'Enter' } }),
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
@@ -100,6 +102,7 @@ describe('WebviewAgentInstrumentation', () => {
       entries: [
         expect.objectContaining({ method: 'click', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'hover', params: { ref: '@1' } }),
+        expect.objectContaining({ method: 'focus', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),

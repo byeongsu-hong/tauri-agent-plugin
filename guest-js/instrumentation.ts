@@ -4,6 +4,7 @@ import {
   checkRef,
   clickRef,
   fillRef,
+  focusRef,
   hoverRef,
   inspectRef,
   pressKey,
@@ -31,7 +32,7 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'fill' | 'press' | 'select' | 'check'
+  action: 'click' | 'hover' | 'focus' | 'fill' | 'press' | 'select' | 'check'
   ref?: string
   value?: string
   checked?: boolean
@@ -96,6 +97,9 @@ export class WebviewAgentInstrumentation {
       case 'hover':
         hoverRef(requiredRef(action.ref))
         break
+      case 'focus':
+        focusRef(requiredRef(action.ref))
+        break
       case 'fill':
         fillRef(requiredRef(action.ref), action.value ?? '')
         break
@@ -123,6 +127,14 @@ export class WebviewAgentInstrumentation {
     hoverRef(ref)
     const action: InstrumentedAction = { action: 'hover', ref }
     this.pushEvent('hover', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
+  focus(ref: string): { ok: true } {
+    focusRef(ref)
+    const action: InstrumentedAction = { action: 'focus', ref }
+    this.pushEvent('focus', serializableAction(action))
     this.recordAction(action)
     return { ok: true }
   }
@@ -256,6 +268,8 @@ export class WebviewAgentInstrumentation {
         return this.action({ action: 'click', ref: requiredStringParam(params, 'ref') })
       case 'hover':
         return this.hover(requiredStringParam(params, 'ref'))
+      case 'focus':
+        return this.focus(requiredStringParam(params, 'ref'))
       case 'fill':
         return this.action({
           action: 'fill',

@@ -4,6 +4,7 @@ import {
   agentCheck,
   agentEval,
   agentEvents,
+  agentFocus,
   agentHover,
   agentInspect,
   agentLogs,
@@ -20,13 +21,15 @@ const roster = ['local-worker', 'remote-worker', 'backup-worker']
 let activeView = 'agents'
 let selectedWorker = roster[0]
 let hoveredForge = false
+let focusedForge = false
 
 const agent = new WebviewAgentInstrumentation({
   state: {
     route: () => activeView,
     registeredCount: () => roster.length,
     selectedWorker: () => selectedWorker,
-    hoveredForge: () => hoveredForge
+    hoveredForge: () => hoveredForge,
+    focusedForge: () => focusedForge
   }
 })
 
@@ -99,6 +102,9 @@ function render(): void {
   forge?.addEventListener('mouseenter', () => {
     hoveredForge = true
   })
+  forge?.addEventListener('focus', () => {
+    focusedForge = true
+  })
 
   input?.focus()
   input?.addEventListener('input', () => {
@@ -143,6 +149,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
@@ -167,9 +174,11 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     isRecord(state) &&
     probes.route === activeView &&
     probes.hoveredForge === true &&
+    probes.focusedForge === true &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
     events.some((event) => event.kind === 'click') &&
     events.some((event) => event.kind === 'hover') &&
+    events.some((event) => event.kind === 'focus') &&
     events.some((event) => event.kind === 'press') &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&

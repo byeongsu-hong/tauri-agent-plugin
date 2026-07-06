@@ -116,6 +116,15 @@ export function hoverRef(ref: string): void {
   }
 }
 
+export function focusRef(ref: string): void {
+  const normalized = normalizeRef(ref)
+  const element = resolveRef(normalized)
+  if (!('focus' in element) || typeof element.focus !== 'function') {
+    throw new Error(`${normalized} is not focusable`)
+  }
+  element.focus()
+}
+
 export function checkRef(ref: string, checked = true): void {
   const normalized = normalizeRef(ref)
   const element = resolveRef(normalized)

@@ -108,6 +108,9 @@ async function executeTool(
     case 'tauri_hover':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('hover', pick(args, ['window', 'ref']))
+    case 'tauri_focus':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('focus', pick(args, ['window', 'ref']))
     case 'tauri_fill':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('fill', pick(args, ['window', 'ref', 'text']))
@@ -216,6 +219,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_hover', 'Hover', 'Hover a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
+  tool('tauri_focus', 'Focus', 'Focus a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
