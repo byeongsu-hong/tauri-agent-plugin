@@ -12,7 +12,7 @@ Headless agent debugger for Tauri apps.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
+The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -97,7 +97,16 @@ Use it as the first real target for live bridge work. Its plugin config enables 
 ## Package Exports
 
 ```ts
-import { WebviewAgentInstrumentation, snapshotDocument } from '@byeongsu-hong/tauri-plugin-agent'
+import {
+  WebviewAgentInstrumentation,
+  agentEvents,
+  agentLogs,
+  agentRecord,
+  agentSnapshot,
+  agentState,
+  agentWait,
+  snapshotDocument
+} from '@byeongsu-hong/tauri-plugin-agent'
 import { DebuggerClient, SocketTransport } from '@byeongsu-hong/tauri-plugin-agent/daemon'
 import { AGENT_METHODS } from '@byeongsu-hong/tauri-plugin-agent/protocol'
 ```
@@ -120,6 +129,17 @@ agent.screenshot()
 agent.logs()
 agent.events()
 agent.state()
+```
+
+Direct Tauri command helpers use the same bridge:
+
+```ts
+await agentSnapshot({ scope: 'main' })
+await agentLogs()
+await agentEvents()
+await agentWait({ text: 'Ready', timeoutMs: 1000 })
+await agentState()
+await agentRecord({ action: 'get' })
 ```
 
 ## Rust Plugin

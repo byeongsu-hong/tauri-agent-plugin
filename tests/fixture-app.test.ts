@@ -25,6 +25,9 @@ describe('example fixture Tauri app', () => {
 
     const appTs = readFileSync('examples/fixture-app/src/main.ts', 'utf8')
     expect(appTs).toContain('new WebviewAgentInstrumentation')
+    expect(appTs).toContain('agentAction')
+    expect(appTs).toContain('agentSnapshot')
+    expect(appTs).toContain('data-action="bridge-self-test"')
     expect(appTs).toContain('data-view="agents"')
     expect(appTs).toContain('Agent name')
     expect(appTs).toContain('Register')
