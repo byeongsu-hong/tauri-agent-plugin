@@ -101,6 +101,17 @@ describe('DebuggerSession', () => {
       matched: true,
       text: 'Registered worker-a'
     })
+    await expect(session.execute('wait', { role: 'button', name: 'Forge', timeoutMs: 1 })).resolves.toEqual({
+      matched: true,
+      text: 'Forge',
+      match: expect.objectContaining({
+        ref: '@1',
+        role: 'button',
+        name: 'Forge',
+        tagName: 'button',
+        text: 'Forge'
+      })
+    })
     await expect(session.execute('logs', {})).resolves.toMatchObject([
       { level: 'info', message: 'booted', window: 'main' }
     ])

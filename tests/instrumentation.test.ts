@@ -55,6 +55,17 @@ describe('WebviewAgentInstrumentation', () => {
       matched: true,
       text: 'Registered worker-a'
     })
+    await expect(instrumentation.wait({ role: 'button', name: 'Forge', timeoutMs: 1 })).resolves.toEqual({
+      matched: true,
+      text: 'Forge',
+      match: expect.objectContaining({
+        ref: '@1',
+        role: 'button',
+        name: 'Forge',
+        tagName: 'button',
+        text: 'Forge'
+      })
+    })
 
     expect(fetchResponse.status).toBe(201)
     expect(instrumentation.network()).toEqual([

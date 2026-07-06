@@ -186,6 +186,40 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
   })
 
+  it('forwards semantic wait filters to protocol calls', async () => {
+    const response = {
+      matched: true,
+      text: 'Forge',
+      match: { ref: '@3', role: 'button', name: 'Forge', tagName: 'button', text: 'Forge', attributes: {}, states: [] }
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      wait: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'wait',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--scope',
+          'main',
+          '--role',
+          'button',
+          '--name',
+          'Forge',
+          '--timeout-ms',
+          '250'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      { method: 'wait', params: { window: 'secondary', scope: 'main', role: 'button', name: 'Forge', timeoutMs: 250 } }
+    ])
+  })
+
   it('streams changed semantic trees in interactive mode', async () => {
     const first = { text: 'main "Ducktape"\n@1 status "Loading"' }
     const second = { text: 'main "Ducktape"\n@1 status "Ready"' }

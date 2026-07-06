@@ -52,6 +52,12 @@ interface LocationOptions extends ConnectionOptions {
   url?: string
 }
 
+interface WaitOptions extends ConnectionOptions {
+  role?: string
+  name?: string
+  timeoutMs?: number
+}
+
 const program = new Command()
 
 program
@@ -427,16 +433,19 @@ program
 
 program
   .command('wait')
-  .description('Wait for text to appear.')
-  .argument('<text>', 'text to wait for')
+  .description('Wait for text or a semantic element to appear.')
+  .argument('[text]', 'text to wait for')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the semantic wait to a CSS selector')
+  .option('--role <role>', 'semantic role to match exactly')
+  .option('--name <name>', 'accessible name substring to match')
   .option('--timeout-ms <ms>', 'timeout in milliseconds', Number)
-  .action(async (text: string, options: ConnectionOptions & { timeoutMs?: number }) =>
-    printJson(await call(options, 'wait', { ...targetParams(options), text, timeoutMs: options.timeoutMs }))
+  .action(async (text: string | undefined, options: WaitOptions) =>
+    printJson(await call(options, 'wait', waitParams(options, text)))
   )
 
 program
@@ -555,6 +564,17 @@ function locationParams(options: LocationOptions): Record<string, unknown> {
     ...targetParams(options),
     action: options.action,
     url: options.url
+  }
+}
+
+function waitParams(options: WaitOptions, text: string | undefined): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    text,
+    scope: options.scope,
+    role: options.role,
+    name: options.name,
+    timeoutMs: options.timeoutMs
   }
 }
 

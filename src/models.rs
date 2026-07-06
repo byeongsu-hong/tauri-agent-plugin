@@ -338,7 +338,10 @@ pub struct AgentEventEntry {
 #[serde(rename_all = "camelCase")]
 pub struct AgentWaitRequest {
     pub window: Option<String>,
-    pub text: String,
+    pub text: Option<String>,
+    pub scope: Option<String>,
+    pub role: Option<String>,
+    pub name: Option<String>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -347,6 +350,8 @@ pub struct AgentWaitRequest {
 pub struct AgentWaitResponse {
     pub matched: bool,
     pub text: String,
+    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
+    pub match_entry: Option<AgentInspectResponse>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -431,12 +436,42 @@ mod tests {
 
         let wait = AgentWaitRequest {
             window: Some("main".into()),
-            text: "Registered".into(),
+            text: Some("Registered".into()),
+            scope: None,
+            role: None,
+            name: None,
             timeout_ms: Some(250),
         };
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
-            serde_json::json!({"window": "main", "text": "Registered", "timeoutMs": 250})
+            serde_json::json!({
+                "window": "main",
+                "text": "Registered",
+                "scope": null,
+                "role": null,
+                "name": null,
+                "timeoutMs": 250
+            })
+        );
+
+        let semantic_wait = AgentWaitRequest {
+            window: Some("main".into()),
+            text: None,
+            scope: Some("main".into()),
+            role: Some("button".into()),
+            name: Some("Forge".into()),
+            timeout_ms: Some(250),
+        };
+        assert_eq!(
+            serde_json::to_value(semantic_wait).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "text": null,
+                "scope": "main",
+                "role": "button",
+                "name": "Forge",
+                "timeoutMs": 250
+            })
         );
 
         let find = AgentFindRequest {
@@ -484,6 +519,38 @@ mod tests {
                     "attributes": {},
                     "states": []
                 }]
+            })
+        );
+
+        let semantic_wait_response = AgentWaitResponse {
+            matched: true,
+            text: "Forge".into(),
+            match_entry: Some(AgentInspectResponse {
+                ref_id: "@1".into(),
+                role: "button".into(),
+                name: "Forge".into(),
+                tag_name: "button".into(),
+                text: "Forge".into(),
+                value: None,
+                attributes: BTreeMap::new(),
+                states: Vec::new(),
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(semantic_wait_response).unwrap(),
+            serde_json::json!({
+                "matched": true,
+                "text": "Forge",
+                "match": {
+                    "ref": "@1",
+                    "role": "button",
+                    "name": "Forge",
+                    "tagName": "button",
+                    "text": "Forge",
+                    "value": null,
+                    "attributes": {},
+                    "states": []
+                }
             })
         );
 

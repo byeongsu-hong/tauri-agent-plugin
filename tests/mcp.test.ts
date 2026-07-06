@@ -429,12 +429,40 @@ describe('tauri-agent MCP server', () => {
 
     expect(network.result.structuredContent).toEqual({ result: [] })
 
-    const storage = JSON.parse(
+    const wait = JSON.parse(
       await requiredResponse(
         handler(
           JSON.stringify({
             jsonrpc: '2.0',
             id: 18,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_wait',
+              arguments: { html: '<main><button>Forge</button></main>', role: 'button', name: 'Forge', timeoutMs: 1 }
+            }
+          })
+        )
+      )
+    )
+
+    expect(wait.result.structuredContent).toEqual({
+      matched: true,
+      text: 'Forge',
+      match: expect.objectContaining({
+        ref: '@1',
+        role: 'button',
+        name: 'Forge',
+        tagName: 'button',
+        text: 'Forge'
+      })
+    })
+
+    const storage = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 19,
             method: 'tools/call',
             params: {
               name: 'tauri_storage',
@@ -455,7 +483,7 @@ describe('tauri-agent MCP server', () => {
         handler(
           JSON.stringify({
             jsonrpc: '2.0',
-            id: 19,
+            id: 20,
             method: 'tools/call',
             params: {
               name: 'tauri_location',

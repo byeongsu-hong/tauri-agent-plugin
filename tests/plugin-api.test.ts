@@ -65,6 +65,7 @@ describe('plugin command helpers', () => {
     await agentStorage({ window: 'main', action: 'set', key: 'agent.token', value: 'ready' })
     await agentLocation({ window: 'main', action: 'push', url: '/agents' })
     await agentWait({ window: 'main', text: 'Ready', timeoutMs: 250 })
+    await agentWait({ window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 })
     await agentState({ window: 'main' })
     await agentRecord({ window: 'main', action: 'start' })
     await agentWindows()
@@ -90,6 +91,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_storage', { request: { window: 'main', action: 'set', key: 'agent.token', value: 'ready' } }],
       ['plugin:agent|agent_location', { request: { window: 'main', action: 'push', url: '/agents' } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', text: 'Ready', timeoutMs: 250 } }],
+      ['plugin:agent|agent_wait', { request: { window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'main' } }],
       ['plugin:agent|agent_record', { request: { window: 'main', action: 'start' } }],
       ['plugin:agent|agent_windows']

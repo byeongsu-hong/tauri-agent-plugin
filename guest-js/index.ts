@@ -35,7 +35,9 @@ import type {
   NetworkEntry,
   RecordingEntry,
   StorageParams,
-  StorageResult
+  StorageResult,
+  WaitParams,
+  WaitResult
 } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
@@ -72,7 +74,9 @@ export {
   type SnapshotOptions,
   type SnapshotResult,
   type StorageParams,
-  type StorageResult
+  type StorageResult,
+  type WaitParams,
+  type WaitResult
 }
 
 export interface AgentSnapshotRequest {
@@ -183,10 +187,8 @@ export interface AgentLocationRequest extends LocationParams {
   window?: string
 }
 
-export interface AgentWaitRequest {
+export interface AgentWaitRequest extends WaitParams {
   window?: string
-  text: string
-  timeoutMs?: number
 }
 
 export interface AgentStateRequest {
@@ -199,10 +201,7 @@ export interface AgentRecordRequest {
   action?: 'start' | 'stop' | 'get' | 'clear'
 }
 
-export interface AgentWaitResponse {
-  matched: boolean
-  text: string
-}
+export interface AgentWaitResponse extends WaitResult {}
 
 export interface AgentRecordResponse {
   recording: boolean
