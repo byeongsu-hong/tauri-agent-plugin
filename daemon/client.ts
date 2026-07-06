@@ -21,20 +21,27 @@ export class DebuggerClient {
   }
 }
 
-export interface SocketTransportOptions {
-  port: number
-  host?: string
-}
+export type SocketTransportOptions =
+  | {
+      port: number
+      host?: string
+    }
+  | {
+      path: string
+    }
 
 export class SocketTransport implements LineTransport {
   constructor(private readonly options: SocketTransportOptions) {}
 
   async send(message: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const socket = createConnection({
-        port: this.options.port,
-        host: this.options.host ?? '127.0.0.1'
-      })
+      const socket =
+        'path' in this.options
+          ? createConnection(this.options.path)
+          : createConnection({
+              port: this.options.port,
+              host: this.options.host ?? '127.0.0.1'
+            })
       let buffer = ''
 
       socket.on('connect', () => socket.write(`${message}\n`))

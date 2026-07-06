@@ -5,6 +5,8 @@ import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:c
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { createEndpointDescriptor, writeEndpointRegistry } from '../daemon/endpoint'
+
 let server: ChildProcessWithoutNullStreams | undefined
 
 afterEach(() => {
@@ -22,9 +24,10 @@ function htmlFile(): string {
   return path
 }
 
-function runCli(args: string[]): string {
+function runCli(args: string[], env: NodeJS.ProcessEnv = process.env): string {
   return execFileSync('bun', ['bin/tauri-agent.ts', ...args], {
     cwd: process.cwd(),
+    env,
     encoding: 'utf8'
   }).trim()
 }
@@ -64,5 +67,25 @@ describe('tauri-agent CLI socket mode', () => {
         'Agent name': 'worker-a'
       }
     })
+  })
+
+  it('discovers a persistent debugger daemon from an app endpoint registry', async () => {
+    const port = 45139
+    const appId = 'dev.byeongsu.fixture'
+    const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-cli-registry-'))
+    const env = { ...process.env, XDG_RUNTIME_DIR: runtimeDir }
+    await startServer(htmlFile(), port)
+    await writeEndpointRegistry(
+      createEndpointDescriptor({
+        appId,
+        pid: process.pid,
+        tcp: { host: '127.0.0.1', port }
+      }),
+      { env }
+    )
+
+    expect(JSON.parse(runCli(['windows', '--app', appId], env))).toEqual([
+      { label: 'main', title: 'Tauri App', focused: true, visible: true }
+    ])
   })
 })

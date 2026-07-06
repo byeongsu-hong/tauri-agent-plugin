@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises'
 import { Command } from 'commander'
 
 import { DebuggerClient, SocketTransport } from '../daemon/client'
+import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
 import type { AgentMethod } from '../protocol/types'
 
 interface ConnectionOptions {
+  app?: string
   fromHtml?: string
   scope?: string
   host?: string
@@ -43,6 +45,7 @@ program
 program
   .command('attach')
   .description('Attach to a debuggable Tauri app.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -51,6 +54,7 @@ program
 program
   .command('windows')
   .description('List known Tauri windows.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -59,6 +63,7 @@ program
 program
   .command('tree')
   .description('Print a compact semantic tree.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -73,6 +78,7 @@ program
   .command('click')
   .description('Click a snapshot-local ref.')
   .argument('<ref>', 'snapshot-local ref, for example @3')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -88,6 +94,7 @@ program
   .description('Fill a snapshot-local ref.')
   .argument('<ref>', 'snapshot-local ref, for example @4')
   .argument('<text>', 'text value')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -102,6 +109,7 @@ program
   .command('press')
   .description('Dispatch a keyboard key.')
   .argument('<key>', 'key name, for example Enter')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -111,6 +119,7 @@ program
   .command('shot')
   .description('Capture a screenshot through the live Tauri bridge.')
   .argument('[path]', 'output path')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <htmlPath>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -121,6 +130,7 @@ program
 program
   .command('logs')
   .description('Print captured app logs.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -132,6 +142,7 @@ program
 program
   .command('events')
   .description('Print captured app events.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -144,6 +155,7 @@ program
   .command('wait')
   .description('Wait for text to appear.')
   .argument('<text>', 'text to wait for')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -155,6 +167,7 @@ program
 program
   .command('state')
   .description('Print current app state probe values.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -163,6 +176,7 @@ program
 program
   .command('record')
   .description('Manage action recording.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
@@ -185,6 +199,16 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
   if (options.port) {
     return new DebuggerClient(new SocketTransport({ port: options.port, host: options.host }))
   }
+  if (options.app) {
+    const endpoint = await readEndpointRegistry(options.app)
+    return new DebuggerClient(
+      new SocketTransport(
+        endpoint.transport === 'tcp'
+          ? { port: endpoint.port, host: endpoint.host }
+          : { path: endpoint.path }
+      )
+    )
+  }
   if (!options.fromHtml) {
     exitBridgePending()
   }
@@ -200,7 +224,7 @@ function printJson(value: unknown): void {
 
 function exitBridgePending(): never {
   process.stderr.write(
-    'live Tauri attach is not wired yet; use --from-html for deterministic protocol prototyping.\n'
+    'live Tauri attach needs --app for endpoint discovery, --port for a known daemon, or --from-html for deterministic protocol prototyping.\n'
   )
   process.exit(2)
 }
