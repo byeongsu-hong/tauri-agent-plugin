@@ -7,6 +7,7 @@ export type AgentMethod =
   | 'click'
   | 'fill'
   | 'select'
+  | 'check'
   | 'inspect'
   | 'eval'
   | 'press'
@@ -66,6 +67,10 @@ export interface FillParams extends RefActionParams {
 
 export interface SelectParams extends RefActionParams {
   value?: string
+}
+
+export interface CheckParams extends RefActionParams {
+  checked?: boolean
 }
 
 export interface InspectParams extends RefActionParams {}

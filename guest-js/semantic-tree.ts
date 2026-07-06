@@ -109,6 +109,23 @@ export function clickRef(ref: string): void {
   element.click()
 }
 
+export function checkRef(ref: string, checked = true): void {
+  const normalized = normalizeRef(ref)
+  const element = resolveRef(normalized)
+  if (!(element instanceof HTMLInputElement) || (element.type !== 'checkbox' && element.type !== 'radio')) {
+    throw new Error(`${normalized} is not checkable`)
+  }
+  if (element.type === 'radio' && !checked) {
+    throw new Error(`radio ${normalized} cannot be unchecked directly`)
+  }
+  if (element.checked === checked) {
+    return
+  }
+  setNativeChecked(element, checked)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 export function fillRef(ref: string, value: string): void {
   const element = resolveRef(ref)
   if (
@@ -502,6 +519,16 @@ function setNativeValue(
     return
   }
   element.value = value
+}
+
+function setNativeChecked(element: HTMLInputElement, checked: boolean): void {
+  const prototype = Object.getPrototypeOf(element)
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'checked')
+  if (descriptor?.set) {
+    descriptor.set.call(element, checked)
+    return
+  }
+  element.checked = checked
 }
 
 function findOption(select: HTMLSelectElement, value: string): HTMLOptionElement | undefined {

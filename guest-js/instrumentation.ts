@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
+  checkRef,
   clickRef,
   fillRef,
   inspectRef,
@@ -29,9 +30,10 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'fill' | 'press' | 'select'
+  action: 'click' | 'fill' | 'press' | 'select' | 'check'
   ref?: string
   value?: string
+  checked?: boolean
 }
 
 type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error'
@@ -99,6 +101,9 @@ export class WebviewAgentInstrumentation {
       case 'select':
         selectRef(requiredRef(action.ref), action.value)
         break
+      case 'check':
+        checkRef(requiredRef(action.ref), action.checked ?? true)
+        break
     }
 
     this.pushEvent(action.action, serializableAction(action))
@@ -114,6 +119,14 @@ export class WebviewAgentInstrumentation {
     selectRef(ref, value)
     const action: InstrumentedAction = { action: 'select', ref, value }
     this.pushEvent('select', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
+  check(ref: string, checked = true): { ok: true } {
+    checkRef(ref, checked)
+    const action: InstrumentedAction = { action: 'check', ref, checked }
+    this.pushEvent('check', serializableAction(action))
     this.recordAction(action)
     return { ok: true }
   }
@@ -136,10 +149,13 @@ export class WebviewAgentInstrumentation {
   }
 
   state(): Record<string, unknown> {
-    const values: Record<string, string> = {}
+    const values: Record<string, string | boolean> = {}
     for (const input of Array.from(document.querySelectorAll('input, textarea, select'))) {
       const control = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-      values[controlName(control)] = control.value
+      values[controlName(control)] =
+        control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')
+          ? control.checked
+          : control.value
     }
 
     const probes: Record<string, unknown> = {}
@@ -234,6 +250,8 @@ export class WebviewAgentInstrumentation {
         })
       case 'select':
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
+      case 'check':
+        return this.check(requiredStringParam(params, 'ref'), booleanParam(params, 'checked') ?? true)
       case 'inspect':
         return this.inspect(requiredStringParam(params, 'ref'))
       case 'eval':
@@ -301,10 +319,11 @@ function requiredRef(ref: string | undefined): string {
   return ref
 }
 
-function serializableAction(action: InstrumentedAction): Record<string, string> {
-  const params: Record<string, string> = {}
+function serializableAction(action: InstrumentedAction): Record<string, string | boolean> {
+  const params: Record<string, string | boolean> = {}
   if (action.ref) params.ref = action.ref
   if (action.value) params.value = action.value
+  if (action.checked !== undefined) params.checked = action.checked
   return params
 }
 
@@ -334,6 +353,11 @@ function stringParam(params: Record<string, unknown>, key: string): string | und
 function numberParam(params: Record<string, unknown>, key: string): number | undefined {
   const value = params[key]
   return typeof value === 'number' ? value : undefined
+}
+
+function booleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
+  const value = params[key]
+  return typeof value === 'boolean' ? value : undefined
 }
 
 function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | undefined {

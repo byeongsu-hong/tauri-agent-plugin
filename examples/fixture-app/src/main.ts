@@ -1,6 +1,7 @@
 import {
   WebviewAgentInstrumentation,
   agentAction,
+  agentCheck,
   agentEval,
   agentEvents,
   agentInspect,
@@ -64,6 +65,10 @@ function render(): void {
             <option value="backup">Backup</option>
           </select>
         </label>
+        <label>
+          Notify agents
+          <input type="checkbox" aria-label="Notify agents" name="notifyAgents" />
+        </label>
         <button type="button" data-action="register" disabled>Register</button>
         <ul aria-label="Roster">
           ${roster
@@ -126,9 +131,11 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const tree = await agentSnapshot({ scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
+  const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
+  if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
   await agentAction({ action: 'press', value: 'Escape' })
   const state = await agentState()
   const logs = await agentLogs()
@@ -145,6 +152,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     inspected.name === 'Agent name' &&
     evaluated.type === 'string' &&
     evaluated.value === 'Command bridge running' &&
+    values['Notify agents'] === true &&
     values['Worker priority'] === 'remote' &&
     isRecord(state) &&
     probes.route === activeView &&

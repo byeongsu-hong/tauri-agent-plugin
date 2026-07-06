@@ -111,6 +111,9 @@ async function executeTool(
     case 'tauri_select':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('select', pick(args, ['window', 'ref', 'value']))
+    case 'tauri_check':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('check', pick(args, ['window', 'ref', 'checked']))
     case 'tauri_inspect':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('inspect', pick(args, ['window', 'ref']))
@@ -194,6 +197,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   mode: { type: 'string', enum: ['compact', 'verbose'] },
   ref: { type: 'string', description: 'Snapshot-local ref such as @3.' },
   value: { type: 'string', description: 'Option value or visible label.' },
+  checked: { type: 'boolean', description: 'Desired checked state. Defaults to true.' },
   code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
   key: { type: 'string', description: 'Keyboard key, for example Enter.' },
@@ -210,6 +214,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
+  tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'key'], ['key'])),

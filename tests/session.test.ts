@@ -11,6 +11,7 @@ const html = `
       <option value="local">Local worker</option>
       <option value="remote">Remote worker</option>
     </select>
+    <label><input type="checkbox" aria-label="Notify" /> Notify</label>
     <p>Registered worker-a</p>
   </main>
 `
@@ -35,7 +36,8 @@ describe('DebuggerSession', () => {
         '@2 textbox "Agent name" empty',
         '@3 combobox "Worker"',
         '  @4 option "Local worker" selected',
-        '  @5 option "Remote worker"'
+        '  @5 option "Remote worker"',
+        '@6 checkbox "Notify"'
       ].join('\n')
     })
     await expect(session.execute('inspect', { ref: '@2' })).resolves.toEqual({
@@ -56,6 +58,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('fill', { ref: '@2', text: 'worker-a' })).resolves.toEqual({ ok: true })
     await expect(session.execute('select', { ref: '@3', value: 'remote' })).resolves.toEqual({ ok: true })
+    await expect(session.execute('check', { ref: '@6', checked: true })).resolves.toEqual({ ok: true })
     await expect(
       session.execute('eval', { code: 'document.querySelector("input")?.value' })
     ).resolves.toEqual({
@@ -70,6 +73,7 @@ describe('DebuggerSession', () => {
       title: 'Ducktape',
       values: {
         'Agent name': 'worker-a',
+        Notify: true,
         Worker: 'remote'
       }
     })

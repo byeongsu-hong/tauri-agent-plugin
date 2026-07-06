@@ -4,11 +4,11 @@ use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
-    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEvalRequest,
-    AgentEventEntry, AgentEventsRequest, AgentInspectRequest, AgentInspectResponse, AgentLogEntry,
-    AgentLogRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
-    AgentWaitResponse, WindowInfo,
+    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentCheckRequest,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentInspectRequest,
+    AgentInspectResponse, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
+    AgentScreenshotRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentWaitRequest, AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -102,6 +102,16 @@ pub async fn agent_select<R: Runtime>(
     request: AgentSelectRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "select", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_check<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentCheckRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "check", &request)?;
     Ok(())
 }
 

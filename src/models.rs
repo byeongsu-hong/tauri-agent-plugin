@@ -123,6 +123,15 @@ pub struct AgentSelectRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentCheckRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub checked: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -299,6 +308,16 @@ mod tests {
         assert_eq!(
             serde_json::to_value(select).unwrap(),
             serde_json::json!({"window": "main", "ref": "@4", "value": "remote"})
+        );
+
+        let check = AgentCheckRequest {
+            window: Some("main".into()),
+            ref_id: "@6".into(),
+            checked: Some(true),
+        };
+        assert_eq!(
+            serde_json::to_value(check).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@6", "checked": true})
         );
 
         let record = AgentRecordRequest {

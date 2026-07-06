@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import {
+  checkRef,
   clickRef,
   currentRefRegistry,
   fillRef,
@@ -19,6 +20,7 @@ export { WebviewAgentInstrumentation, type InstrumentationOptions } from './inst
 
 export {
   clickRef,
+  checkRef,
   currentRefRegistry,
   fillRef,
   inspectRef,
@@ -72,6 +74,12 @@ export interface AgentSelectRequest {
   window?: string
   ref: string
   value?: string
+}
+
+export interface AgentCheckRequest {
+  window?: string
+  ref: string
+  checked?: boolean
 }
 
 export interface AgentScreenshotRequest {
@@ -140,6 +148,10 @@ export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> 
 
 export async function agentSelect(request: AgentSelectRequest): Promise<void> {
   return invoke('plugin:agent|agent_select', { request })
+}
+
+export async function agentCheck(request: AgentCheckRequest): Promise<void> {
+  return invoke('plugin:agent|agent_check', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

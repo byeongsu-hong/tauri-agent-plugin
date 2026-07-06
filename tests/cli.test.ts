@@ -17,7 +17,7 @@ function htmlFile(): string {
   const path = join(dir, 'screen.html')
   writeFileSync(
     path,
-    '<main aria-label="Ducktape"><button>Forge</button><label>Agent name<input aria-label="Agent name"></label><select aria-label="Worker"><option value="local">Local worker</option><option value="remote">Remote worker</option></select><p>Registered worker-a</p></main>'
+    '<main aria-label="Ducktape"><button>Forge</button><label>Agent name<input aria-label="Agent name"></label><select aria-label="Worker"><option value="local">Local worker</option><option value="remote">Remote worker</option></select><label><input type="checkbox" aria-label="Notify"> Notify</label><p>Registered worker-a</p></main>'
   )
   return path
 }
@@ -36,7 +36,8 @@ describe('tauri-agent CLI', () => {
         '@2 textbox "Agent name" empty',
         '@3 combobox "Worker"',
         '  @4 option "Local worker" selected',
-        '  @5 option "Remote worker"'
+        '  @5 option "Remote worker"',
+        '@6 checkbox "Notify"'
       ].join('\n')
     )
     expect(JSON.parse(runCli(['inspect', '@2', '--from-html', path]))).toEqual({
@@ -53,6 +54,7 @@ describe('tauri-agent CLI', () => {
     })
     expect(JSON.parse(runCli(['fill', '@2', 'worker-a', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['select', '@3', 'remote', '--from-html', path]))).toEqual({ ok: true })
+    expect(JSON.parse(runCli(['check', '@6', 'true', '--from-html', path]))).toEqual({ ok: true })
     expect(
       JSON.parse(runCli(['eval', 'document.querySelector("input")?.getAttribute("aria-label")', '--from-html', path]))
     ).toEqual({
@@ -63,7 +65,7 @@ describe('tauri-agent CLI', () => {
     expect(JSON.parse(runCli(['state', '--from-html', path]))).toEqual({
       url: 'tauri-agent://static',
       title: 'Tauri App',
-      values: { 'Agent name': '', Worker: 'local' }
+      values: { 'Agent name': '', Notify: false, Worker: 'local' }
     })
     expect(JSON.parse(runCli(['logs', '--from-html', path]))).toEqual([])
     expect(JSON.parse(runCli(['events', '--from-html', path]))).toEqual([])
