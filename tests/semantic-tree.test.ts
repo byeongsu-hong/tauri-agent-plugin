@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clickRef,
+  checkRef,
   fillRef,
   inspectRef,
   pressKey,
@@ -128,6 +129,38 @@ describe('snapshotDocument', () => {
     selectRef('@3')
     expect((resolveRef('@1') as HTMLSelectElement).value).toBe('local')
     expect(seen).toEqual(['input', 'change', 'input', 'change', 'input', 'change'])
+  })
+
+  it('sets checkbox and radio checked state idempotently', () => {
+    const seen: string[] = []
+    document.body.innerHTML = `
+      <label><input type="checkbox" aria-label="Notify" /> Notify</label>
+      <label><input type="radio" name="mode" value="local" aria-label="Local" /> Local</label>
+      <label><input type="radio" name="mode" value="remote" aria-label="Remote" checked /> Remote</label>
+    `
+    for (const input of Array.from(document.querySelectorAll('input'))) {
+      input.addEventListener('input', () => seen.push(`input:${input.getAttribute('aria-label')}`))
+      input.addEventListener('change', () => seen.push(`change:${input.getAttribute('aria-label')}`))
+    }
+
+    const snapshot = snapshotDocument(document)
+
+    expect(snapshot.text).toBe(
+      [
+        '@1 checkbox "Notify"',
+        '@2 radio "Local"',
+        '@3 radio "Remote" checked'
+      ].join('\n')
+    )
+
+    checkRef('@1', true)
+    checkRef('@2', true)
+    checkRef('@1', true)
+    expect((resolveRef('@1') as HTMLInputElement).checked).toBe(true)
+    expect((resolveRef('@2') as HTMLInputElement).checked).toBe(true)
+    expect((resolveRef('@3') as HTMLInputElement).checked).toBe(false)
+    expect(seen).toEqual(['input:Notify', 'change:Notify', 'input:Local', 'change:Local'])
+    expect(() => checkRef('@2', false)).toThrow('radio @2 cannot be unchecked directly')
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

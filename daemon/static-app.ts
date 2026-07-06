@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { JSDOM } from 'jsdom'
 
 import {
+  checkRef,
   clickRef,
   fillRef,
   inspectRef,
@@ -67,6 +68,13 @@ export class StaticHtmlAppAdapter {
     return { ok: true }
   }
 
+  async check(ref: string, checked?: boolean): Promise<{ ok: true }> {
+    this.bindGlobals()
+    checkRef(ref, checked ?? true)
+    this.pushEvent('check', { ref, checked: checked ?? true })
+    return { ok: true }
+  }
+
   async fill(ref: string, text: string): Promise<{ ok: true }> {
     this.bindGlobals()
     fillRef(ref, text)
@@ -111,10 +119,14 @@ export class StaticHtmlAppAdapter {
   }
 
   async state(): Promise<Record<string, unknown>> {
-    const values: Record<string, string> = {}
+    const values: Record<string, string | boolean> = {}
     for (const input of Array.from(this.dom.window.document.querySelectorAll('input, textarea, select'))) {
       const control = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-      values[this.controlName(control)] = control.value
+      values[this.controlName(control)] =
+        control instanceof this.dom.window.HTMLInputElement &&
+        (control.type === 'checkbox' || control.type === 'radio')
+          ? control.checked
+          : control.value
     }
 
     return {

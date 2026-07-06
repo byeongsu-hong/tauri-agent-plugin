@@ -30,6 +30,8 @@ export class DebuggerSession {
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':
         return this.app.select(requiredString(params.ref, 'ref'), stringParam(params.value))
+      case 'check':
+        return this.app.check(requiredString(params.ref, 'ref'), booleanParam(params.checked))
       case 'inspect':
         return this.app.inspect(requiredString(params.ref, 'ref'))
       case 'eval':
@@ -99,6 +101,10 @@ function stringParam(value: unknown): string | undefined {
 
 function numberParam(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined
+}
+
+function booleanParam(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
 }
 
 function modeParam(value: unknown): 'compact' | 'verbose' | undefined {

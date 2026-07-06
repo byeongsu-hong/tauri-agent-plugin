@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, select controls, screenshots, event streams, and window discovery.
+Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref inspection, JavaScript eval, ref actions, select controls, checked controls, screenshots, event streams, and window discovery.
 
 #### This default permission set includes the following:
 
@@ -11,6 +11,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref 
 - `allow-agent-inspect`
 - `allow-agent-eval`
 - `allow-agent-select`
+- `allow-agent-check`
 - `allow-agent-screenshot`
 - `allow-agent-logs`
 - `allow-agent-events`
@@ -102,6 +103,32 @@ Enables the agent_bridge_response command without any pre-configured scope.
 <td>
 
 Denies the agent_bridge_response command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-check`
+
+</td>
+<td>
+
+Enables the agent_check command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-check`
+
+</td>
+<td>
+
+Denies the agent_check command without any pre-configured scope.
 
 </td>
 </tr>

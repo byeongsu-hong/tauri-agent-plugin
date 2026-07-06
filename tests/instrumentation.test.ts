@@ -12,6 +12,7 @@ describe('WebviewAgentInstrumentation', () => {
           <option value="local">Local worker</option>
           <option value="remote">Remote worker</option>
         </select>
+        <label><input type="checkbox" aria-label="Notify" /> Notify</label>
         <p>Registered worker-a</p>
       </main>
     `
@@ -29,6 +30,7 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.action({ action: 'click', ref: '@1' })
     instrumentation.action({ action: 'fill', ref: '@2', value: 'worker-a' })
     instrumentation.select('@3', 'remote')
+    instrumentation.check('@6', true)
     instrumentation.action({ action: 'press', value: 'Enter' })
 
     await expect(instrumentation.wait({ text: 'Registered worker-a', timeoutMs: 1 })).resolves.toEqual({
@@ -43,7 +45,8 @@ describe('WebviewAgentInstrumentation', () => {
         '@2 textbox "Agent name" empty',
         '@3 combobox "Worker"',
         '  @4 option "Local worker" selected',
-        '  @5 option "Remote worker"'
+        '  @5 option "Remote worker"',
+        '@6 checkbox "Notify"'
       ].join('\n')
     )
     expect(instrumentation.inspect('@2')).toEqual({
@@ -74,6 +77,7 @@ describe('WebviewAgentInstrumentation', () => {
       title: '',
       values: {
         'Agent name': 'worker-a',
+        Notify: true,
         Worker: 'remote'
       },
       probes: {
@@ -95,6 +99,7 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ method: 'click', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
+        expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
         expect.objectContaining({ method: 'press', params: { value: 'Enter' } })
       ]
     })
