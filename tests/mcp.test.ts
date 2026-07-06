@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Server } from 'node:net'
+import { createServer, type Server } from 'node:net'
 
 import { createEndpointDescriptor, writeEndpointRegistry } from '../daemon/endpoint'
 import { createLineJsonRpcServer } from '../daemon/server'
@@ -100,6 +100,21 @@ describe('tauri-agent MCP server', () => {
       items: { type: 'string', enum: ['Alt', 'Control', 'Meta', 'Shift'] },
       description: 'Keyboard modifiers held while dispatching the key.'
     })
+    for (const toolName of ['tauri_logs', 'tauri_events', 'tauri_network']) {
+      const followTool = list.result.tools.find((tool: { name: string }) => tool.name === toolName)
+      expect(followTool.inputSchema.properties.follow).toEqual({
+        type: 'boolean',
+        description: 'Poll for entries before returning a bounded tool result.'
+      })
+      expect(followTool.inputSchema.properties.pollMs).toEqual({
+        type: 'number',
+        description: 'Follow polling interval in milliseconds.'
+      })
+      expect(followTool.inputSchema.properties.timeoutMs).toEqual({
+        type: 'number',
+        description: 'Maximum wait or follow duration in milliseconds.'
+      })
+    }
   })
 
   it('falls back to the supported MCP protocol version when the client asks for another version', async () => {
@@ -161,6 +176,49 @@ describe('tauri-agent MCP server', () => {
         message: 'invalid MCP JSON-RPC message'
       }
     })
+  })
+
+  it('polls followed log tools and returns accumulated entries', async () => {
+    const fakeServer = await startFakeRpcServer({
+      logs: (callIndex: number) =>
+        callIndex === 0
+          ? [{ level: 'info', message: 'booted' }]
+          : [
+              { level: 'info', message: 'booted' },
+              { level: 'error', message: 'late failure' }
+            ]
+    })
+
+    try {
+      const response = JSON.parse(
+        await requiredResponse(
+          createMcpRequestHandler()(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 19,
+              method: 'tools/call',
+              params: {
+                name: 'tauri_logs',
+                arguments: { port: fakeServer.port, follow: true, pollMs: 1, timeoutMs: 5 }
+              }
+            })
+          )
+        )
+      )
+
+      expect(response.result.structuredContent).toEqual({
+        result: [
+          { level: 'info', message: 'booted' },
+          { level: 'error', message: 'late failure' }
+        ]
+      })
+      expect(fakeServer.requests.length).toBeGreaterThanOrEqual(2)
+      expect(fakeServer.requests.every((request) => request.method === 'logs')).toBe(true)
+      expect(fakeServer.requests.every((request) => request.params?.follow === true)).toBe(true)
+      expect(fakeServer.requests.every((request) => request.params?.clear === undefined)).toBe(true)
+    } finally {
+      fakeServer.close()
+    }
   })
 
   it('calls debugger tools through the existing protocol path', async () => {
@@ -673,6 +731,54 @@ async function listen(server: Server): Promise<number> {
     throw new Error('server did not bind a TCP port')
   }
   return address.port
+}
+
+type RpcResponse = unknown | ((callIndex: number) => unknown)
+
+async function startFakeRpcServer(responses: Record<string, RpcResponse>): Promise<{
+  close: () => void
+  port: number
+  requests: Array<{ method: string; params?: Record<string, unknown> }>
+}> {
+  const requests: Array<{ method: string; params?: Record<string, unknown> }> = []
+  const callCounts = new Map<string, number>()
+  const server = createServer((socket) => {
+    let buffer = ''
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex)
+        buffer = buffer.slice(newlineIndex + 1)
+        const request = JSON.parse(line) as { id: number; method: string; params?: Record<string, unknown> }
+        requests.push({ method: request.method, params: request.params })
+        const callIndex = callCounts.get(request.method) ?? 0
+        callCounts.set(request.method, callIndex + 1)
+        const response = responses[request.method]
+        const result = typeof response === 'function' ? response(callIndex) : response
+        socket.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: request.id,
+            result: result ?? { ok: true }
+          })}\n`,
+          () => socket.end()
+        )
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('fake RPC server did not bind to a TCP port')
+  }
+  return {
+    close: () => server.close(),
+    port: address.port,
+    requests
+  }
 }
 
 function staticWindowInfo(title: string): Record<string, unknown> {

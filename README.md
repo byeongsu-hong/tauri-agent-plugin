@@ -178,6 +178,8 @@ It exposes named tools mirroring the debugger protocol:
 
 Each tool accepts the same connection inputs as the CLI: `app` for endpoint discovery, `port`/`host` for a known debugger daemon, or `html`/`fromHtml` for deterministic static prototyping. MCP never assumes a singleton `/tmp/tauri-mcp.sock`; live calls should use the app-scoped endpoint registry.
 
+`tauri_logs`, `tauri_events`, and `tauri_network` support bounded follow polling through `follow`, `pollMs`, and `timeoutMs`. MCP tool calls return one accumulated result instead of an unbounded stream, which keeps agent requests finite while still allowing live tailing.
+
 ## Fixture App
 
 `examples/fixture-app` is a minimal Bun + TypeScript + Tauri v2 app wired to this plugin by local path.

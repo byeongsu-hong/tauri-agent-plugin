@@ -34,6 +34,7 @@ type JsonSchema = {
 }
 
 type ToolCallArgs = Record<string, unknown>
+type FollowMethod = 'logs' | 'events' | 'network'
 
 export function createMcpRequestHandler(): McpRequestHandler {
   return async (message: string) => {
@@ -146,11 +147,11 @@ async function executeTool(
     case 'tauri_shot':
       return client.call('shot', pick(args, ['window', 'path']))
     case 'tauri_logs':
-      return client.call('logs', pick(args, ['window', 'follow', 'clear']))
+      return callFollowableEntries(client, 'logs', args)
     case 'tauri_events':
-      return client.call('events', pick(args, ['window', 'follow', 'clear']))
+      return callFollowableEntries(client, 'events', args)
     case 'tauri_network':
-      return client.call('network', pick(args, ['window', 'follow', 'clear']))
+      return callFollowableEntries(client, 'network', args)
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
     case 'tauri_cookies':
@@ -165,6 +166,38 @@ async function executeTool(
       return client.call('record', pick(args, ['window', 'action']))
     default:
       throw new Error(`unknown tool: ${name}`)
+  }
+}
+
+async function callFollowableEntries(
+  client: DebuggerClient,
+  method: FollowMethod,
+  args: ToolCallArgs
+): Promise<unknown> {
+  if (args.follow !== true) {
+    return client.call(method, pick(args, ['window', 'follow', 'clear']))
+  }
+
+  const pollMs = Math.max(1, numberField(args, 'pollMs') ?? 250)
+  const timeoutMs = Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
+  const startedAt = Date.now()
+  const entries: unknown[] = []
+  let emitted = 0
+
+  while (true) {
+    const result = await client.call(method, { ...windowParams(args), follow: true })
+    if (!Array.isArray(result)) {
+      throw new Error(`${method} follow expected an array result`)
+    }
+
+    const start = result.length < emitted ? 0 : emitted
+    entries.push(...result.slice(start))
+    emitted = result.length
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      return entries
+    }
+    await sleep(nextPollDelay(startedAt, pollMs, timeoutMs))
   }
 }
 
@@ -245,11 +278,12 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   height: { type: 'number', description: 'Height in physical pixels.' },
   limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
-  follow: { type: 'boolean', description: 'Reserved for future streaming.' },
+  follow: { type: 'boolean', description: 'Poll for entries before returning a bounded tool result.' },
   clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
+  pollMs: { type: 'number', description: 'Follow polling interval in milliseconds.' },
   area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
   url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
-  timeoutMs: { type: 'number' },
+  timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
 }
 
@@ -272,9 +306,9 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
-  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear'])),
-  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear'])),
-  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
+  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
+  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
+  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
@@ -418,6 +452,14 @@ function stringField(value: Record<string, unknown>, field: string, fallback = '
 function numberField(value: Record<string, unknown>, field: string): number | undefined {
   const fieldValue = value[field]
   return typeof fieldValue === 'number' ? fieldValue : undefined
+}
+
+function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number): number {
+  return Math.max(0, Math.min(pollMs, timeoutMs - (Date.now() - startedAt)))
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function jsonRpcResult(id: string | number, result: unknown): string {
