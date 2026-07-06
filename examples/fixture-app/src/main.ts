@@ -168,32 +168,29 @@ function render(): void {
 async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<void> {
   if (!status) return
   status.textContent = 'Command bridge running'
-  const tree = await agentSnapshot({ window: fixtureWindowLabel, scope: 'main' })
+  const tree = await agentSnapshot({ scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
   const forgeRef = tree.match(/(@\d+) button "Forge"/)?.[1]
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const rosterRef = tree.match(/(@\d+) list "Roster"/)?.[1]
   const dropRef = tree.match(/(@\d+) button "Deployment queue"/)?.[1]
-  const inspected = agentNameRef ? await agentInspect({ window: fixtureWindowLabel, ref: agentNameRef }) : null
-  const evaluated = await agentEval({
-    window: fixtureWindowLabel,
-    code: 'document.querySelector("[data-status]")?.textContent'
-  })
-  if (forgeRef) await agentFocus({ window: fixtureWindowLabel, ref: forgeRef })
-  if (forgeRef) await agentBlur({ window: fixtureWindowLabel, ref: forgeRef })
-  if (forgeRef) await agentHover({ window: fixtureWindowLabel, ref: forgeRef })
-  if (rosterRef) await agentScroll({ window: fixtureWindowLabel, ref: rosterRef, y: 12 })
-  if (forgeRef) await agentDrag({ window: fixtureWindowLabel, ref: forgeRef, toRef: dropRef })
-  if (priorityRef) await agentSelect({ window: fixtureWindowLabel, ref: priorityRef, value: 'remote' })
-  if (notifyRef) await agentCheck({ window: fixtureWindowLabel, ref: notifyRef, checked: true })
-  await agentAction({ window: fixtureWindowLabel, action: 'press', value: 'Escape' })
-  const state = await agentState({ window: fixtureWindowLabel })
-  const logs = await agentLogs({ window: fixtureWindowLabel })
-  const events = await agentEvents({ window: fixtureWindowLabel })
-  const shot = await agentScreenshot({ window: fixtureWindowLabel })
-  const wait = await agentWait({ window: fixtureWindowLabel, text: 'Command bridge running', timeoutMs: 500 })
-  const record = await agentRecord({ window: fixtureWindowLabel })
+  const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
+  const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  if (forgeRef) await agentFocus({ ref: forgeRef })
+  if (forgeRef) await agentBlur({ ref: forgeRef })
+  if (forgeRef) await agentHover({ ref: forgeRef })
+  if (rosterRef) await agentScroll({ ref: rosterRef, y: 12 })
+  if (forgeRef) await agentDrag({ ref: forgeRef, toRef: dropRef })
+  if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
+  if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
+  await agentAction({ action: 'press', value: 'Escape' })
+  const state = await agentState()
+  const logs = await agentLogs()
+  const events = await agentEvents()
+  const shot = await agentScreenshot()
+  const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
+  const record = await agentRecord()
   const probes = isRecord(state.probes) ? state.probes : {}
   const values = isRecord(state.values) ? state.values : {}
 

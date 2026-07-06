@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   blurRef,
   checkRef,
@@ -173,75 +174,89 @@ export interface WindowInfo {
 }
 
 export async function agentSnapshot(request: AgentSnapshotRequest = {}): Promise<string> {
-  return invoke('plugin:agent|agent_snapshot', { request })
+  return invoke('plugin:agent|agent_snapshot', { request: withCurrentWindow(request) })
 }
 
 export async function agentAction(request: AgentActionRequest): Promise<void> {
-  return invoke('plugin:agent|agent_action', { request })
+  return invoke('plugin:agent|agent_action', { request: withCurrentWindow(request) })
 }
 
 export async function agentInspect(request: AgentInspectRequest): Promise<InspectResult> {
-  return invoke('plugin:agent|agent_inspect', { request })
+  return invoke('plugin:agent|agent_inspect', { request: withCurrentWindow(request) })
 }
 
 export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> {
-  return invoke('plugin:agent|agent_eval', { request })
+  return invoke('plugin:agent|agent_eval', { request: withCurrentWindow(request) })
 }
 
 export async function agentSelect(request: AgentSelectRequest): Promise<void> {
-  return invoke('plugin:agent|agent_select', { request })
+  return invoke('plugin:agent|agent_select', { request: withCurrentWindow(request) })
 }
 
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {
-  return invoke('plugin:agent|agent_check', { request })
+  return invoke('plugin:agent|agent_check', { request: withCurrentWindow(request) })
 }
 
 export async function agentHover(request: AgentHoverRequest): Promise<void> {
-  return invoke('plugin:agent|agent_hover', { request })
+  return invoke('plugin:agent|agent_hover', { request: withCurrentWindow(request) })
 }
 
 export async function agentFocus(request: AgentFocusRequest): Promise<void> {
-  return invoke('plugin:agent|agent_focus', { request })
+  return invoke('plugin:agent|agent_focus', { request: withCurrentWindow(request) })
 }
 
 export async function agentBlur(request: AgentBlurRequest): Promise<void> {
-  return invoke('plugin:agent|agent_blur', { request })
+  return invoke('plugin:agent|agent_blur', { request: withCurrentWindow(request) })
 }
 
 export async function agentScroll(request: AgentScrollRequest): Promise<void> {
-  return invoke('plugin:agent|agent_scroll', { request })
+  return invoke('plugin:agent|agent_scroll', { request: withCurrentWindow(request) })
 }
 
 export async function agentDrag(request: AgentDragRequest): Promise<void> {
-  return invoke('plugin:agent|agent_drag', { request })
+  return invoke('plugin:agent|agent_drag', { request: withCurrentWindow(request) })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {
-  return invoke('plugin:agent|agent_screenshot', { request })
+  return invoke('plugin:agent|agent_screenshot', { request: withCurrentWindow(request) })
 }
 
 export async function agentLogs(request: AgentLogRequest = {}): Promise<LogEntry[]> {
-  return invoke('plugin:agent|agent_logs', { request })
+  return invoke('plugin:agent|agent_logs', { request: withCurrentWindow(request) })
 }
 
 export async function agentEvents(request: AgentEventsRequest | string = {}): Promise<AgentEvent[]> {
   return invoke('plugin:agent|agent_events', {
-    request: typeof request === 'string' ? { window: request } : request
+    request: withCurrentWindow(typeof request === 'string' ? { window: request } : request)
   })
 }
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {
-  return invoke('plugin:agent|agent_wait', { request })
+  return invoke('plugin:agent|agent_wait', { request: withCurrentWindow(request) })
 }
 
 export async function agentState(request: AgentStateRequest = {}): Promise<Record<string, unknown>> {
-  return invoke('plugin:agent|agent_state', { request })
+  return invoke('plugin:agent|agent_state', { request: withCurrentWindow(request) })
 }
 
 export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
-  return invoke('plugin:agent|agent_record', { request })
+  return invoke('plugin:agent|agent_record', { request: withCurrentWindow(request) })
 }
 
 export async function agentWindows(): Promise<WindowInfo[]> {
   return invoke('plugin:agent|agent_windows')
+}
+
+type WindowRequest = { window?: string }
+
+function withCurrentWindow<TRequest extends WindowRequest>(request: TRequest): TRequest {
+  if (request.window) {
+    return request
+  }
+  try {
+    const windowLabel = getCurrentWindow().label
+    return windowLabel ? { ...request, window: windowLabel } : request
+  } catch {
+    return request
+  }
 }

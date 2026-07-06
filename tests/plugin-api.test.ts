@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const invokeMock = vi.hoisted(() => vi.fn())
+const currentWindowMock = vi.hoisted(() => ({
+  label: 'secondary'
+}))
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock
+}))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => currentWindowMock
 }))
 
 import {
@@ -74,6 +81,48 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_state', { request: { window: 'main' } }],
       ['plugin:agent|agent_record', { request: { window: 'main', action: 'start' } }],
       ['plugin:agent|agent_windows']
+    ])
+  })
+
+  it('defaults direct Tauri command helpers to the current window label', async () => {
+    await agentSnapshot({ scope: 'main' })
+    await agentInspect({ ref: '@1' })
+    await agentEval({ code: 'document.title' })
+    await agentSelect({ ref: '@2', value: 'remote' })
+    await agentCheck({ ref: '@3', checked: true })
+    await agentHover({ ref: '@4' })
+    await agentFocus({ ref: '@5' })
+    await agentBlur({ ref: '@6' })
+    await agentScroll({ ref: '@7', y: 12, x: 3 })
+    await agentDrag({ ref: '@8', toRef: '@9' })
+    await agentAction({ action: 'click', ref: '@1' })
+    await agentAction({ action: 'press', value: 'Enter' })
+    await agentScreenshot({ path: '/tmp/app.svg' })
+    await agentLogs()
+    await agentEvents()
+    await agentWait({ text: 'Ready', timeoutMs: 250 })
+    await agentState()
+    await agentRecord({ action: 'start' })
+
+    expect(invokeMock.mock.calls).toEqual([
+      ['plugin:agent|agent_snapshot', { request: { window: 'secondary', scope: 'main' } }],
+      ['plugin:agent|agent_inspect', { request: { window: 'secondary', ref: '@1' } }],
+      ['plugin:agent|agent_eval', { request: { window: 'secondary', code: 'document.title' } }],
+      ['plugin:agent|agent_select', { request: { window: 'secondary', ref: '@2', value: 'remote' } }],
+      ['plugin:agent|agent_check', { request: { window: 'secondary', ref: '@3', checked: true } }],
+      ['plugin:agent|agent_hover', { request: { window: 'secondary', ref: '@4' } }],
+      ['plugin:agent|agent_focus', { request: { window: 'secondary', ref: '@5' } }],
+      ['plugin:agent|agent_blur', { request: { window: 'secondary', ref: '@6' } }],
+      ['plugin:agent|agent_scroll', { request: { window: 'secondary', ref: '@7', y: 12, x: 3 } }],
+      ['plugin:agent|agent_drag', { request: { window: 'secondary', ref: '@8', toRef: '@9' } }],
+      ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'click', ref: '@1' } }],
+      ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'press', value: 'Enter' } }],
+      ['plugin:agent|agent_screenshot', { request: { window: 'secondary', path: '/tmp/app.svg' } }],
+      ['plugin:agent|agent_logs', { request: { window: 'secondary' } }],
+      ['plugin:agent|agent_events', { request: { window: 'secondary' } }],
+      ['plugin:agent|agent_wait', { request: { window: 'secondary', text: 'Ready', timeoutMs: 250 } }],
+      ['plugin:agent|agent_state', { request: { window: 'secondary' } }],
+      ['plugin:agent|agent_record', { request: { window: 'secondary', action: 'start' } }]
     ])
   })
 })
