@@ -164,6 +164,12 @@ describe('WebviewAgentInstrumentation', () => {
         route: '/agents'
       }
     })
+    expect(instrumentation.state('values')).toEqual({
+      'Agent name': 'worker-a',
+      Notify: true,
+      Worker: 'remote'
+    })
+    expect(instrumentation.state('missing')).toBeNull()
     expect(instrumentation.evaluate('document.querySelector("input")?.value')).toEqual({
       type: 'string',
       value: 'worker-a',

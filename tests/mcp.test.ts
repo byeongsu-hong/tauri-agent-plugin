@@ -600,6 +600,45 @@ describe('tauri-agent MCP server', () => {
       })
     })
 
+    const stateValues = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 24,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_state',
+              arguments: {
+                html: '<main><label>Agent name<input aria-label="Agent name" value="worker-a"></label></main>',
+                key: 'values'
+              }
+            }
+          })
+        )
+      )
+    )
+
+    expect(stateValues.result.structuredContent).toEqual({ 'Agent name': 'worker-a' })
+
+    const missingState = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 25,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_state',
+              arguments: { html, key: 'missing' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(missingState.result.structuredContent).toEqual({ result: null })
+
     const storage = JSON.parse(
       await requiredResponse(
         handler(

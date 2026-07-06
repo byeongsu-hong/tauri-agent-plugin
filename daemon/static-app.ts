@@ -296,7 +296,7 @@ export class StaticHtmlAppAdapter {
     return result
   }
 
-  async state(): Promise<Record<string, unknown>> {
+  async state(key?: string): Promise<unknown> {
     const values: Record<string, string | boolean> = {}
     for (const input of Array.from(this.dom.window.document.querySelectorAll('input, textarea, select'))) {
       const control = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -307,11 +307,12 @@ export class StaticHtmlAppAdapter {
           : control.value
     }
 
-    return {
+    const state = {
       url: this.dom.window.location.href,
       title: this.title,
       values
     }
+    return stateValue(state, key)
   }
 
   async wait(options: WaitParams = {}): Promise<WaitResult> {
@@ -495,6 +496,10 @@ function pressDetail(key: string, options: { ref?: string; modifiers?: KeyModifi
     ...(options.ref ? { ref: options.ref } : {}),
     ...(options.modifiers?.length ? { modifiers: options.modifiers } : {})
   }
+}
+
+function stateValue(state: Record<string, unknown>, key: string | undefined): unknown {
+  return key === undefined ? state : state[key] ?? null
 }
 
 function requiredFiniteNumber(value: number | undefined, name: string): number {

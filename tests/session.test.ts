@@ -106,6 +106,12 @@ describe('DebuggerSession', () => {
         Worker: 'remote'
       }
     })
+    await expect(session.execute('state', { key: 'values' })).resolves.toEqual({
+      'Agent name': 'worker-a',
+      Notify: true,
+      Worker: 'remote'
+    })
+    await expect(session.execute('state', { key: 'missing' })).resolves.toBeNull()
     await expect(session.execute('wait', { text: 'Registered worker-a', timeoutMs: 1 })).resolves.toEqual({
       matched: true,
       text: 'Registered worker-a'

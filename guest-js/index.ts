@@ -332,7 +332,10 @@ export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitRes
   return invokeAgentCommand('plugin:agent|agent_wait', { request: withCurrentWindow(request) })
 }
 
-export async function agentState(request: AgentStateRequest = {}): Promise<Record<string, unknown>> {
+export async function agentState(request?: AgentStateRequest & { key?: undefined }): Promise<Record<string, unknown>>
+export async function agentState(request: AgentStateRequest & { key: string }): Promise<unknown>
+export async function agentState(request: AgentStateRequest): Promise<unknown>
+export async function agentState(request: AgentStateRequest = {}): Promise<unknown> {
   return invokeAgentCommand('plugin:agent|agent_state', { request: withCurrentWindow(request) })
 }
 

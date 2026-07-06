@@ -97,6 +97,11 @@ describe('tauri-agent CLI', () => {
       title: 'Tauri App',
       values: { 'Agent name': '', Notify: false, Worker: 'local' }
     })
+    expect(JSON.parse(runCli(['state', '--key', 'values', '--from-html', path]))).toEqual({
+      'Agent name': '',
+      Notify: false,
+      Worker: 'local'
+    })
     expect(JSON.parse(runCli(['logs', '--from-html', path]))).toEqual([])
     expect(JSON.parse(runCli(['events', '--from-html', path]))).toEqual([])
     expect(JSON.parse(runCli(['network', '--from-html', path]))).toEqual([])
