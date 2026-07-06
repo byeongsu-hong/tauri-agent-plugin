@@ -1,3 +1,4 @@
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -92,6 +93,41 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
   throw new Error('invalid endpoint descriptor')
 }
 
+export async function writeEndpointRegistry(
+  descriptor: EndpointDescriptor,
+  options: { env?: EndpointPathOptions['env'] } = {}
+): Promise<void> {
+  const runtimeDir = endpointRuntimeDir({ appId: descriptor.appId, env: options.env })
+  await mkdir(runtimeDir, { recursive: true })
+  await writeFile(
+    endpointRegistryPath({ appId: descriptor.appId, env: options.env }),
+    `${JSON.stringify(descriptor, null, 2)}\n`,
+    'utf8'
+  )
+}
+
+export async function readEndpointRegistry(
+  appId: string,
+  options: { env?: EndpointPathOptions['env'] } = {}
+): Promise<EndpointDescriptor> {
+  const path = endpointRegistryPath({ appId, env: options.env })
+  try {
+    return parseEndpointDescriptor(await readFile(path, 'utf8'))
+  } catch (error) {
+    if (isNotFound(error)) {
+      throw new Error(`endpoint registry not found for app: ${appId}`)
+    }
+    throw error
+  }
+}
+
+export async function removeEndpointRegistry(
+  appId: string,
+  options: { env?: EndpointPathOptions['env'] } = {}
+): Promise<void> {
+  await rm(endpointRegistryPath({ appId, env: options.env }), { force: true })
+}
+
 function runtimeBaseDir(env: EndpointPathOptions['env']): string {
   return env?.XDG_RUNTIME_DIR ?? env?.TMPDIR ?? env?.TEMP ?? env?.TMP ?? tmpdir()
 }
@@ -102,4 +138,8 @@ function safeAppId(appId: string): string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
