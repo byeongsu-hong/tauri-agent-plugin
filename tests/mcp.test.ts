@@ -100,6 +100,13 @@ describe('tauri-agent MCP server', () => {
       items: { type: 'string', enum: ['Alt', 'Control', 'Meta', 'Shift'] },
       description: 'Keyboard modifiers held while dispatching the key.'
     })
+    const shotTool = list.result.tools.find((tool: { name: string }) => tool.name === 'tauri_shot')
+    expect(shotTool.description).toBe('Capture a DOM or native screenshot.')
+    expect(shotTool.inputSchema.properties.backend).toEqual({
+      type: 'string',
+      enum: ['dom', 'native', 'auto'],
+      description: 'Screenshot backend. dom preserves the SVG bridge path, native captures app-window pixels, auto tries native then falls back to dom.'
+    })
     for (const toolName of ['tauri_logs', 'tauri_events', 'tauri_network']) {
       const followTool = list.result.tools.find((tool: { name: string }) => tool.name === toolName)
       expect(followTool.inputSchema.properties.follow).toEqual({
@@ -199,7 +206,7 @@ describe('tauri-agent MCP server', () => {
               method: 'tools/call',
               params: {
                 name: 'tauri_logs',
-                arguments: { port: fakeServer.port, follow: true, pollMs: 1, timeoutMs: 5 }
+                arguments: { port: fakeServer.port, follow: true, pollMs: 1, timeoutMs: 50 }
               }
             })
           )
@@ -216,6 +223,47 @@ describe('tauri-agent MCP server', () => {
       expect(fakeServer.requests.every((request) => request.method === 'logs')).toBe(true)
       expect(fakeServer.requests.every((request) => request.params?.follow === true)).toBe(true)
       expect(fakeServer.requests.every((request) => request.params?.clear === undefined)).toBe(true)
+    } finally {
+      fakeServer.close()
+    }
+  })
+
+  it('forwards screenshot backend requests through MCP tools', async () => {
+    const fakeServer = await startFakeRpcServer({
+      shot: {
+        path: '/tmp/app.png',
+        mime: 'image/png',
+        width: 32,
+        height: 24
+      }
+    })
+
+    try {
+      const response = JSON.parse(
+        await requiredResponse(
+          createMcpRequestHandler()(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 25,
+              method: 'tools/call',
+              params: {
+                name: 'tauri_shot',
+                arguments: { port: fakeServer.port, path: '/tmp/app.png', backend: 'native' }
+              }
+            })
+          )
+        )
+      )
+
+      expect(response.result.structuredContent).toEqual({
+        path: '/tmp/app.png',
+        mime: 'image/png',
+        width: 32,
+        height: 24
+      })
+      expect(fakeServer.requests).toEqual([
+        { method: 'shot', params: { path: '/tmp/app.png', backend: 'native' } }
+      ])
     } finally {
       fakeServer.close()
     }

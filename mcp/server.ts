@@ -145,7 +145,7 @@ async function executeTool(
       }
       return client.call('press', { ...pick(args, ['window', 'ref', 'modifiers']), key: stringField(args, 'key') })
     case 'tauri_shot':
-      return client.call('shot', pick(args, ['window', 'path']))
+      return client.call('shot', pick(args, ['window', 'path', 'backend']))
     case 'tauri_logs':
       return callFollowableEntries(client, 'logs', args)
     case 'tauri_events':
@@ -278,6 +278,11 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   height: { type: 'number', description: 'Height in physical pixels.' },
   limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
+  backend: {
+    type: 'string',
+    enum: ['dom', 'native', 'auto'],
+    description: 'Screenshot backend. dom preserves the SVG bridge path, native captures app-window pixels, auto tries native then falls back to dom.'
+  },
   follow: { type: 'boolean', description: 'Poll for entries before returning a bounded tool result.' },
   clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
   pollMs: { type: 'number', description: 'Follow polling interval in milliseconds.' },
@@ -305,7 +310,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
-  tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
+  tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot.', schema(['window', 'path', 'backend'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),

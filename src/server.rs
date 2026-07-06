@@ -14,8 +14,8 @@ use serde_json::{json, Value};
 use crate::screenshot::write_data_url_to_path;
 use crate::{
     bridge::AgentBridge, commands, write_endpoint_registry, AgentAttachRequest,
-    AgentEndpointDescriptor, AgentWindowRequest, EndpointRegistryError, Error, InlineServerConfig,
-    WindowAction, WindowInfo,
+    AgentEndpointDescriptor, AgentScreenshotRequest, AgentWindowRequest, EndpointRegistryError,
+    Error, InlineServerConfig, ScreenshotBackend, WindowAction, WindowInfo,
 };
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -80,6 +80,12 @@ pub(crate) trait InlineDebuggerBackend {
         let _ = (method, params);
         Err(Error::BridgeUnavailable(
             "guest bridge methods are not active in this backend".into(),
+        ))
+    }
+    fn native_screenshot(&self, request: AgentScreenshotRequest) -> crate::Result<Value> {
+        let _ = request;
+        Err(Error::BridgeUnavailable(
+            "native screenshot backend is not active in this backend".into(),
         ))
     }
 }
@@ -193,6 +199,10 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
         let bridge = self.app.state::<AgentBridge>();
         bridge.request_webview(&self.app, window.as_deref(), method, params)
     }
+
+    fn native_screenshot(&self, request: AgentScreenshotRequest) -> crate::Result<Value> {
+        commands::capture_native_screenshot_for_request(&self.app, &request)
+    }
 }
 
 fn accept_loop<B>(listener: TcpListener, backend: Arc<B>, shutdown: Arc<AtomicBool>)
@@ -268,6 +278,17 @@ fn handle_window(
 }
 
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
+    let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
+    match request.backend.unwrap_or(ScreenshotBackend::Dom) {
+        ScreenshotBackend::Dom => handle_bridge_shot(backend, params),
+        ScreenshotBackend::Native => backend.native_screenshot(request),
+        ScreenshotBackend::Auto => backend
+            .native_screenshot(request)
+            .or_else(|_| handle_bridge_shot(backend, params)),
+    }
+}
+
+fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let path = params
         .get("path")
         .and_then(Value::as_str)

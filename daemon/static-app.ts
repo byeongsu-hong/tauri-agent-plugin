@@ -37,6 +37,7 @@ import type {
   LogEntry,
   KeyModifier,
   NetworkEntry,
+  ShotParams,
   ScreenshotResult,
   StorageParams,
   StorageResult,
@@ -282,8 +283,13 @@ export class StaticHtmlAppAdapter {
     return { ok: true }
   }
 
-  async shot(path?: string): Promise<ScreenshotResult> {
+  async shot(options: ShotParams = {}): Promise<ScreenshotResult> {
     this.bindGlobals()
+    const backend = options.backend ?? 'dom'
+    if (backend === 'native') {
+      throw new Error('native screenshot backend requires a live Tauri window')
+    }
+    const path = options.path
     const screenshot = screenshotDocument(this.dom.window.document, { path })
     const result = path
       ? { path, mime: screenshot.mime, width: screenshot.width, height: screenshot.height }

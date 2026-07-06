@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 import { describe, expect, it } from 'vitest'
 
@@ -12,6 +12,15 @@ function runCli(args: string[]): string {
     cwd: process.cwd(),
     encoding: 'utf8'
   }).trim()
+}
+
+function runCliFailure(args: string[]): string {
+  const result = spawnSync('bun', ['bin/tauri-agent.ts', ...args], {
+    cwd: process.cwd(),
+    encoding: 'utf8'
+  })
+  expect(result.status).not.toBe(0)
+  return `${result.stdout}${result.stderr}`
 }
 
 function htmlFile(): string {
@@ -146,6 +155,16 @@ describe('tauri-agent CLI', () => {
     expect(shot.width).toBeGreaterThan(0)
     expect(shot.height).toBeGreaterThan(0)
     expect(readFileSync(shotPath, 'utf8')).toContain('Ducktape')
+    const domShot = JSON.parse(runCli(['shot', '--backend', 'dom', '--from-html', path]))
+    expect(domShot).toEqual({
+      dataUrl: expect.stringMatching(/^data:image\/svg\+xml;base64,/),
+      mime: 'image/svg+xml',
+      width: expect.any(Number),
+      height: expect.any(Number)
+    })
+    expect(runCliFailure(['shot', '--backend', 'native', '--from-html', path])).toContain(
+      'native screenshot backend requires a live Tauri window'
+    )
     expect(JSON.parse(runCli(['record', '--from-html', path]))).toEqual({
       recording: false,
       entries: []

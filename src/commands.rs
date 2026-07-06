@@ -12,9 +12,9 @@ use crate::models::{
     AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
     AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentStorageRequest, AgentStorageResponse, AgentWaitRequest, AgentWaitResponse,
-    AgentWindowRequest, WindowAction, WindowInfo,
+    AgentWindowRequest, ScreenshotBackend, WindowAction, WindowInfo,
 };
-use crate::screenshot::write_data_url_to_path;
+use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
 
 #[tauri::command]
@@ -186,7 +186,17 @@ pub async fn agent_screenshot<R: Runtime>(
     request: AgentScreenshotRequest,
 ) -> Result<String> {
     let path = request.path.clone();
-    let result = request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)?;
+    let result = match request.backend.unwrap_or(ScreenshotBackend::Dom) {
+        ScreenshotBackend::Dom => {
+            request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)?
+        }
+        ScreenshotBackend::Native => capture_native_screenshot_for_request(&app, &request)?,
+        ScreenshotBackend::Auto => {
+            capture_native_screenshot_for_request(&app, &request).or_else(|_| {
+                request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)
+            })?
+        }
+    };
     screenshot_return_value(result, path.as_deref())
 }
 
@@ -342,15 +352,35 @@ fn snapshot_text_from_bridge(result: Value) -> Result<String> {
 }
 
 fn screenshot_return_value(result: Value, path: Option<&str>) -> Result<String> {
-    let data_url = result
-        .get("dataUrl")
-        .and_then(Value::as_str)
-        .ok_or_else(|| Error::BridgeUnavailable("screenshot bridge returned no dataUrl".into()))?;
     let Some(path) = path else {
-        return Ok(data_url.to_string());
+        if let Some(data_url) = result.get("dataUrl").and_then(Value::as_str) {
+            return Ok(data_url.to_string());
+        }
+        if let Some(path) = result.get("path").and_then(Value::as_str) {
+            return Ok(path.to_string());
+        }
+        return Err(Error::BridgeUnavailable(
+            "screenshot bridge returned no dataUrl".into(),
+        ));
     };
-    write_data_url_to_path(data_url, path)?;
-    Ok(path.to_string())
+    if let Some(data_url) = result.get("dataUrl").and_then(Value::as_str) {
+        write_data_url_to_path(data_url, path)?;
+        return Ok(path.to_string());
+    }
+    if let Some(path) = result.get("path").and_then(Value::as_str) {
+        return Ok(path.to_string());
+    }
+    Err(Error::BridgeUnavailable(
+        "screenshot bridge returned no dataUrl".into(),
+    ))
+}
+
+pub(crate) fn capture_native_screenshot_for_request<R: Runtime>(
+    app: &AppHandle<R>,
+    request: &AgentScreenshotRequest,
+) -> Result<Value> {
+    let window = target_webview_window(app, request.window.as_deref())?;
+    capture_native_screenshot(&window, request.path.as_deref())
 }
 
 fn decode_bridge_result<T: DeserializeOwned>(result: Value) -> Result<T> {
@@ -528,6 +558,15 @@ mod tests {
             screenshot_return_value(serde_json::json!({"mime": "image/svg+xml"}), None)
                 .unwrap_err()
                 .to_string(),
+            "live bridge unavailable: screenshot bridge returned no dataUrl"
+        );
+        assert_eq!(
+            screenshot_return_value(
+                serde_json::json!({"mime": "image/svg+xml"}),
+                Some("/tmp/missing.svg"),
+            )
+            .unwrap_err()
+            .to_string(),
             "live bridge unavailable: screenshot bridge returned no dataUrl"
         );
         assert_eq!(
