@@ -86,7 +86,16 @@ describe('DebuggerSession', () => {
       value: 'worker-a',
       text: 'worker-a'
     })
+    await session.execute('eval', {
+      code: 'document.querySelector("input")?.addEventListener("keydown", (event) => { window.__lastShortcut = `${event.key}:${event.metaKey}:${event.shiftKey}:${document.activeElement?.getAttribute("aria-label")}` })'
+    })
     await expect(session.execute('press', { key: 'Enter' })).resolves.toEqual({ ok: true })
+    await expect(session.execute('press', { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] })).resolves.toEqual({ ok: true })
+    await expect(session.execute('eval', { code: 'window.__lastShortcut' })).resolves.toEqual({
+      type: 'string',
+      value: 'k:true:true:Agent name',
+      text: 'k:true:true:Agent name'
+    })
 
     await expect(session.execute('state', {})).resolves.toEqual({
       url: 'tauri-agent://static',
@@ -215,7 +224,8 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
-        expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } })
+        expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } }),
+        expect.objectContaining({ kind: 'press', detail: { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ])
     )
     await expect(session.execute('events', { clear: true })).resolves.toEqual(
@@ -235,7 +245,8 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
-        expect.objectContaining({ method: 'press', params: { key: 'Enter' } })
+        expect.objectContaining({ method: 'press', params: { key: 'Enter' } }),
+        expect.objectContaining({ method: 'press', params: { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]
     })
   })

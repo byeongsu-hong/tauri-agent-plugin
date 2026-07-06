@@ -1,5 +1,5 @@
 import type { StaticHtmlAppAdapter } from './static-app'
-import type { AgentMethod, RecordingEntry, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, RecordingEntry, WindowAction } from '../protocol/types'
 
 export class DebuggerSession {
   private recording = false
@@ -69,7 +69,10 @@ export class DebuggerSession {
       case 'eval':
         return this.app.evaluate(requiredString(params.code, 'code'))
       case 'press':
-        return this.app.press(requiredString(params.key, 'key'))
+        return this.app.press(requiredString(params.key, 'key'), {
+          ref: stringParam(params.ref),
+          modifiers: keyModifiersParam(params.modifiers)
+        })
       case 'shot':
         return this.app.shot(stringParam(params.path))
       case 'logs':
@@ -163,6 +166,23 @@ function numberParam(value: unknown): number | undefined {
 
 function booleanParam(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
+}
+
+function keyModifiersParam(value: unknown): KeyModifier[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('modifiers must be an array')
+  }
+  return value.map(keyModifierParam)
+}
+
+function keyModifierParam(value: unknown): KeyModifier {
+  if (value === 'Alt' || value === 'Control' || value === 'Meta' || value === 'Shift') {
+    return value
+  }
+  throw new Error(`unknown key modifier: ${String(value)}`)
 }
 
 function modeParam(value: unknown): 'compact' | 'verbose' | undefined {

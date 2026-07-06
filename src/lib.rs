@@ -22,7 +22,7 @@ pub use models::{
     AgentRecordEntry, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
     AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentStorageEntry, AgentStorageRequest, AgentStorageResponse, AgentWaitRequest,
-    AgentWaitResponse, AgentWindowRequest, Config, CookieAction, InlineServerConfig,
+    AgentWaitResponse, AgentWindowRequest, Config, CookieAction, InlineServerConfig, KeyModifier,
     LocationAction, RecordAction, SnapshotMode, StorageAction, StorageArea, WindowAction,
     WindowBounds, WindowInfo,
 };

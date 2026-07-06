@@ -127,12 +127,16 @@ export interface DragParams extends RefActionParams {
 
 export interface InspectParams extends RefActionParams {}
 
+export type KeyModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
+
 export interface EvalParams extends WindowTarget {
   code: string
 }
 
 export interface PressParams extends WindowTarget {
   key: string
+  ref?: string
+  modifiers?: KeyModifier[]
 }
 
 export interface ShotParams extends WindowTarget {

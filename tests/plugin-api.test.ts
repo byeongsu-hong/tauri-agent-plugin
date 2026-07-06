@@ -59,7 +59,7 @@ describe('plugin command helpers', () => {
     await agentScroll({ window: 'main', ref: '@7', y: 12, x: 3 })
     await agentDrag({ window: 'main', ref: '@8', toRef: '@9' })
     await agentAction({ window: 'main', action: 'click', ref: '@1' })
-    await agentAction({ window: 'main', action: 'press', value: 'Enter' })
+    await agentAction({ window: 'main', action: 'press', value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] })
     await agentScreenshot({ window: 'main', path: '/tmp/app.svg' })
     await agentLogs({ window: 'main', clear: true })
     await agentNetwork({ window: 'main', clear: true })
@@ -87,7 +87,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_scroll', { request: { window: 'main', ref: '@7', y: 12, x: 3 } }],
       ['plugin:agent|agent_drag', { request: { window: 'main', ref: '@8', toRef: '@9' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'click', ref: '@1' } }],
-      ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter' } }],
+      ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'main', path: '/tmp/app.svg' } }],
       ['plugin:agent|agent_logs', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_network', { request: { window: 'main', clear: true } }],
@@ -117,7 +117,7 @@ describe('plugin command helpers', () => {
     await agentScroll({ ref: '@7', y: 12, x: 3 })
     await agentDrag({ ref: '@8', toRef: '@9' })
     await agentAction({ action: 'click', ref: '@1' })
-    await agentAction({ action: 'press', value: 'Enter' })
+    await agentAction({ action: 'press', value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] })
     await agentScreenshot({ path: '/tmp/app.svg' })
     await agentLogs()
     await agentNetwork()
@@ -143,7 +143,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_scroll', { request: { window: 'secondary', ref: '@7', y: 12, x: 3 } }],
       ['plugin:agent|agent_drag', { request: { window: 'secondary', ref: '@8', toRef: '@9' } }],
       ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'click', ref: '@1' } }],
-      ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'press', value: 'Enter' } }],
+      ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'press', value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'secondary', path: '/tmp/app.svg' } }],
       ['plugin:agent|agent_logs', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_network', { request: { window: 'secondary' } }],

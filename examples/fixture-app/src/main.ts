@@ -35,6 +35,7 @@ let focusedForge = false
 let blurredForge = false
 let scrolledRoster = false
 let draggedForge = false
+let lastShortcut = ''
 
 const agent = new WebviewAgentInstrumentation({
   windowLabel: fixtureWindowLabel,
@@ -47,7 +48,8 @@ const agent = new WebviewAgentInstrumentation({
     focusedForge: () => focusedForge,
     blurredForge: () => blurredForge,
     scrolledRoster: () => scrolledRoster,
-    draggedForge: () => draggedForge
+    draggedForge: () => draggedForge,
+    lastShortcut: () => lastShortcut
   }
 })
 
@@ -143,6 +145,9 @@ function render(): void {
       register.disabled = input.value.trim().length === 0
     }
   })
+  input?.addEventListener('keydown', (event) => {
+    lastShortcut = `${event.key}:${event.metaKey}:${event.shiftKey}`
+  })
 
   register?.addEventListener('click', () => {
     const name = input?.value.trim()
@@ -205,7 +210,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   if (forgeRef) await agentDrag({ ref: forgeRef, toRef: dropRef })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
-  await agentAction({ action: 'press', value: 'Escape' })
+  if (agentNameRef) await agentAction({ action: 'press', ref: agentNameRef, value: 'k', modifiers: ['Meta', 'Shift'] })
   const state = await agentState()
   console.info('command bridge log probe')
   const logs = await agentLogs({ clear: true })
@@ -244,6 +249,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     probes.blurredForge === true &&
     probes.scrolledRoster === true &&
     probes.draggedForge === true &&
+    probes.lastShortcut === 'k:true:true' &&
     logs.some((entry) => entry.message.includes('command bridge log probe')) &&
     events.some((event) => event.kind === 'click') &&
     events.some((event) => event.kind === 'hover') &&
