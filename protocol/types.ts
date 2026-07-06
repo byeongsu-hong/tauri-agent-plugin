@@ -172,6 +172,8 @@ export interface ScreenshotResult {
   path?: string
   dataUrl?: string
   mime?: string
+  width?: number
+  height?: number
 }
 
 export interface RecordingEntry {

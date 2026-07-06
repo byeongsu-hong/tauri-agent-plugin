@@ -257,10 +257,16 @@ fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Re
         .and_then(Value::as_str)
         .unwrap_or("application/octet-stream");
     write_data_url_to_path(data_url, &path)?;
-    Ok(json!({
-        "path": path,
-        "mime": mime
-    }))
+    let mut response = serde_json::Map::new();
+    response.insert("path".into(), json!(path));
+    response.insert("mime".into(), json!(mime));
+    if let Some(width) = result.get("width") {
+        response.insert("width".into(), width.clone());
+    }
+    if let Some(height) = result.get("height") {
+        response.insert("height".into(), height.clone());
+    }
+    Ok(Value::Object(response))
 }
 
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
@@ -349,7 +355,9 @@ mod tests {
             assert_eq!(params["path"], self.expected_path);
             Ok(serde_json::json!({
                 "dataUrl": "data:image/svg+xml;base64,PHN2Zz5zaG90PC9zdmc+",
-                "mime": "image/svg+xml"
+                "mime": "image/svg+xml",
+                "width": 1024,
+                "height": 768
             }))
         }
     }
@@ -806,7 +814,9 @@ mod tests {
                 "id": 3,
                 "result": {
                     "path": path_string,
-                    "mime": "image/svg+xml"
+                    "mime": "image/svg+xml",
+                    "width": 1024,
+                    "height": 768
                 }
             })
         );
