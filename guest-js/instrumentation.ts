@@ -37,7 +37,9 @@ import type {
   RecordingEntry,
   ScreenshotResult,
   StorageParams,
-  StorageResult
+  StorageResult,
+  WaitParams,
+  WaitResult
 } from '../protocol/types'
 
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
@@ -224,17 +226,38 @@ export class WebviewAgentInstrumentation {
     return evalResult(window.eval(code))
   }
 
-  async wait(options: { text: string; timeoutMs?: number }): Promise<{ matched: true; text: string }> {
+  async wait(options: WaitParams): Promise<WaitResult> {
     const startedAt = Date.now()
     const timeoutMs = options.timeoutMs ?? 1000
+    if (!hasSemanticWaitFilter(options)) {
+      if (!options.text) {
+        throw new Error('wait requires text or semantic filter')
+      }
+      return this.waitForText(options.text, timeoutMs)
+    }
+
     while (Date.now() - startedAt <= timeoutMs) {
-      if ((document.body.textContent ?? '').includes(options.text)) {
-        this.pushEvent('wait', { text: options.text })
-        return { matched: true, text: options.text }
+      const snapshot = this.snapshot({ scope: options.scope })
+      const match = findRefs({ ...options, limit: 1 }, snapshot.refs)[0]
+      if (match) {
+        this.pushEvent('wait', waitEventDetail(options, match))
+        return { matched: true, text: match.text, match }
       }
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
-    throw new Error(`wait timed out for text: ${options.text}`)
+    throw new Error('wait timed out for semantic target')
+  }
+
+  private async waitForText(text: string, timeoutMs: number): Promise<WaitResult> {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt <= timeoutMs) {
+      if ((document.body.textContent ?? '').includes(text)) {
+        this.pushEvent('wait', { text })
+        return { matched: true, text }
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error(`wait timed out for text: ${text}`)
   }
 
   state(): Record<string, unknown> {
@@ -429,7 +452,10 @@ export class WebviewAgentInstrumentation {
         })
       case 'wait':
         return this.wait({
-          text: requiredStringParam(params, 'text'),
+          text: stringParam(params, 'text'),
+          scope: stringParam(params, 'scope'),
+          role: stringParam(params, 'role'),
+          name: stringParam(params, 'name'),
           timeoutMs: numberParam(params, 'timeoutMs')
         })
       case 'state':
@@ -748,4 +774,18 @@ function requiredLocationUrl(url: string | undefined): string {
     throw new Error('location action requires url')
   }
   return url
+}
+
+function hasSemanticWaitFilter(options: WaitParams): boolean {
+  return Boolean(options.scope || options.role || options.name)
+}
+
+function waitEventDetail(options: WaitParams, match: InspectResult): Record<string, unknown> {
+  return {
+    ...(options.text ? { text: options.text } : {}),
+    ...(options.scope ? { scope: options.scope } : {}),
+    ...(options.role ? { role: options.role } : {}),
+    ...(options.name ? { name: options.name } : {}),
+    match
+  }
 }

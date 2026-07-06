@@ -109,6 +109,17 @@ describe('tauri-agent CLI', () => {
       matched: true,
       text: 'Registered worker-a'
     })
+    expect(JSON.parse(runCli(['wait', '--role', 'button', '--name', 'Forge', '--from-html', path]))).toEqual({
+      matched: true,
+      text: 'Forge',
+      match: expect.objectContaining({
+        ref: '@1',
+        role: 'button',
+        name: 'Forge',
+        tagName: 'button',
+        text: 'Forge'
+      })
+    })
     const shotPath = join(tmpdir(), 'tauri-agent-static-shot.svg')
     const shot = JSON.parse(runCli(['shot', shotPath, '--from-html', path]))
     expect(shot).toEqual({

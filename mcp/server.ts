@@ -151,7 +151,7 @@ async function executeTool(
     case 'tauri_location':
       return client.call('location', pick(args, ['window', 'action', 'url']))
     case 'tauri_wait':
-      return client.call('wait', pick(args, ['window', 'text', 'timeoutMs']))
+      return client.call('wait', pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs']))
     case 'tauri_state':
       return client.call('state', pick(args, ['window', 'key']))
     case 'tauri_record':
@@ -262,7 +262,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
-  tool('tauri_wait', 'Wait', 'Wait for text to appear.', schema(['window', 'text', 'timeoutMs'], ['text'])),
+  tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
 ]

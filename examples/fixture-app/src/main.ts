@@ -205,6 +205,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const network = await agentNetwork()
   const shot = await agentScreenshot()
   const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
+  const semanticWait = await agentWait({ role: 'button', name: 'Verify command bridge', timeoutMs: 500 })
   const record = await agentRecord()
   const probes = isRecord(state.probes) ? state.probes : {}
   const values = isRecord(state.values) ? state.values : {}
@@ -244,6 +245,8 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     network.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')) &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&
+    semanticWait.match?.role === 'button' &&
+    semanticWait.match?.name === 'Verify command bridge' &&
     !record.recording
 
   status.textContent = verified ? 'Command bridge verified' : 'Command bridge failed'

@@ -144,6 +144,9 @@ export interface LocationParams extends WindowTarget {
 
 export interface WaitParams extends WindowTarget {
   text?: string
+  scope?: string
+  role?: string
+  name?: string
   timeoutMs?: number
 }
 
@@ -234,6 +237,12 @@ export interface LocationResult {
   pathname: string
   search: string
   hash: string
+}
+
+export interface WaitResult {
+  matched: true
+  text: string
+  match?: InspectResult
 }
 
 export interface ScreenshotResult {

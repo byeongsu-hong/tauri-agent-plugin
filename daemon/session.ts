@@ -82,7 +82,13 @@ export class DebuggerSession {
           url: stringParam(params.url)
         })
       case 'wait':
-        return this.app.waitForText(requiredString(params.text, 'text'), numberParam(params.timeoutMs))
+        return this.app.wait({
+          text: stringParam(params.text),
+          scope: stringParam(params.scope),
+          role: stringParam(params.role),
+          name: stringParam(params.name),
+          timeoutMs: numberParam(params.timeoutMs)
+        })
       case 'state':
         return this.app.state()
       case 'record':
