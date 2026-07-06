@@ -1,4 +1,4 @@
-import type { FindParams, InspectResult } from '../protocol/types'
+import type { FindParams, InspectResult, KeyModifier } from '../protocol/types'
 
 export interface SnapshotOptions {
   scope?: string
@@ -17,6 +17,10 @@ export interface ScrollOptions {
 
 export interface DragOptions {
   toRef?: string
+}
+
+export interface PressOptions {
+  modifiers?: KeyModifier[]
 }
 
 export type { InspectResult }
@@ -237,11 +241,29 @@ export function selectRef(ref: string, value?: string): void {
   setSelectValue(element, option.value)
 }
 
-export function pressKey(key: string, target: Element | Document = document): void {
+export function pressKey(key: string, target: Element | Document = document, options: PressOptions = {}): void {
   const eventTarget =
     target instanceof Document ? target.activeElement ?? target.body ?? target.documentElement : target
-  eventTarget.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
-  eventTarget.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }))
+  const keyboardOptions = {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...modifierFlags(options.modifiers)
+  }
+  eventTarget.dispatchEvent(new KeyboardEvent('keydown', keyboardOptions))
+  eventTarget.dispatchEvent(new KeyboardEvent('keyup', keyboardOptions))
+}
+
+function modifierFlags(modifiers: KeyModifier[] = []): Pick<
+  KeyboardEventInit,
+  'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'
+> {
+  return {
+    altKey: modifiers.includes('Alt'),
+    ctrlKey: modifiers.includes('Control'),
+    metaKey: modifiers.includes('Meta'),
+    shiftKey: modifiers.includes('Shift')
+  }
 }
 
 function dispatchMouseLike(element: Element, type: string): void {

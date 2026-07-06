@@ -36,6 +36,7 @@ import type {
   LocationResult,
   LogsParams,
   LogEntry,
+  KeyModifier,
   EventsParams,
   NetworkEntry,
   RecordingEntry,
@@ -59,6 +60,7 @@ export interface InstrumentedAction {
   toRef?: string
   value?: string
   checked?: boolean
+  modifiers?: KeyModifier[]
   x?: number
   y?: number
 }
@@ -161,7 +163,10 @@ export class WebviewAgentInstrumentation {
         fillRef(requiredRef(action.ref), action.value ?? '')
         break
       case 'press':
-        pressKey(action.value ?? '')
+        if (action.ref) {
+          focusRef(action.ref)
+        }
+        pressKey(action.value ?? '', document, { modifiers: action.modifiers })
         break
       case 'select':
         selectRef(requiredRef(action.ref), action.value)
@@ -456,7 +461,12 @@ export class WebviewAgentInstrumentation {
       case 'eval':
         return this.evaluate(requiredStringParam(params, 'code'))
       case 'press':
-        return this.action({ action: 'press', value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '' })
+        return this.action({
+          action: 'press',
+          ref: stringParam(params, 'ref'),
+          value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '',
+          modifiers: modifierListParam(params, 'modifiers')
+        })
       case 'shot':
         return this.screenshot({ path: stringParam(params, 'path') })
       case 'logs':
@@ -585,12 +595,13 @@ function requiredRef(ref: string | undefined): string {
   return ref
 }
 
-function serializableAction(action: InstrumentedAction): Record<string, string | boolean | number> {
-  const params: Record<string, string | boolean | number> = {}
+function serializableAction(action: InstrumentedAction): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
   if (action.ref) params.ref = action.ref
   if (action.toRef) params.toRef = action.toRef
   if (action.value) params.value = action.value
   if (action.checked !== undefined) params.checked = action.checked
+  if (action.modifiers?.length) params.modifiers = action.modifiers
   if (action.x !== undefined) params.x = action.x
   if (action.y !== undefined) params.y = action.y
   return params
@@ -627,6 +638,24 @@ function numberParam(params: Record<string, unknown>, key: string): number | und
 function booleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
   const value = params[key]
   return typeof value === 'boolean' ? value : undefined
+}
+
+function modifierListParam(params: Record<string, unknown>, key: string): KeyModifier[] | undefined {
+  const value = params[key]
+  if (value === undefined) {
+    return undefined
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${key} must be an array`)
+  }
+  return value.map((modifier) => keyModifierParam(modifier, key))
+}
+
+function keyModifierParam(value: unknown, key: string): KeyModifier {
+  if (value === 'Alt' || value === 'Control' || value === 'Meta' || value === 'Shift') {
+    return value
+  }
+  throw new Error(`unknown ${key} value: ${String(value)}`)
 }
 
 function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | undefined {

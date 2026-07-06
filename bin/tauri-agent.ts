@@ -8,7 +8,7 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -64,6 +64,11 @@ interface WindowOptions extends ConnectionOptions {
   y?: number
   width?: number
   height?: number
+}
+
+interface PressOptions extends ConnectionOptions {
+  ref?: string
+  modifier?: KeyModifier[]
 }
 
 interface WaitOptions extends ConnectionOptions {
@@ -355,9 +360,16 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .action(async (key: string, options: ConnectionOptions) =>
-    printJson(await call(options, 'press', { ...targetParams(options), key }))
-  )
+  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+  .option('--ref <ref>', 'snapshot-local ref to focus before dispatching the key')
+  .option('--modifier <modifier>', 'keyboard modifier: Alt, Control, Meta, or Shift', collectModifier, [])
+  .action(async (key: string, options: PressOptions) => {
+    const client = await debuggerClient(options)
+    if (options.ref) {
+      await client.call('tree', treeParams(options))
+    }
+    printJson(await client.call('press', pressParams(options, key)))
+  })
 
 program
   .command('shot')
@@ -644,6 +656,15 @@ function waitParams(options: WaitOptions, text: string | undefined): Record<stri
   }
 }
 
+function pressParams(options: PressOptions, key: string): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    key,
+    ref: options.ref,
+    modifiers: options.modifier?.length ? options.modifier : undefined
+  }
+}
+
 function refActionParams(
   options: ConnectionOptions,
   ref: string,
@@ -747,6 +768,17 @@ function parseWindowAction(value: string): WindowAction {
     return value
   }
   throw new Error(`expected a window action, got ${value}`)
+}
+
+function collectModifier(value: string, previous: KeyModifier[]): KeyModifier[] {
+  return [...previous, parseKeyModifier(value)]
+}
+
+function parseKeyModifier(value: string): KeyModifier {
+  if (value === 'Alt' || value === 'Control' || value === 'Meta' || value === 'Shift') {
+    return value
+  }
+  throw new Error(`expected Alt, Control, Meta, or Shift, got ${value}`)
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {

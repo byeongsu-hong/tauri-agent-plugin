@@ -139,7 +139,10 @@ async function executeTool(
     case 'tauri_eval':
       return client.call('eval', pick(args, ['window', 'code']))
     case 'tauri_press':
-      return client.call('press', { ...windowParams(args), key: stringField(args, 'key') })
+      if (args.ref !== undefined) {
+        await client.call('tree', pick(args, ['window', 'scope']))
+      }
+      return client.call('press', { ...pick(args, ['window', 'ref', 'modifiers']), key: stringField(args, 'key') })
     case 'tauri_shot':
       return client.call('shot', pick(args, ['window', 'path']))
     case 'tauri_logs':
@@ -231,6 +234,11 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
   key: { type: 'string', description: 'Keyboard key, for example Enter, or storage key.' },
+  modifiers: {
+    type: 'array',
+    items: { type: 'string', enum: ['Alt', 'Control', 'Meta', 'Shift'] },
+    description: 'Keyboard modifiers held while dispatching the key.'
+  },
   x: { type: 'number', description: 'Horizontal scroll delta.' },
   y: { type: 'number', description: 'Vertical scroll delta.' },
   width: { type: 'number', description: 'Width in physical pixels.' },
@@ -262,7 +270,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
-  tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'key'], ['key'])),
+  tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear'])),

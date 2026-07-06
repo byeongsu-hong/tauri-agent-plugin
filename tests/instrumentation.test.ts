@@ -33,6 +33,10 @@ describe('WebviewAgentInstrumentation', () => {
         status: 201,
         headers: { 'content-type': 'application/json' }
       })
+    document.querySelector('input')?.addEventListener('keydown', (event) => {
+      ;(window as typeof window & { __lastShortcut?: string }).__lastShortcut =
+        `${event.key}:${event.metaKey}:${event.shiftKey}:${document.activeElement?.getAttribute('aria-label')}`
+    })
     instrumentation.install()
 
     console.info('booted')
@@ -49,7 +53,7 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.action({ action: 'fill', ref: '@2', value: 'worker-a' })
     instrumentation.select('@3', 'remote')
     instrumentation.check('@6', true)
-    instrumentation.action({ action: 'press', value: 'Enter' })
+    instrumentation.action({ action: 'press', value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] })
 
     await expect(instrumentation.wait({ text: 'Registered worker-a', timeoutMs: 1 })).resolves.toEqual({
       matched: true,
@@ -119,7 +123,7 @@ describe('WebviewAgentInstrumentation', () => {
       attributes: {
         'aria-label': 'Agent name'
       },
-      states: []
+      states: ['focused']
     })
     expect(instrumentation.logs()).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
@@ -137,7 +141,7 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', value: 'worker-a' } }),
-        expect.objectContaining({ kind: 'press', detail: { value: 'Enter' } }),
+        expect.objectContaining({ kind: 'press', detail: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }),
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
       ])
     )
@@ -234,9 +238,10 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
-        expect.objectContaining({ method: 'press', params: { value: 'Enter' } })
+        expect.objectContaining({ method: 'press', params: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]
     })
+    expect((window as typeof window & { __lastShortcut?: string }).__lastShortcut).toBe('Enter:true:true:Agent name')
 
     instrumentation.dispose()
     window.fetch = originalFetch

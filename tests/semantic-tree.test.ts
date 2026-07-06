@@ -94,14 +94,18 @@ describe('snapshotDocument', () => {
     document.querySelector('button')?.addEventListener('click', () => seen.push('clicked'))
     document.querySelector('input')?.addEventListener('input', () => seen.push('input'))
     document.body.addEventListener('keydown', (event) => seen.push(`key:${event.key}`))
+    document.querySelector('input')?.addEventListener('keydown', (event) =>
+      seen.push(`target:${event.key}:${event.metaKey}:${event.shiftKey}`)
+    )
 
     snapshotDocument(document)
 
     clickRef('@1')
     fillRef('@2', 'worker-a')
     pressKey('Enter')
+    pressKey('k', resolveRef('@2'), { modifiers: ['Meta', 'Shift'] })
 
-    expect(seen).toEqual(['clicked', 'input', 'key:Enter'])
+    expect(seen).toEqual(['clicked', 'input', 'key:Enter', 'target:k:true:true', 'key:k'])
     expect((resolveRef('@2') as HTMLInputElement).value).toBe('worker-a')
   })
 

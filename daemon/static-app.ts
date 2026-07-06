@@ -35,6 +35,7 @@ import type {
   LocationParams,
   LocationResult,
   LogEntry,
+  KeyModifier,
   NetworkEntry,
   ScreenshotResult,
   StorageParams,
@@ -271,10 +272,13 @@ export class StaticHtmlAppAdapter {
     return evalResult(this.dom.window.eval(code))
   }
 
-  async press(key: string): Promise<{ ok: true }> {
+  async press(key: string, options: { ref?: string; modifiers?: KeyModifier[] } = {}): Promise<{ ok: true }> {
     this.bindGlobals()
-    pressKey(key, this.dom.window.document)
-    this.pushEvent('press', { key })
+    if (options.ref) {
+      focusRef(options.ref)
+    }
+    pressKey(key, this.dom.window.document, { modifiers: options.modifiers })
+    this.pushEvent('press', pressDetail(key, options))
     return { ok: true }
   }
 
@@ -483,6 +487,14 @@ function actionDetail(detail: Record<string, string | number | undefined>): Reco
   return Object.fromEntries(
     Object.entries(detail).filter((entry): entry is [string, string | number] => entry[1] !== undefined)
   )
+}
+
+function pressDetail(key: string, options: { ref?: string; modifiers?: KeyModifier[] }): Record<string, unknown> {
+  return {
+    key,
+    ...(options.ref ? { ref: options.ref } : {}),
+    ...(options.modifiers?.length ? { modifiers: options.modifiers } : {})
+  }
 }
 
 function requiredFiniteNumber(value: number | undefined, name: string): number {

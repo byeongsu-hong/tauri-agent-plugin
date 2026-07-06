@@ -93,6 +93,13 @@ describe('tauri-agent MCP server', () => {
     expect(list.result.tools[0].inputSchema).toEqual(
       expect.objectContaining({ type: 'object', properties: expect.any(Object) })
     )
+    const pressTool = list.result.tools.find((tool: { name: string }) => tool.name === 'tauri_press')
+    expect(pressTool.inputSchema.properties.ref).toEqual({ type: 'string', description: 'Snapshot-local ref such as @3.' })
+    expect(pressTool.inputSchema.properties.modifiers).toEqual({
+      type: 'array',
+      items: { type: 'string', enum: ['Alt', 'Control', 'Meta', 'Shift'] },
+      description: 'Keyboard modifiers held while dispatching the key.'
+    })
   })
 
   it('falls back to the supported MCP protocol version when the client asks for another version', async () => {
@@ -213,6 +220,24 @@ describe('tauri-agent MCP server', () => {
       innerBounds: { x: 0, y: 0, width: 800, height: 600 },
       outerBounds: { x: 0, y: 0, width: 800, height: 600 }
     })
+
+    const pressed = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 18,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_press',
+              arguments: { html, scope: 'main', ref: '@1', key: 'k', modifiers: ['Meta', 'Shift'] }
+            }
+          })
+        )
+      )
+    )
+
+    expect(pressed.result.structuredContent).toEqual({ ok: true })
 
     const found = JSON.parse(
       await requiredResponse(

@@ -107,6 +107,7 @@ pub struct AgentActionRequest {
     pub ref_id: Option<String>,
     pub action: AgentAction,
     pub value: Option<String>,
+    pub modifiers: Option<Vec<KeyModifier>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -222,6 +223,15 @@ pub enum AgentAction {
     Click,
     Fill,
     Press,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum KeyModifier {
+    Alt,
+    Control,
+    Meta,
+    Shift,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -952,17 +962,19 @@ mod tests {
 
         let press = AgentActionRequest {
             window: Some("main".into()),
-            ref_id: None,
+            ref_id: Some("@2".into()),
             action: AgentAction::Press,
             value: Some("Enter".into()),
+            modifiers: Some(vec![KeyModifier::Meta, KeyModifier::Shift]),
         };
         assert_eq!(
             serde_json::to_value(press).unwrap(),
             serde_json::json!({
                 "window": "main",
-                "ref": null,
+                "ref": "@2",
                 "action": "press",
-                "value": "Enter"
+                "value": "Enter",
+                "modifiers": ["Meta", "Shift"]
             })
         );
     }

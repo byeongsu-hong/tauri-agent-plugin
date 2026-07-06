@@ -83,6 +83,9 @@ describe('tauri-agent CLI', () => {
     expect(JSON.parse(runCli(['select', '@3', 'remote', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['check', '@6', 'true', '--from-html', path]))).toEqual({ ok: true })
     expect(
+      JSON.parse(runCli(['press', 'k', '--ref', '@2', '--modifier', 'Meta', '--modifier', 'Shift', '--from-html', path]))
+    ).toEqual({ ok: true })
+    expect(
       JSON.parse(runCli(['eval', 'document.querySelector("input")?.getAttribute("aria-label")', '--from-html', path]))
     ).toEqual({
       type: 'string',

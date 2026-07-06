@@ -17,6 +17,7 @@ import {
   selectRef,
   snapshotDocument,
   type DragOptions,
+  type PressOptions,
   type InspectResult,
   type ScrollOptions,
   type SnapshotOptions,
@@ -37,6 +38,7 @@ import type {
   LocationResult,
   LogsParams,
   LogEntry,
+  KeyModifier,
   NetworkEntry,
   RecordingEntry,
   StorageParams,
@@ -79,7 +81,9 @@ export {
   type LocationResult,
   type LogEntry,
   type LogsParams,
+  type KeyModifier,
   type NetworkEntry,
+  type PressOptions,
   type RecordingEntry,
   type ScreenshotOptions,
   type ScrollOptions,
@@ -120,6 +124,7 @@ export type AgentActionRequest =
       action: 'press'
       value: string
       ref?: string
+      modifiers?: KeyModifier[]
     }
 
 export interface AgentInspectRequest {
