@@ -22,6 +22,7 @@ import {
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
+import { deferDirectAgentInvokes } from './bridge-gate'
 import type {
   AgentEvent,
   AgentMethod,
@@ -306,6 +307,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private async handleBridgeRequest(request: AgentBridgeRequest): Promise<void> {
+    const releaseDirectInvokes = deferDirectAgentInvokes()
     try {
       const result = await this.executeBridgeRequest(request)
       await invoke('plugin:agent|agent_bridge_response', {
@@ -321,6 +323,8 @@ export class WebviewAgentInstrumentation {
           error: error instanceof Error ? error.message : String(error)
         }
       })
+    } finally {
+      releaseDirectInvokes()
     }
   }
 

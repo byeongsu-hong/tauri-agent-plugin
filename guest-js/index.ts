@@ -24,6 +24,7 @@ import {
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
+import { waitForBridgeResponseTurn } from './bridge-gate'
 import type { AgentEvent, EvalResult, FindResult, LogEntry, RecordingEntry } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
@@ -186,81 +187,81 @@ export interface WindowInfo {
 }
 
 export async function agentSnapshot(request: AgentSnapshotRequest = {}): Promise<string> {
-  return invoke('plugin:agent|agent_snapshot', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_snapshot', { request: withCurrentWindow(request) })
 }
 
 export async function agentFind(request: AgentFindRequest = {}): Promise<FindResult> {
-  return invoke('plugin:agent|agent_find', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_find', { request: withCurrentWindow(request) })
 }
 
 export async function agentAction(request: AgentActionRequest): Promise<void> {
-  return invoke('plugin:agent|agent_action', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_action', { request: withCurrentWindow(request) })
 }
 
 export async function agentInspect(request: AgentInspectRequest): Promise<InspectResult> {
-  return invoke('plugin:agent|agent_inspect', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_inspect', { request: withCurrentWindow(request) })
 }
 
 export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> {
-  return invoke('plugin:agent|agent_eval', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_eval', { request: withCurrentWindow(request) })
 }
 
 export async function agentSelect(request: AgentSelectRequest): Promise<void> {
-  return invoke('plugin:agent|agent_select', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_select', { request: withCurrentWindow(request) })
 }
 
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {
-  return invoke('plugin:agent|agent_check', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_check', { request: withCurrentWindow(request) })
 }
 
 export async function agentHover(request: AgentHoverRequest): Promise<void> {
-  return invoke('plugin:agent|agent_hover', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_hover', { request: withCurrentWindow(request) })
 }
 
 export async function agentFocus(request: AgentFocusRequest): Promise<void> {
-  return invoke('plugin:agent|agent_focus', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_focus', { request: withCurrentWindow(request) })
 }
 
 export async function agentBlur(request: AgentBlurRequest): Promise<void> {
-  return invoke('plugin:agent|agent_blur', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_blur', { request: withCurrentWindow(request) })
 }
 
 export async function agentScroll(request: AgentScrollRequest): Promise<void> {
-  return invoke('plugin:agent|agent_scroll', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_scroll', { request: withCurrentWindow(request) })
 }
 
 export async function agentDrag(request: AgentDragRequest): Promise<void> {
-  return invoke('plugin:agent|agent_drag', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_drag', { request: withCurrentWindow(request) })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {
-  return invoke('plugin:agent|agent_screenshot', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_screenshot', { request: withCurrentWindow(request) })
 }
 
 export async function agentLogs(request: AgentLogRequest = {}): Promise<LogEntry[]> {
-  return invoke('plugin:agent|agent_logs', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_logs', { request: withCurrentWindow(request) })
 }
 
 export async function agentEvents(request: AgentEventsRequest | string = {}): Promise<AgentEvent[]> {
-  return invoke('plugin:agent|agent_events', {
+  return invokeAgentCommand('plugin:agent|agent_events', {
     request: withCurrentWindow(typeof request === 'string' ? { window: request } : request)
   })
 }
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {
-  return invoke('plugin:agent|agent_wait', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_wait', { request: withCurrentWindow(request) })
 }
 
 export async function agentState(request: AgentStateRequest = {}): Promise<Record<string, unknown>> {
-  return invoke('plugin:agent|agent_state', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_state', { request: withCurrentWindow(request) })
 }
 
 export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
-  return invoke('plugin:agent|agent_record', { request: withCurrentWindow(request) })
+  return invokeAgentCommand('plugin:agent|agent_record', { request: withCurrentWindow(request) })
 }
 
 export async function agentWindows(): Promise<WindowInfo[]> {
-  return invoke('plugin:agent|agent_windows')
+  return invokeAgentCommand('plugin:agent|agent_windows')
 }
 
 type WindowRequest = { window?: string }
@@ -275,4 +276,11 @@ function withCurrentWindow<TRequest extends WindowRequest>(request: TRequest): T
   } catch {
     return request
   }
+}
+
+type AgentInvokeArgs = Parameters<typeof invoke>[1]
+
+async function invokeAgentCommand<TResponse>(command: string, args?: AgentInvokeArgs): Promise<TResponse> {
+  await waitForBridgeResponseTurn()
+  return args === undefined ? invoke<TResponse>(command) : invoke<TResponse>(command, args)
 }

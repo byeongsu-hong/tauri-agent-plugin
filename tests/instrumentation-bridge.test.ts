@@ -1,0 +1,85 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const invokeMock = vi.hoisted(() => vi.fn())
+const listenMock = vi.hoisted(() => vi.fn())
+const currentWindowListenMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: listenMock
+}))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => ({
+    label: 'main',
+    listen: currentWindowListenMock
+  })
+}))
+
+import { WebviewAgentInstrumentation } from '../guest-js/instrumentation'
+import { agentFind } from '../guest-js/index'
+
+interface CapturedEvent {
+  payload: {
+    id: string
+    method: 'click'
+    params: Record<string, unknown>
+  }
+}
+
+describe('WebviewAgentInstrumentation bridge handling', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    invokeMock.mockReset()
+    invokeMock.mockImplementation(() => Promise.resolve({ matches: [] }))
+    listenMock.mockReset()
+    currentWindowListenMock.mockReset()
+    currentWindowListenMock.mockResolvedValue(() => {})
+  })
+
+  it('sends the active bridge response before direct helper calls started by the DOM action', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    document.body.innerHTML = '<button>Verify command bridge</button>'
+    document.querySelector('button')?.addEventListener('click', () => {
+      void agentFind({ role: 'button', name: 'Verify' })
+    })
+
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+    instrumentation.snapshot()
+
+    bridgeHandler?.({
+      payload: {
+        id: 'bridge-1',
+        method: 'click',
+        params: { ref: '@1' }
+      }
+    })
+
+    await waitForInvoke('plugin:agent|agent_find')
+
+    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
+      'plugin:agent|agent_bridge_response',
+      'plugin:agent|agent_find'
+    ])
+
+    instrumentation.dispose()
+  })
+})
+
+async function waitForInvoke(command: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (invokeMock.mock.calls.some(([calledCommand]) => calledCommand === command)) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+  throw new Error(`timed out waiting for ${command}`)
+}
