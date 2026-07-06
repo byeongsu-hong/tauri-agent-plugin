@@ -10,9 +10,11 @@ import {
   inspectRef,
   pressKey,
   resolveRef,
+  scrollRef,
   selectRef,
   snapshotDocument,
   type InspectResult,
+  type ScrollOptions,
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
@@ -33,6 +35,7 @@ export {
   pressKey,
   resolveRef,
   screenshotDocument,
+  scrollRef,
   selectRef,
   snapshotDocument,
   evalResult,
@@ -42,6 +45,7 @@ export {
   type LogEntry,
   type RecordingEntry,
   type ScreenshotOptions,
+  type ScrollOptions,
   type SnapshotOptions,
   type SnapshotResult
 }
@@ -101,6 +105,13 @@ export interface AgentFocusRequest {
 export interface AgentBlurRequest {
   window?: string
   ref: string
+}
+
+export interface AgentScrollRequest {
+  window?: string
+  ref: string
+  x?: number
+  y?: number
 }
 
 export interface AgentScreenshotRequest {
@@ -185,6 +196,10 @@ export async function agentFocus(request: AgentFocusRequest): Promise<void> {
 
 export async function agentBlur(request: AgentBlurRequest): Promise<void> {
   return invoke('plugin:agent|agent_blur', { request })
+}
+
+export async function agentScroll(request: AgentScrollRequest): Promise<void> {
+  return invoke('plugin:agent|agent_scroll', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

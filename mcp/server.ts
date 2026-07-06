@@ -114,6 +114,9 @@ async function executeTool(
     case 'tauri_blur':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('blur', pick(args, ['window', 'ref']))
+    case 'tauri_scroll':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('scroll', pick(args, ['window', 'ref', 'x', 'y']))
     case 'tauri_fill':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('fill', pick(args, ['window', 'ref', 'text']))
@@ -210,6 +213,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
   key: { type: 'string', description: 'Keyboard key, for example Enter.' },
+  x: { type: 'number', description: 'Horizontal scroll delta.' },
+  y: { type: 'number', description: 'Vertical scroll delta.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
   timeoutMs: { type: 'number' },
@@ -224,6 +229,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_hover', 'Hover', 'Hover a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_focus', 'Focus', 'Focus a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_blur', 'Blur', 'Blur a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
+  tool('tauri_scroll', 'Scroll', 'Scroll a snapshot-local ref.', schema(['window', 'scope', 'ref', 'y', 'x'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),

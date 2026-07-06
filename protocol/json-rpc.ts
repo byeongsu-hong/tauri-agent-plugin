@@ -8,6 +8,7 @@ export const AGENT_METHODS = [
   'hover',
   'focus',
   'blur',
+  'scroll',
   'fill',
   'select',
   'check',

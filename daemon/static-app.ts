@@ -12,8 +12,10 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  scrollRef,
   selectRef,
   snapshotDocument,
+  type ScrollOptions,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
@@ -89,6 +91,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     blurRef(ref)
     this.pushEvent('blur', { ref })
+    return { ok: true }
+  }
+
+  async scroll(ref: string, options: ScrollOptions = {}): Promise<{ ok: true }> {
+    this.bindGlobals()
+    scrollRef(ref, options)
+    this.pushEvent('scroll', actionDetail({ ref, x: options.x, y: options.y }))
     return { ok: true }
   }
 
@@ -232,4 +241,10 @@ function requiredDataUrlBody(dataUrl: string | undefined): string {
     throw new Error('invalid screenshot data URL')
   }
   return body
+}
+
+function actionDetail(detail: Record<string, string | number | undefined>): Record<string, string | number> {
+  return Object.fromEntries(
+    Object.entries(detail).filter((entry): entry is [string, string | number] => entry[1] !== undefined)
+  )
 }

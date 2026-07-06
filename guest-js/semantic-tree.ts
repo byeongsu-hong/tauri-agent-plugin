@@ -10,6 +10,11 @@ export interface SnapshotResult {
   refs: Map<string, Element>
 }
 
+export interface ScrollOptions {
+  x?: number
+  y?: number
+}
+
 export type { InspectResult }
 
 interface RenderState {
@@ -132,6 +137,13 @@ export function blurRef(ref: string): void {
     throw new Error(`${normalized} is not blurrable`)
   }
   element.blur()
+}
+
+export function scrollRef(ref: string, options: ScrollOptions = {}): void {
+  const element = resolveRef(ref)
+  element.scrollLeft += options.x ?? 0
+  element.scrollTop += options.y ?? 0
+  element.dispatchEvent(new Event('scroll', { bubbles: true }))
 }
 
 export function checkRef(ref: string, checked = true): void {
