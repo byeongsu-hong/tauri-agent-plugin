@@ -315,7 +315,7 @@ mod tests {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpStream;
 
-    use crate::{Error, WindowInfo};
+    use crate::{Error, WindowBounds, WindowInfo};
 
     struct FakeBackend;
 
@@ -326,6 +326,21 @@ mod tests {
                 title: Some("Fixture".into()),
                 focused: true,
                 visible: true,
+                minimized: Some(false),
+                maximized: Some(false),
+                scale_factor: Some(2.0),
+                inner_bounds: Some(WindowBounds {
+                    x: 10,
+                    y: 20,
+                    width: 800,
+                    height: 600,
+                }),
+                outer_bounds: Some(WindowBounds {
+                    x: 4,
+                    y: 12,
+                    width: 824,
+                    height: 648,
+                }),
             }]
         }
 
@@ -696,7 +711,12 @@ mod tests {
                     "label": "main",
                     "title": "Fixture",
                     "focused": true,
-                    "visible": true
+                    "visible": true,
+                    "minimized": false,
+                    "maximized": false,
+                    "scaleFactor": 2.0,
+                    "innerBounds": {"x": 10, "y": 20, "width": 800, "height": 600},
+                    "outerBounds": {"x": 4, "y": 12, "width": 824, "height": 648}
                 }]
             })
         );
@@ -1043,7 +1063,12 @@ mod tests {
                     "label": "main",
                     "title": "Fixture",
                     "focused": true,
-                    "visible": true
+                    "visible": true,
+                    "minimized": false,
+                    "maximized": false,
+                    "scaleFactor": 2.0,
+                    "innerBounds": {"x": 10, "y": 20, "width": 800, "height": 600},
+                    "outerBounds": {"x": 4, "y": 12, "width": 824, "height": 648}
                 }]
             })
         );

@@ -86,7 +86,28 @@ export class StaticHtmlAppAdapter {
   }
 
   async windows(): Promise<AgentWindow[]> {
-    return [{ label: this.label, title: this.title, focused: true, visible: true }]
+    const innerBounds = {
+      x: 0,
+      y: 0,
+      width: this.dom.window.innerWidth,
+      height: this.dom.window.innerHeight
+    }
+    return [{
+      label: this.label,
+      title: this.title,
+      focused: true,
+      visible: true,
+      minimized: false,
+      maximized: false,
+      scaleFactor: this.dom.window.devicePixelRatio || 1,
+      innerBounds,
+      outerBounds: {
+        x: 0,
+        y: 0,
+        width: this.dom.window.outerWidth || innerBounds.width,
+        height: this.dom.window.outerHeight || innerBounds.height
+      }
+    }]
   }
 
   async tree(options: SnapshotOptions = {}): Promise<{ text: string }> {

@@ -172,6 +172,18 @@ export interface AgentWindow {
   title?: string
   focused: boolean
   visible: boolean
+  minimized?: boolean
+  maximized?: boolean
+  scaleFactor?: number
+  innerBounds?: WindowBounds
+  outerBounds?: WindowBounds
+}
+
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface TreeResult {

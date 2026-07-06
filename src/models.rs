@@ -434,6 +434,25 @@ pub struct WindowInfo {
     pub title: Option<String>,
     pub focused: bool,
     pub visible: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minimized: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximized: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale_factor: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inner_bounds: Option<WindowBounds>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_bounds: Option<WindowBounds>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[cfg(test)]
@@ -458,6 +477,42 @@ mod tests {
         assert!(parsed.inline_server.enabled);
         assert_eq!(parsed.inline_server.host, "127.0.0.1");
         assert_eq!(parsed.inline_server.port, 45127);
+
+        let window = WindowInfo {
+            label: "main".into(),
+            title: Some("Fixture".into()),
+            focused: true,
+            visible: true,
+            minimized: Some(false),
+            maximized: Some(false),
+            scale_factor: Some(2.0),
+            inner_bounds: Some(WindowBounds {
+                x: 10,
+                y: 20,
+                width: 800,
+                height: 600,
+            }),
+            outer_bounds: Some(WindowBounds {
+                x: 4,
+                y: 12,
+                width: 824,
+                height: 648,
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(window).unwrap(),
+            serde_json::json!({
+                "label": "main",
+                "title": "Fixture",
+                "focused": true,
+                "visible": true,
+                "minimized": false,
+                "maximized": false,
+                "scaleFactor": 2.0,
+                "innerBounds": {"x": 10, "y": 20, "width": 800, "height": 600},
+                "outerBounds": {"x": 4, "y": 12, "width": 824, "height": 648}
+            })
+        );
 
         let attach = AgentAttachRequest {
             app: Some("ducktape".into()),
