@@ -1,9 +1,11 @@
 use tauri::{plugin::TauriPlugin, Manager, Runtime};
 
 mod commands;
+mod endpoint;
 mod error;
 mod models;
 
+pub use endpoint::{endpoint_registry_path, endpoint_runtime_dir, AgentEndpointDescriptor};
 pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
