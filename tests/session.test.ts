@@ -105,6 +105,42 @@ describe('DebuggerSession', () => {
       { level: 'info', message: 'booted', window: 'main' }
     ])
     await expect(session.execute('network', {})).resolves.toEqual([])
+    await expect(
+      session.execute('storage', { action: 'set', key: 'agent.token', value: 'ready' })
+    ).resolves.toEqual({
+      area: 'local',
+      entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
+    await expect(session.execute('storage', { key: 'agent.token' })).resolves.toEqual({
+      area: 'local',
+      entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
+    await expect(session.execute('eval', { code: 'localStorage.getItem("agent.token")' })).resolves.toEqual({
+      type: 'string',
+      value: 'ready',
+      text: 'ready'
+    })
+    await expect(
+      session.execute('eval', { code: 'sessionStorage.setItem("agent.eval", "seen"); sessionStorage.getItem("agent.eval")' })
+    ).resolves.toEqual({
+      type: 'string',
+      value: 'seen',
+      text: 'seen'
+    })
+    await expect(session.execute('storage', { area: 'session', key: 'agent.eval' })).resolves.toEqual({
+      area: 'session',
+      entries: [{ area: 'session', key: 'agent.eval', value: 'seen' }]
+    })
+    await expect(
+      session.execute('storage', { area: 'session', action: 'set', key: 'agent.route', value: '/agents' })
+    ).resolves.toEqual({
+      area: 'session',
+      entries: [{ area: 'session', key: 'agent.route', value: '/agents' }]
+    })
+    await expect(session.execute('storage', { action: 'remove', key: 'agent.token' })).resolves.toEqual({
+      area: 'local',
+      entries: []
+    })
     await expect(session.execute('events', {})).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),

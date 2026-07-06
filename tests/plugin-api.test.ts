@@ -32,6 +32,7 @@ import {
   agentScroll,
   agentSnapshot,
   agentState,
+  agentStorage,
   agentWait,
   agentWindows
 } from '../guest-js/index'
@@ -60,6 +61,7 @@ describe('plugin command helpers', () => {
     await agentLogs({ window: 'main' })
     await agentNetwork({ window: 'main', clear: true })
     await agentEvents({ window: 'main' })
+    await agentStorage({ window: 'main', action: 'set', key: 'agent.token', value: 'ready' })
     await agentWait({ window: 'main', text: 'Ready', timeoutMs: 250 })
     await agentState({ window: 'main' })
     await agentRecord({ window: 'main', action: 'start' })
@@ -83,6 +85,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_logs', { request: { window: 'main' } }],
       ['plugin:agent|agent_network', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_events', { request: { window: 'main' } }],
+      ['plugin:agent|agent_storage', { request: { window: 'main', action: 'set', key: 'agent.token', value: 'ready' } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'main' } }],
       ['plugin:agent|agent_record', { request: { window: 'main', action: 'start' } }],
@@ -108,6 +111,7 @@ describe('plugin command helpers', () => {
     await agentLogs()
     await agentNetwork()
     await agentEvents()
+    await agentStorage({ key: 'agent.token' })
     await agentWait({ text: 'Ready', timeoutMs: 250 })
     await agentState()
     await agentRecord({ action: 'start' })
@@ -130,6 +134,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_logs', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_network', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_events', { request: { window: 'secondary' } }],
+      ['plugin:agent|agent_storage', { request: { window: 'secondary', key: 'agent.token' } }],
       ['plugin:agent|agent_wait', { request: { window: 'secondary', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_record', { request: { window: 'secondary', action: 'start' } }]

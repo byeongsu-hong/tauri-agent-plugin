@@ -18,6 +18,7 @@ import {
   agentScroll,
   agentSnapshot,
   agentState,
+  agentStorage,
   agentWait
 } from '@byeongsu-hong/tauri-plugin-agent'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -180,6 +181,12 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const dropRef = tree.match(/(@\d+) button "Deployment queue"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  const storageSet = await agentStorage({
+    action: 'set',
+    key: 'fixture:lastSelfTest',
+    value: fixtureWindowLabel
+  })
+  const storageRead = await agentStorage({ key: 'fixture:lastSelfTest' })
   await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
@@ -206,6 +213,8 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     inspected.name === 'Agent name' &&
     evaluated.type === 'string' &&
     evaluated.value === 'Command bridge running' &&
+    storageSet.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+    storageRead.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
     values['Notify agents'] === true &&
     values['Worker priority'] === 'remote' &&
     isRecord(state) &&

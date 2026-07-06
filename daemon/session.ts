@@ -69,6 +69,13 @@ export class DebuggerSession {
         return this.app.getEvents()
       case 'network':
         return this.app.getNetwork(booleanParam(params.clear) ?? false)
+      case 'storage':
+        return this.app.storage({
+          area: storageAreaParam(params.area),
+          action: storageActionParam(params.action),
+          key: stringParam(params.key),
+          value: stringParam(params.value)
+        })
       case 'wait':
         return this.app.waitForText(requiredString(params.text, 'text'), numberParam(params.timeoutMs))
       case 'state':
@@ -134,4 +141,12 @@ function booleanParam(value: unknown): boolean | undefined {
 
 function modeParam(value: unknown): 'compact' | 'verbose' | undefined {
   return value === 'compact' || value === 'verbose' ? value : undefined
+}
+
+function storageAreaParam(value: unknown): 'local' | 'session' | undefined {
+  return value === 'local' || value === 'session' ? value : undefined
+}
+
+function storageActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
+  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
 }

@@ -21,6 +21,7 @@ export const AGENT_METHODS = [
   'logs',
   'events',
   'network',
+  'storage',
   'wait',
   'state',
   'record'

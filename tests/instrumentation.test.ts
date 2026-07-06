@@ -4,6 +4,8 @@ import { WebviewAgentInstrumentation } from '../guest-js/instrumentation'
 
 describe('WebviewAgentInstrumentation', () => {
   it('captures trees, actions, logs, events, state probes, waits, and recordings', async () => {
+    localStorage.clear()
+    sessionStorage.clear()
     document.body.innerHTML = `
       <main aria-label="Ducktape">
         <button>Forge</button>
@@ -140,6 +142,17 @@ describe('WebviewAgentInstrumentation', () => {
       value: 'worker-a',
       text: 'worker-a'
     })
+    expect(instrumentation.storage({ action: 'set', key: 'agent.token', value: 'ready' })).toEqual({
+      area: 'local',
+      entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
+    expect(localStorage.getItem('agent.token')).toBe('ready')
+    expect(instrumentation.storage({ area: 'session', action: 'set', key: 'agent.route', value: '/agents' })).toEqual({
+      area: 'session',
+      entries: [{ area: 'session', key: 'agent.route', value: '/agents' }]
+    })
+    expect(sessionStorage.getItem('agent.route')).toBe('/agents')
+    expect(instrumentation.storage({ action: 'clear' })).toEqual({ area: 'local', entries: [] })
     const screenshot = instrumentation.screenshot()
     expect(screenshot.mime).toBe('image/svg+xml')
     expect(screenshot.dataUrl).toMatch(/^data:image\/svg\+xml;base64,/)
@@ -162,6 +175,8 @@ describe('WebviewAgentInstrumentation', () => {
 
     instrumentation.dispose()
     window.fetch = originalFetch
+    localStorage.clear()
+    sessionStorage.clear()
   })
 })
 

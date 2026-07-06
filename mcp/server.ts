@@ -146,6 +146,8 @@ async function executeTool(
       return client.call('events', pick(args, ['window', 'follow']))
     case 'tauri_network':
       return client.call('network', pick(args, ['window', 'follow', 'clear']))
+    case 'tauri_storage':
+      return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
     case 'tauri_wait':
       return client.call('wait', pick(args, ['window', 'text', 'timeoutMs']))
     case 'tauri_state':
@@ -218,17 +220,18 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   name: { type: 'string', description: 'Accessible name substring to match.' },
   ref: { type: 'string', description: 'Snapshot-local ref such as @3.' },
   toRef: { type: 'string', description: 'Snapshot-local drag target ref such as @8.' },
-  value: { type: 'string', description: 'Option value or visible label.' },
+  value: { type: 'string', description: 'Option value, visible label, or storage value.' },
   checked: { type: 'boolean', description: 'Desired checked state. Defaults to true.' },
   code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
-  key: { type: 'string', description: 'Keyboard key, for example Enter.' },
+  key: { type: 'string', description: 'Keyboard key, for example Enter, or storage key.' },
   x: { type: 'number', description: 'Horizontal scroll delta.' },
   y: { type: 'number', description: 'Vertical scroll delta.' },
   limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
   clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
+  area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
   timeoutMs: { type: 'number' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
 }
@@ -254,6 +257,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
+  tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text to appear.', schema(['window', 'text', 'timeoutMs'], ['text'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
@@ -290,6 +294,12 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
     ...(required.length > 0 ? { required } : {}),
     additionalProperties: false
   }
+}
+
+function storageSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'area', 'key', 'value'])
+  inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  return inputSchema
 }
 
 function connectionProperties(): Record<string, unknown> {
