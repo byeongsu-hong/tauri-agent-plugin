@@ -19,6 +19,12 @@ interface ConnectionOptions {
   port?: number
 }
 
+interface FollowOptions extends ConnectionOptions {
+  follow?: boolean
+  pollMs?: number
+  timeoutMs?: number
+}
+
 const program = new Command()
 
 program
@@ -290,10 +296,16 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'reserved for live streaming')
-  .action(async (options: ConnectionOptions & { follow?: boolean }) =>
+  .option('--follow', 'poll and stream new log entries as newline-delimited JSON')
+  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
+  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+  .action(async (options: FollowOptions) => {
+    if (options.follow) {
+      await followEntries(options, 'logs')
+      return
+    }
     printJson(await call(options, 'logs', { ...targetParams(options), follow: options.follow }))
-  )
+  })
 
 program
   .command('events')
@@ -303,10 +315,16 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'reserved for live streaming')
-  .action(async (options: ConnectionOptions & { follow?: boolean }) =>
+  .option('--follow', 'poll and stream new event entries as newline-delimited JSON')
+  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
+  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+  .action(async (options: FollowOptions) => {
+    if (options.follow) {
+      await followEntries(options, 'events')
+      return
+    }
     printJson(await call(options, 'events', { ...targetParams(options), follow: options.follow }))
-  )
+  })
 
 program
   .command('wait')
@@ -353,6 +371,31 @@ async function call(
   params: Record<string, unknown> = {}
 ): Promise<unknown> {
   return debuggerClient(options).then((client) => client.call(method, params))
+}
+
+async function followEntries(options: FollowOptions, method: 'logs' | 'events'): Promise<void> {
+  const client = await debuggerClient(options)
+  const pollMs = Math.max(1, options.pollMs ?? 250)
+  const startedAt = Date.now()
+  let emitted = 0
+
+  while (true) {
+    const result = await client.call(method, { ...targetParams(options), follow: true })
+    if (!Array.isArray(result)) {
+      throw new Error(`${method} follow expected an array result`)
+    }
+
+    const start = result.length < emitted ? 0 : emitted
+    for (const entry of result.slice(start)) {
+      process.stdout.write(`${JSON.stringify(entry)}\n`)
+    }
+    emitted = result.length
+
+    if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
+      return
+    }
+    await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
+  }
 }
 
 function targetParams(options: ConnectionOptions): Record<string, unknown> {
@@ -413,6 +456,17 @@ function parseNumber(value: string): number {
     throw new Error(`invalid number: ${value}`)
   }
   return parsed
+}
+
+function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined) {
+    return pollMs
+  }
+  return Math.max(0, Math.min(pollMs, timeoutMs - (Date.now() - startedAt)))
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function exitBridgePending(): never {

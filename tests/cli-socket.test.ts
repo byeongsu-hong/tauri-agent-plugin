@@ -12,6 +12,8 @@ let server: ChildProcessWithoutNullStreams | undefined
 let fakeRpcServer: Server | undefined
 const PROCESS_SPAWNING_TEST_TIMEOUT_MS = 20000
 
+type RpcResponse = unknown | ((callIndex: number) => unknown)
+
 afterEach(() => {
   server?.kill()
   server = undefined
@@ -77,11 +79,12 @@ async function startServer(path: string, port: number): Promise<void> {
   }
 }
 
-async function startCapturingRpcServer(responses: Record<string, unknown>): Promise<{
+async function startCapturingRpcServer(responses: Record<string, RpcResponse>): Promise<{
   port: number
   requests: Array<{ method: string; params?: unknown }>
 }> {
   const requests: Array<{ method: string; params?: unknown }> = []
+  const callCounts = new Map<string, number>()
   fakeRpcServer = createServer((socket) => {
     let buffer = ''
     socket.on('data', (chunk) => {
@@ -92,11 +95,15 @@ async function startCapturingRpcServer(responses: Record<string, unknown>): Prom
         buffer = buffer.slice(newlineIndex + 1)
         const request = JSON.parse(line) as { id: number; method: string; params?: unknown }
         requests.push({ method: request.method, params: request.params })
+        const callIndex = callCounts.get(request.method) ?? 0
+        callCounts.set(request.method, callIndex + 1)
+        const response = responses[request.method]
+        const result = typeof response === 'function' ? response(callIndex) : response
         socket.write(
           `${JSON.stringify({
             jsonrpc: '2.0',
             id: request.id,
-            result: responses[request.method] ?? { ok: true }
+            result: result ?? { ok: true }
           })}\n`,
           () => socket.end()
         )
@@ -177,5 +184,40 @@ describe('tauri-agent CLI socket mode', () => {
       values: {}
     })
     expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
+  })
+
+  it.each([
+    {
+      command: 'logs',
+      first: { level: 'info', message: 'booted', timestamp: '2026-07-07T00:00:00.000Z' },
+      second: { level: 'warn', message: 'ready', timestamp: '2026-07-07T00:00:00.100Z' }
+    },
+    {
+      command: 'events',
+      first: { kind: 'click', timestamp: '2026-07-07T00:00:00.000Z', detail: { ref: '@3' } },
+      second: { kind: 'focus', timestamp: '2026-07-07T00:00:00.100Z', detail: { ref: '@4' } }
+    }
+  ])('streams new $command entries in follow mode', async ({ command, first, second }) => {
+    const { port, requests } = await startCapturingRpcServer({
+      [command]: (callIndex: number) => (callIndex === 0 ? [first] : [first, second])
+    })
+
+    const output = await runCliAsync([
+      command,
+      '--port',
+      String(port),
+      '--follow',
+      '--poll-ms',
+      '10',
+      '--timeout-ms',
+      '35'
+    ])
+
+    expect(output.split('\n').map((line) => JSON.parse(line))).toEqual([first, second])
+    const followRequests = requests.filter((request) => request.method === command)
+    expect(followRequests.length).toBeGreaterThanOrEqual(2)
+    expect(followRequests.every((request) => JSON.stringify(request.params) === JSON.stringify({ follow: true }))).toBe(
+      true
+    )
   })
 })
