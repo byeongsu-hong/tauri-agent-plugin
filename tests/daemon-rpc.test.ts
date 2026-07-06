@@ -50,6 +50,12 @@ describe('debugger JSON-RPC transport', () => {
     await expect(readClient.call('location')).resolves.toEqual({ href: 'http://127.0.0.1:1420/' })
     expect(readTransport.messages.map((message) => message.method)).toEqual(['location', 'location'])
 
+    const waitTransport = new FlakyResetTransport({ matched: true, text: 'Ready' })
+    const waitClient = new DebuggerClient(waitTransport)
+
+    await expect(waitClient.call('wait', { text: 'Ready' })).resolves.toEqual({ matched: true, text: 'Ready' })
+    expect(waitTransport.messages.map((message) => message.method)).toEqual(['wait', 'wait'])
+
     const writeTransport = new FlakyResetTransport({ ok: true })
     const writeClient = new DebuggerClient(writeTransport)
 

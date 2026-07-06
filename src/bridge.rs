@@ -10,6 +10,8 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime};
 use crate::{commands, Error};
 
 pub(crate) const BRIDGE_REQUEST_EVENT: &str = "tauri-agent://request";
+const DEFAULT_BRIDGE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
+const WAIT_BRIDGE_RESPONSE_MARGIN: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +50,7 @@ impl AgentBridge {
         let target_label = target.label().to_string();
         let id = format!("bridge-{}", self.next_id.fetch_add(1, Ordering::SeqCst));
         let pending = self.insert_pending(id.clone());
+        let response_timeout = bridge_response_timeout(method, &params);
 
         app.emit_to(
             EventTarget::window(target_label),
@@ -59,7 +62,7 @@ impl AgentBridge {
             },
         )?;
 
-        match pending.recv_timeout(Duration::from_secs(2)) {
+        match pending.recv_timeout(response_timeout) {
             Ok(Ok(result)) => Ok(result),
             Ok(Err(error)) => Err(Error::BridgeUnavailable(error)),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -108,6 +111,21 @@ impl AgentBridge {
     }
 }
 
+fn bridge_response_timeout(method: &str, params: &serde_json::Value) -> Duration {
+    if method != "wait" {
+        return DEFAULT_BRIDGE_RESPONSE_TIMEOUT;
+    }
+
+    let requested = params
+        .get("timeoutMs")
+        .and_then(serde_json::Value::as_u64)
+        .map(Duration::from_millis)
+        .unwrap_or_default()
+        + WAIT_BRIDGE_RESPONSE_MARGIN;
+
+    requested.max(DEFAULT_BRIDGE_RESPONSE_TIMEOUT)
+}
+
 fn target_window<R: Runtime>(
     app: &AppHandle<R>,
     label: Option<&str>,
@@ -147,6 +165,22 @@ mod tests {
         assert_eq!(
             pending.recv().unwrap().unwrap(),
             serde_json::json!({"ok": true})
+        );
+    }
+
+    #[test]
+    fn bridge_response_timeout_extends_for_wait_timeout_ms() {
+        assert_eq!(
+            bridge_response_timeout("wait", &serde_json::json!({"timeoutMs": 4_500})),
+            Duration::from_millis(5_000)
+        );
+    }
+
+    #[test]
+    fn bridge_response_timeout_keeps_default_for_non_wait_methods() {
+        assert_eq!(
+            bridge_response_timeout("eval", &serde_json::json!({"timeoutMs": 4_500})),
+            Duration::from_secs(2)
         );
     }
 }
