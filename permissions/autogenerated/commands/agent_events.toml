@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-events"
+description = "Enables the agent_events command without any pre-configured scope."
+commands.allow = ["agent_events"]
+
+[[permission]]
+identifier = "deny-agent-events"
+description = "Denies the agent_events command without any pre-configured scope."
+commands.deny = ["agent_events"]

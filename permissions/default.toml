@@ -1,0 +1,11 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref actions, screenshots, event streams, and window discovery."
+permissions = [
+  "allow-agent-snapshot",
+  "allow-agent-action",
+  "allow-agent-screenshot",
+  "allow-agent-events",
+  "allow-agent-windows",
+]
