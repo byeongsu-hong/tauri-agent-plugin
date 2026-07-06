@@ -10,6 +10,7 @@ import { createEndpointDescriptor, writeEndpointRegistry } from '../daemon/endpo
 
 let server: ChildProcessWithoutNullStreams | undefined
 let fakeRpcServer: Server | undefined
+const PROCESS_SPAWNING_TEST_TIMEOUT_MS = 20000
 
 afterEach(() => {
   server?.kill()
@@ -128,7 +129,7 @@ describe('tauri-agent CLI socket mode', () => {
         'Agent name': 'worker-a'
       }
     })
-  })
+  }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 
   it('discovers a persistent debugger daemon from an app endpoint registry', async () => {
     const port = 45139
@@ -148,7 +149,7 @@ describe('tauri-agent CLI socket mode', () => {
     expect(JSON.parse(runCli(['windows', '--app', appId], env))).toEqual([
       { label: 'main', title: 'Tauri App', focused: true, visible: true }
     ])
-  })
+  }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 
   it('forwards --window to ref command snapshot refresh and action calls', async () => {
     const { port, requests } = await startCapturingRpcServer({

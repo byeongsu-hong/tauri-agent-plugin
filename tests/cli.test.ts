@@ -5,6 +5,8 @@ import { execFileSync } from 'node:child_process'
 
 import { describe, expect, it } from 'vitest'
 
+const PROCESS_SPAWNING_TEST_TIMEOUT_MS = 30000
+
 function runCli(args: string[]): string {
   return execFileSync('bun', ['bin/tauri-agent.ts', ...args], {
     cwd: process.cwd(),
@@ -90,5 +92,5 @@ describe('tauri-agent CLI', () => {
       recording: false,
       entries: []
     })
-  }, 15000)
+  }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 })
