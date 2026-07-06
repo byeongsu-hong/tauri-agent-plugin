@@ -260,6 +260,17 @@ describe('tauri-agent CLI socket mode', () => {
     ])
   })
 
+  it('forwards network options to protocol calls', async () => {
+    const { port, requests } = await startCapturingRpcServer({
+      network: []
+    })
+
+    expect(
+      JSON.parse(await runCliAsync(['network', '--port', String(port), '--window', 'secondary', '--clear']))
+    ).toEqual([])
+    expect(requests).toEqual([{ method: 'network', params: { window: 'secondary', clear: true } }])
+  })
+
   it.each([
     {
       command: 'logs',
@@ -270,6 +281,27 @@ describe('tauri-agent CLI socket mode', () => {
       command: 'events',
       first: { kind: 'click', timestamp: '2026-07-07T00:00:00.000Z', detail: { ref: '@3' } },
       second: { kind: 'focus', timestamp: '2026-07-07T00:00:00.100Z', detail: { ref: '@4' } }
+    },
+    {
+      command: 'network',
+      first: {
+        id: 'fetch-1',
+        type: 'fetch',
+        method: 'GET',
+        url: 'https://example.test/api/agents',
+        startedAt: '2026-07-07T00:00:00.000Z'
+      },
+      second: {
+        id: 'fetch-2',
+        type: 'fetch',
+        method: 'POST',
+        url: 'https://example.test/api/agents',
+        status: 201,
+        ok: true,
+        startedAt: '2026-07-07T00:00:00.100Z',
+        endedAt: '2026-07-07T00:00:00.150Z',
+        durationMs: 50
+      }
     }
   ])('streams new $command entries in follow mode', async ({ command, first, second }) => {
     const { port, requests } = await startCapturingRpcServer({

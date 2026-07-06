@@ -67,6 +67,8 @@ export class DebuggerSession {
         return this.app.getLogs()
       case 'events':
         return this.app.getEvents()
+      case 'network':
+        return this.app.getNetwork(booleanParam(params.clear) ?? false)
       case 'wait':
         return this.app.waitForText(requiredString(params.text, 'text'), numberParam(params.timeoutMs))
       case 'state':

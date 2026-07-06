@@ -25,6 +25,7 @@ import {
   agentHover,
   agentInspect,
   agentLogs,
+  agentNetwork,
   agentRecord,
   agentScreenshot,
   agentSelect,
@@ -57,6 +58,7 @@ describe('plugin command helpers', () => {
     await agentAction({ window: 'main', action: 'press', value: 'Enter' })
     await agentScreenshot({ window: 'main', path: '/tmp/app.svg' })
     await agentLogs({ window: 'main' })
+    await agentNetwork({ window: 'main', clear: true })
     await agentEvents({ window: 'main' })
     await agentWait({ window: 'main', text: 'Ready', timeoutMs: 250 })
     await agentState({ window: 'main' })
@@ -79,6 +81,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter' } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'main', path: '/tmp/app.svg' } }],
       ['plugin:agent|agent_logs', { request: { window: 'main' } }],
+      ['plugin:agent|agent_network', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_events', { request: { window: 'main' } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'main' } }],
@@ -103,6 +106,7 @@ describe('plugin command helpers', () => {
     await agentAction({ action: 'press', value: 'Enter' })
     await agentScreenshot({ path: '/tmp/app.svg' })
     await agentLogs()
+    await agentNetwork()
     await agentEvents()
     await agentWait({ text: 'Ready', timeoutMs: 250 })
     await agentState()
@@ -124,6 +128,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_action', { request: { window: 'secondary', action: 'press', value: 'Enter' } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'secondary', path: '/tmp/app.svg' } }],
       ['plugin:agent|agent_logs', { request: { window: 'secondary' } }],
+      ['plugin:agent|agent_network', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_events', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_wait', { request: { window: 'secondary', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'secondary' } }],

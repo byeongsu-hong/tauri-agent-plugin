@@ -87,8 +87,8 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
-        | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "wait"
-        | "state" | "record" => {
+        | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
+        | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -572,6 +572,35 @@ mod tests {
         }
     }
 
+    struct FakeNetworkBackend;
+
+    impl InlineDebuggerBackend for FakeNetworkBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "network");
+            assert_eq!(params["window"], "main");
+            assert_eq!(params["clear"], true);
+            Ok(serde_json::json!([{
+                "id": "fetch-1",
+                "type": "fetch",
+                "method": "GET",
+                "url": "https://example.test/api/agents",
+                "status": 200,
+                "ok": true,
+                "startedAt": "2026-07-07T00:00:00.000Z",
+                "endedAt": "2026-07-07T00:00:00.020Z",
+                "durationMs": 20.0
+            }]))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -658,6 +687,33 @@ mod tests {
                         "states": []
                     }]
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_network_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeNetworkBackend,
+            r#"{"jsonrpc":"2.0","id":14,"method":"network","params":{"window":"main","clear":true}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 14,
+                "result": [{
+                    "id": "fetch-1",
+                    "type": "fetch",
+                    "method": "GET",
+                    "url": "https://example.test/api/agents",
+                    "status": 200,
+                    "ok": true,
+                    "startedAt": "2026-07-07T00:00:00.000Z",
+                    "endedAt": "2026-07-07T00:00:00.020Z",
+                    "durationMs": 20.0
+                }]
             })
         );
     }

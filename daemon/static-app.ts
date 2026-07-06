@@ -31,6 +31,7 @@ import type {
   FindResult,
   InspectResult,
   LogEntry,
+  NetworkEntry,
   ScreenshotResult
 } from '../protocol/types'
 
@@ -49,6 +50,7 @@ export class StaticHtmlAppAdapter {
   private dom: JSDOM
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
+  private network: NetworkEntry[] = []
 
   constructor(options: StaticHtmlAppOptions) {
     this.label = options.window ?? 'main'
@@ -214,6 +216,14 @@ export class StaticHtmlAppAdapter {
 
   getEvents(): AgentEvent[] {
     return [...this.events]
+  }
+
+  getNetwork(clear = false): NetworkEntry[] {
+    const entries = [...this.network]
+    if (clear) {
+      this.network = []
+    }
+    return entries
   }
 
   addLog(level: LogEntry['level'], message: string): void {

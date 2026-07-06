@@ -24,9 +24,17 @@ describe('WebviewAgentInstrumentation', () => {
         route: () => '/agents'
       }
     })
+    const originalFetch = window.fetch
+    window.fetch = async () =>
+      new Response('{"ok":true}', {
+        status: 201,
+        headers: { 'content-type': 'application/json' }
+      })
     instrumentation.install()
 
     console.info('booted')
+    const fetchResponse = await window.fetch('/api/agents', { method: 'POST', body: 'worker-a' })
+    await window.fetch('ipc://localhost/plugin%3Aagent%7Cagent_bridge_response', { method: 'POST', body: '{}' })
     const tree = instrumentation.snapshot()
     instrumentation.record('start')
     instrumentation.action({ action: 'click', ref: '@1' })
@@ -45,6 +53,24 @@ describe('WebviewAgentInstrumentation', () => {
       text: 'Registered worker-a'
     })
 
+    expect(fetchResponse.status).toBe(201)
+    expect(instrumentation.network()).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        type: 'fetch',
+        method: 'POST',
+        url: expect.stringContaining('/api/agents'),
+        status: 201,
+        ok: true,
+        startedAt: expect.any(String),
+        endedAt: expect.any(String),
+        durationMs: expect.any(Number),
+        requestBodySize: 8,
+        responseBodySize: 11
+      })
+    ])
+    expect(instrumentation.network({ clear: true })).toHaveLength(1)
+    expect(instrumentation.network()).toEqual([])
     expect(tree.text).toBe(
       [
         'main "Ducktape"',
@@ -135,6 +161,7 @@ describe('WebviewAgentInstrumentation', () => {
     })
 
     instrumentation.dispose()
+    window.fetch = originalFetch
   })
 })
 
