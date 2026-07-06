@@ -156,7 +156,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 bun run tauri:dev
 ```
 
-Use it as the first real target for live bridge work. Its plugin config enables the inline server with an ephemeral loopback port and endpoint publication. Its UI intentionally exposes agent-testable semantics: `Status` and `Agents` navitems, `Forge`, `Agent name`, `Register`, `Roster`, and `Inspect backing`.
+Use it as the first real target for live bridge work. Its plugin config enables the inline server with an ephemeral loopback port and endpoint publication. It opens `main` and `secondary` windows so `--window` targeting can be tested against real webviews. Its UI intentionally exposes agent-testable semantics: `Status` and `Agents` navitems, `Forge`, `Agent name`, `Register`, `Roster`, and `Inspect backing`.
 
 ## Package Exports
 
@@ -191,6 +191,7 @@ import { AGENT_METHODS } from '@byeongsu-hong/tauri-plugin-agent/protocol'
 import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
 
 const agent = new WebviewAgentInstrumentation({
+  windowLabel: 'main',
   state: {
     route: () => location.pathname
   }

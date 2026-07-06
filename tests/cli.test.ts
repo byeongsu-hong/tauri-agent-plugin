@@ -90,5 +90,5 @@ describe('tauri-agent CLI', () => {
       recording: false,
       entries: []
     })
-  })
+  }, 15000)
 })

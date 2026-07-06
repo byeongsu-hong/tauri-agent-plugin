@@ -18,9 +18,11 @@ import {
   agentState,
   agentWait
 } from '@byeongsu-hong/tauri-plugin-agent'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import './style.css'
 
 const roster = ['local-worker', 'remote-worker', 'backup-worker']
+const fixtureWindowLabel = configuredFixtureWindowLabel() ?? currentFixtureWindowLabel()
 let activeView = 'agents'
 let selectedWorker = roster[0]
 let hoveredForge = false
@@ -30,7 +32,9 @@ let scrolledRoster = false
 let draggedForge = false
 
 const agent = new WebviewAgentInstrumentation({
+  windowLabel: fixtureWindowLabel,
   state: {
+    windowLabel: () => fixtureWindowLabel,
     route: () => activeView,
     registeredCount: () => roster.length,
     selectedWorker: () => selectedWorker,
@@ -58,15 +62,16 @@ const appRoot = mustFindAppRoot()
 render()
 
 function render(): void {
+  const appLabel = fixtureWindowLabel === 'main' ? 'Ducktape' : `Ducktape ${fixtureWindowLabel}`
   appRoot.innerHTML = `
-    <main aria-label="Ducktape" data-view="${activeView}">
+    <main aria-label="${appLabel}" data-window-label="${fixtureWindowLabel}" data-view="${activeView}">
       <nav aria-label="Primary">
         <button role="navitem" aria-selected="${activeView === 'status'}" data-nav="status">Status</button>
         <button role="navitem" aria-selected="${activeView === 'agents'}" data-nav="agents">Agents</button>
       </nav>
 
       <section aria-label="Agents" data-view="agents">
-        <h1>Agents</h1>
+        <h1>${fixtureWindowLabel === 'main' ? 'Agents' : 'Agents secondary'}</h1>
         <button type="button" data-action="forge">Forge</button>
         <label>
           Agent name
@@ -163,29 +168,32 @@ function render(): void {
 async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<void> {
   if (!status) return
   status.textContent = 'Command bridge running'
-  const tree = await agentSnapshot({ scope: 'main' })
+  const tree = await agentSnapshot({ window: fixtureWindowLabel, scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
   const forgeRef = tree.match(/(@\d+) button "Forge"/)?.[1]
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const rosterRef = tree.match(/(@\d+) list "Roster"/)?.[1]
   const dropRef = tree.match(/(@\d+) button "Deployment queue"/)?.[1]
-  const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
-  const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
-  if (forgeRef) await agentFocus({ ref: forgeRef })
-  if (forgeRef) await agentBlur({ ref: forgeRef })
-  if (forgeRef) await agentHover({ ref: forgeRef })
-  if (rosterRef) await agentScroll({ ref: rosterRef, y: 12 })
-  if (forgeRef) await agentDrag({ ref: forgeRef, toRef: dropRef })
-  if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
-  if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
-  await agentAction({ action: 'press', value: 'Escape' })
-  const state = await agentState()
-  const logs = await agentLogs()
-  const events = await agentEvents()
-  const shot = await agentScreenshot()
-  const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
-  const record = await agentRecord()
+  const inspected = agentNameRef ? await agentInspect({ window: fixtureWindowLabel, ref: agentNameRef }) : null
+  const evaluated = await agentEval({
+    window: fixtureWindowLabel,
+    code: 'document.querySelector("[data-status]")?.textContent'
+  })
+  if (forgeRef) await agentFocus({ window: fixtureWindowLabel, ref: forgeRef })
+  if (forgeRef) await agentBlur({ window: fixtureWindowLabel, ref: forgeRef })
+  if (forgeRef) await agentHover({ window: fixtureWindowLabel, ref: forgeRef })
+  if (rosterRef) await agentScroll({ window: fixtureWindowLabel, ref: rosterRef, y: 12 })
+  if (forgeRef) await agentDrag({ window: fixtureWindowLabel, ref: forgeRef, toRef: dropRef })
+  if (priorityRef) await agentSelect({ window: fixtureWindowLabel, ref: priorityRef, value: 'remote' })
+  if (notifyRef) await agentCheck({ window: fixtureWindowLabel, ref: notifyRef, checked: true })
+  await agentAction({ window: fixtureWindowLabel, action: 'press', value: 'Escape' })
+  const state = await agentState({ window: fixtureWindowLabel })
+  const logs = await agentLogs({ window: fixtureWindowLabel })
+  const events = await agentEvents({ window: fixtureWindowLabel })
+  const shot = await agentScreenshot({ window: fixtureWindowLabel })
+  const wait = await agentWait({ window: fixtureWindowLabel, text: 'Command bridge running', timeoutMs: 500 })
+  const record = await agentRecord({ window: fixtureWindowLabel })
   const probes = isRecord(state.probes) ? state.probes : {}
   const values = isRecord(state.values) ? state.values : {}
 
@@ -230,4 +238,17 @@ function mustFindAppRoot(): HTMLDivElement {
     throw new Error('missing app root')
   }
   return root
+}
+
+function currentFixtureWindowLabel(): string {
+  try {
+    return getCurrentWindow().label || 'main'
+  } catch {
+    return 'main'
+  }
+}
+
+function configuredFixtureWindowLabel(): string | null {
+  const label = new URL(location.href).searchParams.get('fixtureWindow')
+  return label && label.length > 0 ? label : null
 }
