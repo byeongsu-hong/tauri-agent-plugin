@@ -76,6 +76,11 @@ export class DebuggerSession {
           key: stringParam(params.key),
           value: stringParam(params.value)
         })
+      case 'location':
+        return this.app.location({
+          action: locationActionParam(params.action),
+          url: stringParam(params.url)
+        })
       case 'wait':
         return this.app.waitForText(requiredString(params.text, 'text'), numberParam(params.timeoutMs))
       case 'state':
@@ -149,4 +154,8 @@ function storageAreaParam(value: unknown): 'local' | 'session' | undefined {
 
 function storageActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
   return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+}
+
+function locationActionParam(value: unknown): 'get' | 'push' | 'replace' | undefined {
+  return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
 }

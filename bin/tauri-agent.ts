@@ -47,6 +47,11 @@ interface StorageOptions extends ConnectionOptions {
   value?: string
 }
 
+interface LocationOptions extends ConnectionOptions {
+  action?: 'get' | 'push' | 'replace'
+  url?: string
+}
+
 const program = new Command()
 
 program
@@ -407,6 +412,20 @@ program
   })
 
 program
+  .command('location')
+  .description('Inspect or update the webview location for SPA-style navigation.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--action <action>', 'location action: get, push, or replace', parseLocationAction, 'get')
+  .option('--url <url>', 'URL or path for push/replace actions')
+  .action(async (options: LocationOptions) => {
+    printJson(await call(options, 'location', locationParams(options)))
+  })
+
+program
   .command('wait')
   .description('Wait for text to appear.')
   .argument('<text>', 'text to wait for')
@@ -531,6 +550,14 @@ function storageParams(options: StorageOptions): Record<string, unknown> {
   }
 }
 
+function locationParams(options: LocationOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    action: options.action,
+    url: options.url
+  }
+}
+
 function refActionParams(
   options: ConnectionOptions,
   ref: string,
@@ -602,6 +629,13 @@ function parseStorageAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
     return value
   }
   throw new Error(`expected get, set, remove, or clear, got ${value}`)
+}
+
+function parseLocationAction(value: string): 'get' | 'push' | 'replace' {
+  if (value === 'get' || value === 'push' || value === 'replace') {
+    return value
+  }
+  throw new Error(`expected get, push, or replace, got ${value}`)
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {

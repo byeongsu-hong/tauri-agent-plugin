@@ -29,6 +29,8 @@ import type {
   AgentEvent,
   EvalResult,
   FindResult,
+  LocationParams,
+  LocationResult,
   LogEntry,
   NetworkEntry,
   RecordingEntry,
@@ -60,6 +62,8 @@ export {
   type EvalResult,
   type FindResult,
   type InspectResult,
+  type LocationParams,
+  type LocationResult,
   type LogEntry,
   type NetworkEntry,
   type RecordingEntry,
@@ -175,6 +179,10 @@ export interface AgentStorageRequest extends StorageParams {
   window?: string
 }
 
+export interface AgentLocationRequest extends LocationParams {
+  window?: string
+}
+
 export interface AgentWaitRequest {
   window?: string
   text: string
@@ -276,6 +284,10 @@ export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<N
 
 export async function agentStorage(request: AgentStorageRequest = {}): Promise<StorageResult> {
   return invokeAgentCommand('plugin:agent|agent_storage', { request: withCurrentWindow(request) })
+}
+
+export async function agentLocation(request: AgentLocationRequest = {}): Promise<LocationResult> {
+  return invokeAgentCommand('plugin:agent|agent_location', { request: withCurrentWindow(request) })
 }
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {

@@ -141,6 +141,27 @@ describe('DebuggerSession', () => {
       area: 'local',
       entries: []
     })
+    await expect(session.execute('location', {})).resolves.toEqual({
+      href: 'tauri-agent://static',
+      origin: 'null',
+      pathname: '',
+      search: '',
+      hash: ''
+    })
+    await expect(session.execute('location', { action: 'push', url: '/agents?view=debug#roster' })).resolves.toEqual({
+      href: 'tauri-agent://static/agents?view=debug#roster',
+      origin: 'null',
+      pathname: '/agents',
+      search: '?view=debug',
+      hash: '#roster'
+    })
+    await expect(session.execute('location', { action: 'replace', url: '/status' })).resolves.toEqual({
+      href: 'tauri-agent://static/status',
+      origin: 'null',
+      pathname: '/status',
+      search: '',
+      hash: ''
+    })
     await expect(session.execute('events', {})).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),

@@ -4,6 +4,7 @@ import { WebviewAgentInstrumentation } from '../guest-js/instrumentation'
 
 describe('WebviewAgentInstrumentation', () => {
   it('captures trees, actions, logs, events, state probes, waits, and recordings', async () => {
+    const originalHref = window.location.href
     localStorage.clear()
     sessionStorage.clear()
     document.body.innerHTML = `
@@ -153,6 +154,27 @@ describe('WebviewAgentInstrumentation', () => {
     })
     expect(sessionStorage.getItem('agent.route')).toBe('/agents')
     expect(instrumentation.storage({ action: 'clear' })).toEqual({ area: 'local', entries: [] })
+    expect(instrumentation.location()).toEqual({
+      href: window.location.href,
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hash: window.location.hash
+    })
+    expect(instrumentation.location({ action: 'push', url: '/agents?view=debug#roster' })).toEqual({
+      href: expect.stringContaining('/agents?view=debug#roster'),
+      origin: window.location.origin,
+      pathname: '/agents',
+      search: '?view=debug',
+      hash: '#roster'
+    })
+    expect(instrumentation.location({ action: 'replace', url: '/status' })).toEqual({
+      href: expect.stringContaining('/status'),
+      origin: window.location.origin,
+      pathname: '/status',
+      search: '',
+      hash: ''
+    })
     const screenshot = instrumentation.screenshot()
     expect(screenshot.mime).toBe('image/svg+xml')
     expect(screenshot.dataUrl).toMatch(/^data:image\/svg\+xml;base64,/)
@@ -175,6 +197,7 @@ describe('WebviewAgentInstrumentation', () => {
 
     instrumentation.dispose()
     window.fetch = originalFetch
+    history.replaceState(null, '', originalHref)
     localStorage.clear()
     sessionStorage.clear()
   })
