@@ -47,6 +47,12 @@ interface StorageOptions extends ConnectionOptions {
   value?: string
 }
 
+interface CookieOptions extends ConnectionOptions {
+  action?: 'get' | 'set' | 'remove' | 'clear'
+  name?: string
+  value?: string
+}
+
 interface LocationOptions extends ConnectionOptions {
   action?: 'get' | 'push' | 'replace'
   url?: string
@@ -420,6 +426,21 @@ program
   })
 
 program
+  .command('cookies')
+  .description('Inspect or mutate webview-visible document.cookie entries.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--action <action>', 'cookie action: get, set, remove, or clear', parseCookieAction, 'get')
+  .option('--name <name>', 'cookie name')
+  .option('--value <value>', 'cookie value for set')
+  .action(async (options: CookieOptions) => {
+    printJson(await call(options, 'cookies', cookieParams(options)))
+  })
+
+program
   .command('location')
   .description('Inspect or update the webview location for SPA-style navigation.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
@@ -561,6 +582,15 @@ function storageParams(options: StorageOptions): Record<string, unknown> {
   }
 }
 
+function cookieParams(options: CookieOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    action: options.action,
+    name: options.name,
+    value: options.value
+  }
+}
+
 function locationParams(options: LocationOptions): Record<string, unknown> {
   return {
     ...targetParams(options),
@@ -647,6 +677,13 @@ function parseStorageArea(value: string): 'local' | 'session' {
 }
 
 function parseStorageAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
+  if (value === 'get' || value === 'set' || value === 'remove' || value === 'clear') {
+    return value
+  }
+  throw new Error(`expected get, set, remove, or clear, got ${value}`)
+}
+
+function parseCookieAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
   if (value === 'get' || value === 'set' || value === 'remove' || value === 'clear') {
     return value
   }

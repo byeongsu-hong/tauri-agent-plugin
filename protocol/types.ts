@@ -22,6 +22,7 @@ export type AgentMethod =
   | 'events'
   | 'network'
   | 'storage'
+  | 'cookies'
   | 'location'
   | 'wait'
   | 'state'
@@ -139,6 +140,12 @@ export interface StorageParams extends WindowTarget {
   value?: string
 }
 
+export interface CookieParams extends WindowTarget {
+  action?: 'get' | 'set' | 'remove' | 'clear'
+  name?: string
+  value?: string
+}
+
 export interface LocationParams extends WindowTarget {
   action?: 'get' | 'push' | 'replace'
   url?: string
@@ -231,6 +238,15 @@ export interface StorageEntry {
 export interface StorageResult {
   area: 'local' | 'session'
   entries: StorageEntry[]
+}
+
+export interface CookieEntry {
+  name: string
+  value: string
+}
+
+export interface CookieResult {
+  entries: CookieEntry[]
 }
 
 export interface LocationResult {

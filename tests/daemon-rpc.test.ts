@@ -56,6 +56,14 @@ describe('debugger JSON-RPC transport', () => {
     await expect(waitClient.call('wait', { text: 'Ready' })).resolves.toEqual({ matched: true, text: 'Ready' })
     expect(waitTransport.messages.map((message) => message.method)).toEqual(['wait', 'wait'])
 
+    const cookieTransport = new FlakyResetTransport({ entries: [{ name: 'agent.cookie', value: 'ready' }] })
+    const cookieClient = new DebuggerClient(cookieTransport)
+
+    await expect(cookieClient.call('cookies', { name: 'agent.cookie' })).resolves.toEqual({
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
+    })
+    expect(cookieTransport.messages.map((message) => message.method)).toEqual(['cookies', 'cookies'])
+
     const writeTransport = new FlakyResetTransport({ ok: true })
     const writeClient = new DebuggerClient(writeTransport)
 
@@ -69,6 +77,12 @@ describe('debugger JSON-RPC transport', () => {
       await expect(clearClient.call(method, { clear: true })).rejects.toThrow('read ECONNRESET')
       expect(clearTransport.messages.map((message) => message.method)).toEqual([method])
     }
+
+    const cookieWriteTransport = new FlakyResetTransport({ entries: [] })
+    const cookieWriteClient = new DebuggerClient(cookieWriteTransport)
+
+    await expect(cookieWriteClient.call('cookies', { action: 'set', name: 'agent.cookie', value: 'ready' })).rejects.toThrow('read ECONNRESET')
+    expect(cookieWriteTransport.messages.map((message) => message.method)).toEqual(['cookies'])
   })
 })
 

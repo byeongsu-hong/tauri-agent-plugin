@@ -15,13 +15,14 @@ pub use endpoint::{
 pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
-    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
-    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
-    AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest, AgentRecordResponse,
-    AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest,
-    AgentStateRequest, AgentStorageEntry, AgentStorageRequest, AgentStorageResponse,
-    AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig, LocationAction, RecordAction,
+    AgentCheckRequest, AgentCookieEntry, AgentCookiesRequest, AgentCookiesResponse,
+    AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFindRequest,
+    AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentLocationRequest,
+    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
+    AgentRecordEntry, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentStorageEntry, AgentStorageRequest, AgentStorageResponse, AgentWaitRequest,
+    AgentWaitResponse, Config, CookieAction, InlineServerConfig, LocationAction, RecordAction,
     SnapshotMode, StorageAction, StorageArea, WindowInfo,
 };
 
@@ -121,6 +122,7 @@ impl Builder {
                 commands::agent_events,
                 commands::agent_network,
                 commands::agent_storage,
+                commands::agent_cookies,
                 commands::agent_location,
                 commands::agent_windows,
                 commands::agent_wait,

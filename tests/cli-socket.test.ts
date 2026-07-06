@@ -355,6 +355,39 @@ describe('tauri-agent CLI socket mode', () => {
     ])
   })
 
+  it('forwards cookie options to protocol calls', async () => {
+    const response = {
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      cookies: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'cookies',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--action',
+          'set',
+          '--name',
+          'agent.cookie',
+          '--value',
+          'ready'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      {
+        method: 'cookies',
+        params: { window: 'secondary', action: 'set', name: 'agent.cookie', value: 'ready' }
+      }
+    ])
+  })
+
   it('forwards location options to protocol calls', async () => {
     const response = {
       href: 'tauri-agent://static/agents?view=debug#roster',

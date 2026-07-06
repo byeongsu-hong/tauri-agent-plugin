@@ -88,7 +88,7 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
         "windows" => Ok(json!(backend.windows())),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
         | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
-        | "storage" | "location" | "wait" | "state" | "record" => {
+        | "storage" | "cookies" | "location" | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -629,6 +629,32 @@ mod tests {
         }
     }
 
+    struct FakeCookiesBackend;
+
+    impl InlineDebuggerBackend for FakeCookiesBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "cookies");
+            assert_eq!(params["window"], "main");
+            assert_eq!(params["action"], "set");
+            assert_eq!(params["name"], "agent.cookie");
+            assert_eq!(params["value"], "ready");
+            Ok(serde_json::json!({
+                "entries": [{
+                    "name": "agent.cookie",
+                    "value": "ready"
+                }]
+            }))
+        }
+    }
+
     struct FakeLocationBackend;
 
     impl InlineDebuggerBackend for FakeLocationBackend {
@@ -797,10 +823,10 @@ mod tests {
     }
 
     #[test]
-    fn inline_server_proxies_location_json_rpc_to_bridge() {
+    fn inline_server_proxies_cookies_json_rpc_to_bridge() {
         let response = respond_to_json_rpc_line(
-            &FakeLocationBackend,
-            r#"{"jsonrpc":"2.0","id":16,"method":"location","params":{"window":"main","action":"push","url":"/agents?view=debug#roster"}}"#,
+            &FakeCookiesBackend,
+            r#"{"jsonrpc":"2.0","id":16,"method":"cookies","params":{"window":"main","action":"set","name":"agent.cookie","value":"ready"}}"#,
         );
 
         assert_eq!(
@@ -808,6 +834,28 @@ mod tests {
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 16,
+                "result": {
+                    "entries": [{
+                        "name": "agent.cookie",
+                        "value": "ready"
+                    }]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_location_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeLocationBackend,
+            r#"{"jsonrpc":"2.0","id":17,"method":"location","params":{"window":"main","action":"push","url":"/agents?view=debug#roster"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 17,
                 "result": {
                     "href": "tauri-agent://static/agents?view=debug#roster",
                     "origin": "null",

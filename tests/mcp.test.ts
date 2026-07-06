@@ -83,6 +83,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_events',
       'tauri_network',
       'tauri_storage',
+      'tauri_cookies',
       'tauri_location',
       'tauri_wait',
       'tauri_state',
@@ -512,6 +513,26 @@ describe('tauri-agent MCP server', () => {
     expect(storage.result.structuredContent).toEqual({
       area: 'local',
       entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
+
+    const cookies = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 23,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_cookies',
+              arguments: { html, action: 'set', name: 'agent.cookie', value: 'ready' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(cookies.result.structuredContent).toEqual({
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
     })
 
     const location = JSON.parse(

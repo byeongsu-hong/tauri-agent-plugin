@@ -302,6 +302,38 @@ pub struct AgentStorageResponse {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentCookiesRequest {
+    pub window: Option<String>,
+    pub action: Option<CookieAction>,
+    pub name: Option<String>,
+    pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CookieAction {
+    #[default]
+    Get,
+    Set,
+    Remove,
+    Clear,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCookieEntry {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCookiesResponse {
+    pub entries: Vec<AgentCookieEntry>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentLocationRequest {
     pub window: Option<String>,
     pub action: Option<LocationAction>,
@@ -749,6 +781,38 @@ mod tests {
                     "area": "session",
                     "key": "agent.route",
                     "value": "/agents"
+                }]
+            })
+        );
+
+        let cookies = AgentCookiesRequest {
+            window: Some("main".into()),
+            action: Some(CookieAction::Set),
+            name: Some("agent.cookie".into()),
+            value: Some("ready".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(cookies).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "action": "set",
+                "name": "agent.cookie",
+                "value": "ready"
+            })
+        );
+
+        let cookies_response = AgentCookiesResponse {
+            entries: vec![AgentCookieEntry {
+                name: "agent.cookie".into(),
+                value: "ready".into(),
+            }],
+        };
+        assert_eq!(
+            serde_json::to_value(cookies_response).unwrap(),
+            serde_json::json!({
+                "entries": [{
+                    "name": "agent.cookie",
+                    "value": "ready"
                 }]
             })
         );

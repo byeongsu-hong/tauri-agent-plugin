@@ -26,6 +26,8 @@ import { evalResult } from '../guest-js/evaluate'
 import type {
   AgentEvent,
   AgentWindow,
+  CookieParams,
+  CookieResult,
   EvalResult,
   FindParams,
   FindResult,
@@ -274,6 +276,11 @@ export class StaticHtmlAppAdapter {
     return storageResult(store, area, options.key)
   }
 
+  cookies(options: CookieParams = {}): CookieResult {
+    applyCookieAction(this.dom.window.document, options)
+    return cookieResult(this.dom.window.document, options.name)
+  }
+
   location(options: LocationParams = {}): LocationResult {
     applyLocationAction(this.dom, options)
     return locationResult(this.dom.window.location)
@@ -444,6 +451,87 @@ function requiredStorageValue(value: string | undefined): string {
     throw new Error('storage set requires value')
   }
   return value
+}
+
+function applyCookieAction(document: Document, options: CookieParams): void {
+  const action = options.action ?? 'get'
+  switch (action) {
+    case 'get':
+      return
+    case 'set':
+      document.cookie = `${encodeURIComponent(requiredCookieName(options.name))}=${encodeURIComponent(requiredCookieValue(options.value))}; path=/`
+      return
+    case 'remove':
+      expireCookie(document, requiredCookieName(options.name))
+      return
+    case 'clear':
+      for (const entry of parseCookies(document.cookie)) {
+        expireCookie(document, entry.name)
+      }
+      return
+  }
+}
+
+function cookieResult(document: Document, name?: string): CookieResult {
+  const entries = parseCookies(document.cookie)
+  return {
+    entries: name === undefined ? entries : entries.filter((entry) => entry.name === name)
+  }
+}
+
+function parseCookies(cookie: string): CookieResult['entries'] {
+  return cookie
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const separatorIndex = part.indexOf('=')
+      const name = separatorIndex === -1 ? part : part.slice(0, separatorIndex)
+      const value = separatorIndex === -1 ? '' : part.slice(separatorIndex + 1)
+      return { name: safeDecode(name), value: safeDecode(value) }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function expireCookie(document: Document, name: string): void {
+  const encodedName = encodeURIComponent(name)
+  for (const path of cookiePathCandidates(document.location.pathname)) {
+    document.cookie = `${encodedName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}`
+  }
+}
+
+function cookiePathCandidates(pathname: string): string[] {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
+  const paths = new Set<string>(['/'])
+  let current = ''
+  for (const segment of normalizedPath.split('/').filter(Boolean)) {
+    current = `${current}/${segment}`
+    paths.add(current)
+    paths.add(`${current}/`)
+  }
+  return [...paths].sort((a, b) => b.length - a.length)
+}
+
+function requiredCookieName(name: string | undefined): string {
+  if (!name) {
+    throw new Error('cookie action requires name')
+  }
+  return name
+}
+
+function requiredCookieValue(value: string | undefined): string {
+  if (value === undefined) {
+    throw new Error('cookie set requires value')
+  }
+  return value
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 function applyLocationAction(dom: JSDOM, options: LocationParams): void {

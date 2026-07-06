@@ -17,6 +17,7 @@ import {
   agentAction,
   agentBlur,
   agentCheck,
+  agentCookies,
   agentDrag,
   agentEvents,
   agentEval,
@@ -63,6 +64,7 @@ describe('plugin command helpers', () => {
     await agentNetwork({ window: 'main', clear: true })
     await agentEvents({ window: 'main', clear: true })
     await agentStorage({ window: 'main', action: 'set', key: 'agent.token', value: 'ready' })
+    await agentCookies({ window: 'main', action: 'set', name: 'agent.cookie', value: 'ready' })
     await agentLocation({ window: 'main', action: 'push', url: '/agents' })
     await agentWait({ window: 'main', text: 'Ready', timeoutMs: 250 })
     await agentWait({ window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 })
@@ -89,6 +91,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_network', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_events', { request: { window: 'main', clear: true } }],
       ['plugin:agent|agent_storage', { request: { window: 'main', action: 'set', key: 'agent.token', value: 'ready' } }],
+      ['plugin:agent|agent_cookies', { request: { window: 'main', action: 'set', name: 'agent.cookie', value: 'ready' } }],
       ['plugin:agent|agent_location', { request: { window: 'main', action: 'push', url: '/agents' } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_wait', { request: { window: 'main', role: 'button', name: 'Forge', timeoutMs: 250 } }],
@@ -117,6 +120,7 @@ describe('plugin command helpers', () => {
     await agentNetwork()
     await agentEvents()
     await agentStorage({ key: 'agent.token' })
+    await agentCookies({ name: 'agent.cookie' })
     await agentLocation({ url: '/status' })
     await agentWait({ text: 'Ready', timeoutMs: 250 })
     await agentState()
@@ -141,6 +145,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_network', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_events', { request: { window: 'secondary' } }],
       ['plugin:agent|agent_storage', { request: { window: 'secondary', key: 'agent.token' } }],
+      ['plugin:agent|agent_cookies', { request: { window: 'secondary', name: 'agent.cookie' } }],
       ['plugin:agent|agent_location', { request: { window: 'secondary', url: '/status' } }],
       ['plugin:agent|agent_wait', { request: { window: 'secondary', text: 'Ready', timeoutMs: 250 } }],
       ['plugin:agent|agent_state', { request: { window: 'secondary' } }],

@@ -176,6 +176,19 @@ describe('WebviewAgentInstrumentation', () => {
     })
     expect(sessionStorage.getItem('agent.route')).toBe('/agents')
     expect(instrumentation.storage({ action: 'clear' })).toEqual({ area: 'local', entries: [] })
+    expect(instrumentation.cookies({ action: 'set', name: 'agent.cookie', value: 'ready' })).toEqual({
+      entries: [{ name: 'agent.cookie', value: 'ready' }]
+    })
+    expect(document.cookie).toContain('agent.cookie=ready')
+    document.cookie = 'agent.eval=seen; path=/'
+    expect(instrumentation.cookies({ name: 'agent.eval' })).toEqual({
+      entries: [{ name: 'agent.eval', value: 'seen' }]
+    })
+    expect(instrumentation.cookies({ action: 'remove', name: 'agent.cookie' })).toEqual({ entries: [] })
+    expect(instrumentation.cookies()).toEqual({
+      entries: [{ name: 'agent.eval', value: 'seen' }]
+    })
+    expect(instrumentation.cookies({ action: 'clear' })).toEqual({ entries: [] })
     expect(instrumentation.location()).toEqual({
       href: window.location.href,
       origin: window.location.origin,
@@ -190,6 +203,14 @@ describe('WebviewAgentInstrumentation', () => {
       search: '?view=debug',
       hash: '#roster'
     })
+    document.cookie = 'agent.path=seen; path=/agents'
+    expect(instrumentation.cookies({ name: 'agent.path' })).toEqual({
+      entries: [{ name: 'agent.path', value: 'seen' }]
+    })
+    expect(instrumentation.cookies({ action: 'remove', name: 'agent.path' })).toEqual({ entries: [] })
+    document.cookie = 'agent.path=seen; path=/agents'
+    document.cookie = 'agent.path.second=ready; path=/agents'
+    expect(instrumentation.cookies({ action: 'clear' })).toEqual({ entries: [] })
     expect(instrumentation.location({ action: 'replace', url: '/status' })).toEqual({
       href: expect.stringContaining('/status'),
       origin: window.location.origin,

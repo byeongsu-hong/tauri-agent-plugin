@@ -57,6 +57,8 @@ function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {
       return params.clear !== true
     case 'storage':
       return params.action === undefined || params.action === 'get'
+    case 'cookies':
+      return params.action === undefined || params.action === 'get'
     case 'location':
       return params.action === undefined || params.action === 'get'
     case 'record':

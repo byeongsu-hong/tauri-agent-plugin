@@ -3,6 +3,7 @@ import {
   agentAction,
   agentBlur,
   agentCheck,
+  agentCookies,
   agentDrag,
   agentEval,
   agentEvents,
@@ -188,6 +189,12 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     value: fixtureWindowLabel
   })
   const storageRead = await agentStorage({ key: 'fixture:lastSelfTest' })
+  const cookiesSet = await agentCookies({
+    action: 'set',
+    name: 'fixture:lastSelfTest',
+    value: fixtureWindowLabel
+  })
+  const cookiesRead = await agentCookies({ name: 'fixture:lastSelfTest' })
   const locationSet = await agentLocation({ action: 'push', url: '/agents?bridge=1#self-test' })
   const locationRead = await agentLocation()
   await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
@@ -220,6 +227,8 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     evaluated.value === 'Command bridge running' &&
     storageSet.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
     storageRead.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+    cookiesSet.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+    cookiesRead.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
     locationSet.pathname === '/agents' &&
     locationSet.search === '?bridge=1' &&
     locationSet.hash === '#self-test' &&

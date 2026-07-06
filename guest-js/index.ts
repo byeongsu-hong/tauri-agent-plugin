@@ -27,6 +27,8 @@ import { evalResult } from './evaluate'
 import { waitForBridgeResponseTurn } from './bridge-gate'
 import type {
   AgentEvent,
+  CookieParams,
+  CookieResult,
   EvalResult,
   FindResult,
   EventsParams,
@@ -62,6 +64,8 @@ export {
   snapshotDocument,
   evalResult,
   type AgentEvent,
+  type CookieParams,
+  type CookieResult,
   type DragOptions,
   type EvalResult,
   type EventsParams,
@@ -185,6 +189,10 @@ export interface AgentStorageRequest extends StorageParams {
   window?: string
 }
 
+export interface AgentCookiesRequest extends CookieParams {
+  window?: string
+}
+
 export interface AgentLocationRequest extends LocationParams {
   window?: string
 }
@@ -285,6 +293,10 @@ export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<N
 
 export async function agentStorage(request: AgentStorageRequest = {}): Promise<StorageResult> {
   return invokeAgentCommand('plugin:agent|agent_storage', { request: withCurrentWindow(request) })
+}
+
+export async function agentCookies(request: AgentCookiesRequest = {}): Promise<CookieResult> {
+  return invokeAgentCommand('plugin:agent|agent_cookies', { request: withCurrentWindow(request) })
 }
 
 export async function agentLocation(request: AgentLocationRequest = {}): Promise<LocationResult> {
