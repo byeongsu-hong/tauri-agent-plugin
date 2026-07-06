@@ -28,6 +28,7 @@ describe('example fixture Tauri app', () => {
     expect(appTs).toContain('agentAction')
     expect(appTs).toContain('agentBlur')
     expect(appTs).toContain('agentCheck')
+    expect(appTs).toContain('agentDrag')
     expect(appTs).toContain('agentEval')
     expect(appTs).toContain('agentFocus')
     expect(appTs).toContain('agentHover')

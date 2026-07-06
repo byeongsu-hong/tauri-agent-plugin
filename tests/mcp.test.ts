@@ -70,6 +70,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_focus',
       'tauri_blur',
       'tauri_scroll',
+      'tauri_drag',
       'tauri_fill',
       'tauri_select',
       'tauri_check',
@@ -356,6 +357,28 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(scrolled.result.structuredContent).toEqual({ ok: true })
+
+    const dragged = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 15,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_drag',
+              arguments: {
+                html: '<main><button draggable="true">Drag source</button><button>Drop target</button></main>',
+                ref: '@1',
+                toRef: '@2'
+              }
+            }
+          })
+        )
+      )
+    )
+
+    expect(dragged.result.structuredContent).toEqual({ ok: true })
   })
 
   it('discovers app-scoped endpoint registries for live MCP tool calls', async () => {

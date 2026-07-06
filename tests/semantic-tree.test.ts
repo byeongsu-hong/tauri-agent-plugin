@@ -3,6 +3,7 @@ import {
   blurRef,
   clickRef,
   checkRef,
+  dragRef,
   fillRef,
   focusRef,
   hoverRef,
@@ -226,6 +227,36 @@ describe('snapshotDocument', () => {
     expect(list?.scrollTop).toBe(12)
     expect(list?.scrollLeft).toBe(3)
     expect(seen).toEqual(['scroll'])
+  })
+
+  it('drags refs through the current snapshot ref registry', () => {
+    const seen: string[] = []
+    document.body.innerHTML = `
+      <button draggable="true">Drag source</button>
+      <button>Drop target</button>
+    `
+    const source = document.querySelectorAll('button')[0]
+    const target = document.querySelectorAll('button')[1]
+    source?.addEventListener('mousedown', () => seen.push('source:mousedown'))
+    source?.addEventListener('dragstart', () => seen.push('source:dragstart'))
+    source?.addEventListener('dragend', () => seen.push('source:dragend'))
+    source?.addEventListener('mouseup', () => seen.push('source:mouseup'))
+    target?.addEventListener('dragenter', () => seen.push('target:dragenter'))
+    target?.addEventListener('dragover', () => seen.push('target:dragover'))
+    target?.addEventListener('drop', () => seen.push('target:drop'))
+
+    snapshotDocument(document)
+    dragRef('@1', { toRef: '@2' })
+
+    expect(seen).toEqual([
+      'source:mousedown',
+      'source:dragstart',
+      'target:dragenter',
+      'target:dragover',
+      'target:drop',
+      'source:dragend',
+      'source:mouseup'
+    ])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

@@ -15,6 +15,10 @@ export interface ScrollOptions {
   y?: number
 }
 
+export interface DragOptions {
+  toRef?: string
+}
+
 export type { InspectResult }
 
 interface RenderState {
@@ -146,6 +150,18 @@ export function scrollRef(ref: string, options: ScrollOptions = {}): void {
   element.dispatchEvent(new Event('scroll', { bubbles: true }))
 }
 
+export function dragRef(ref: string, options: DragOptions = {}): void {
+  const source = resolveRef(ref)
+  const target = options.toRef ? resolveRef(options.toRef) : source
+  dispatchMouseLike(source, 'mousedown')
+  dispatchMouseLike(source, 'dragstart')
+  dispatchMouseLike(target, 'dragenter')
+  dispatchMouseLike(target, 'dragover')
+  dispatchMouseLike(target, 'drop')
+  dispatchMouseLike(source, 'dragend')
+  dispatchMouseLike(source, 'mouseup')
+}
+
 export function checkRef(ref: string, checked = true): void {
   const normalized = normalizeRef(ref)
   const element = resolveRef(normalized)
@@ -206,6 +222,10 @@ export function pressKey(key: string, target: Element | Document = document): vo
     target instanceof Document ? target.activeElement ?? target.body ?? target.documentElement : target
   eventTarget.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
   eventTarget.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }))
+}
+
+function dispatchMouseLike(element: Element, type: string): void {
+  element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
 }
 
 function finish(state: RenderState): SnapshotResult {

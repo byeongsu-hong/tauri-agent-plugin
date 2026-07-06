@@ -9,6 +9,7 @@ export type AgentMethod =
   | 'focus'
   | 'blur'
   | 'scroll'
+  | 'drag'
   | 'fill'
   | 'select'
   | 'check'
@@ -84,6 +85,10 @@ export interface BlurParams extends RefActionParams {}
 export interface ScrollParams extends RefActionParams {
   x?: number
   y?: number
+}
+
+export interface DragParams extends RefActionParams {
+  toRef?: string
 }
 
 export interface InspectParams extends RefActionParams {}

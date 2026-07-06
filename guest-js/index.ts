@@ -4,6 +4,7 @@ import {
   checkRef,
   clickRef,
   currentRefRegistry,
+  dragRef,
   fillRef,
   focusRef,
   hoverRef,
@@ -13,6 +14,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  type DragOptions,
   type InspectResult,
   type ScrollOptions,
   type SnapshotOptions,
@@ -28,6 +30,7 @@ export {
   clickRef,
   checkRef,
   currentRefRegistry,
+  dragRef,
   fillRef,
   focusRef,
   hoverRef,
@@ -40,6 +43,7 @@ export {
   snapshotDocument,
   evalResult,
   type AgentEvent,
+  type DragOptions,
   type EvalResult,
   type InspectResult,
   type LogEntry,
@@ -112,6 +116,12 @@ export interface AgentScrollRequest {
   ref: string
   x?: number
   y?: number
+}
+
+export interface AgentDragRequest {
+  window?: string
+  ref: string
+  toRef?: string
 }
 
 export interface AgentScreenshotRequest {
@@ -200,6 +210,10 @@ export async function agentBlur(request: AgentBlurRequest): Promise<void> {
 
 export async function agentScroll(request: AgentScrollRequest): Promise<void> {
   return invoke('plugin:agent|agent_scroll', { request })
+}
+
+export async function agentDrag(request: AgentDragRequest): Promise<void> {
+  return invoke('plugin:agent|agent_drag', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

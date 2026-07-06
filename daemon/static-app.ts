@@ -7,6 +7,7 @@ import {
   blurRef,
   checkRef,
   clickRef,
+  dragRef,
   fillRef,
   focusRef,
   hoverRef,
@@ -15,6 +16,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  type DragOptions,
   type ScrollOptions,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
@@ -98,6 +100,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     scrollRef(ref, options)
     this.pushEvent('scroll', actionDetail({ ref, x: options.x, y: options.y }))
+    return { ok: true }
+  }
+
+  async drag(ref: string, options: DragOptions = {}): Promise<{ ok: true }> {
+    this.bindGlobals()
+    dragRef(ref, options)
+    this.pushEvent('drag', actionDetail({ ref, toRef: options.toRef }))
     return { ok: true }
   }
 

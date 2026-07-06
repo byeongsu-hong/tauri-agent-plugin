@@ -13,6 +13,7 @@ const html = `
     </select>
     <label><input type="checkbox" aria-label="Notify" /> Notify</label>
     <ul aria-label="Roster"><li>local-worker</li></ul>
+    <button type="button">Drop zone</button>
     <p>Registered worker-a</p>
   </main>
 `
@@ -39,7 +40,8 @@ describe('DebuggerSession', () => {
         '  @4 option "Local worker" selected',
         '  @5 option "Remote worker"',
         '@6 checkbox "Notify"',
-        '@7 list "Roster" 1'
+        '@7 list "Roster" 1',
+        '@8 button "Drop zone"'
       ].join('\n')
     })
     await expect(session.execute('inspect', { ref: '@2' })).resolves.toEqual({
@@ -62,6 +64,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('focus', { ref: '@2' })).resolves.toEqual({ ok: true })
     await expect(session.execute('blur', { ref: '@2' })).resolves.toEqual({ ok: true })
     await expect(session.execute('scroll', { ref: '@7', y: 12, x: 3 })).resolves.toEqual({ ok: true })
+    await expect(session.execute('drag', { ref: '@1', toRef: '@8' })).resolves.toEqual({ ok: true })
     await expect(session.execute('fill', { ref: '@2', text: 'worker-a' })).resolves.toEqual({ ok: true })
     await expect(session.execute('select', { ref: '@3', value: 'remote' })).resolves.toEqual({ ok: true })
     await expect(session.execute('check', { ref: '@6', checked: true })).resolves.toEqual({ ok: true })
@@ -98,6 +101,7 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ kind: 'focus', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'blur', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
+        expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } })
       ])
@@ -110,6 +114,7 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ method: 'focus', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'blur', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
+        expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ method: 'press', params: { key: 'Enter' } })
       ]
