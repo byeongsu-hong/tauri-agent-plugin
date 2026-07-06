@@ -61,6 +61,15 @@ impl<R: Runtime, T: Manager<R>> AgentExt<R> for T {
     }
 }
 
+fn validate_inline_server_config(config: &Config, debug_assertions: bool) -> Result<()> {
+    if config.inline_server.enabled && !debug_assertions && !config.allow_release_socket {
+        return Err(Error::BridgeUnavailable(
+            "inlineServer requires allowReleaseSocket in release builds".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub struct Builder;
 
 impl Builder {
@@ -72,6 +81,7 @@ impl Builder {
         tauri::plugin::Builder::<R, Option<Config>>::new("agent")
             .setup(|app, api| {
                 let config = api.config().clone().unwrap_or_default();
+                validate_inline_server_config(&config, cfg!(debug_assertions))?;
                 app.manage(bridge::AgentBridge::default());
                 let endpoint = if config.inline_server.enabled {
                     let server = server::start_inline_debugger_server(
@@ -143,4 +153,37 @@ impl Default for Builder {
 
 pub fn init<R: Runtime>() -> TauriPlugin<R, Option<Config>> {
     Builder::new().build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn inline_enabled_config(allow_release_socket: bool) -> Config {
+        Config {
+            allow_release_socket,
+            inline_server: InlineServerConfig {
+                enabled: true,
+                ..Default::default()
+            },
+        }
+    }
+
+    #[test]
+    fn release_build_rejects_inline_server_without_explicit_socket_opt_in() {
+        let error = validate_inline_server_config(&inline_enabled_config(false), false)
+            .expect_err("release inline server should require allow_release_socket");
+
+        assert!(error.to_string().contains("allowReleaseSocket"));
+    }
+
+    #[test]
+    fn release_build_allows_inline_server_with_explicit_socket_opt_in() {
+        validate_inline_server_config(&inline_enabled_config(true), false).unwrap();
+    }
+
+    #[test]
+    fn debug_build_allows_inline_server_without_release_socket_opt_in() {
+        validate_inline_server_config(&inline_enabled_config(false), true).unwrap();
+    }
 }

@@ -351,4 +351,4 @@ Rust command names:
 
 ## Security Direction
 
-Default posture is dev-only and local-only. The live bridge must use explicit Tauri permissions, bind local sockets only, and keep webview actions scoped to the app. `eval` is permission-gated with the other bridge commands and should remain a local debugging primitive, not a production remote-code execution surface. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
+Default posture is dev-only and local-only. The live bridge must use explicit Tauri permissions, bind local sockets only, and keep webview actions scoped to the app. The inline server can run in debug builds when enabled, but release builds require the explicit `allowReleaseSocket` plugin config opt-in before binding a debugger socket. `eval` is permission-gated with the other bridge commands and should remain a local debugging primitive, not a production remote-code execution surface. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
