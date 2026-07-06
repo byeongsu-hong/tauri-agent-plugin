@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import {
+  blurRef,
   checkRef,
   clickRef,
   currentRefRegistry,
@@ -21,6 +22,7 @@ import type { AgentEvent, EvalResult, LogEntry, RecordingEntry } from '../protoc
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
+  blurRef,
   clickRef,
   checkRef,
   currentRefRegistry,
@@ -92,6 +94,11 @@ export interface AgentHoverRequest {
 }
 
 export interface AgentFocusRequest {
+  window?: string
+  ref: string
+}
+
+export interface AgentBlurRequest {
   window?: string
   ref: string
 }
@@ -174,6 +181,10 @@ export async function agentHover(request: AgentHoverRequest): Promise<void> {
 
 export async function agentFocus(request: AgentFocusRequest): Promise<void> {
   return invoke('plugin:agent|agent_focus', { request })
+}
+
+export async function agentBlur(request: AgentBlurRequest): Promise<void> {
+  return invoke('plugin:agent|agent_blur', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

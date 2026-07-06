@@ -7,6 +7,7 @@ export type AgentMethod =
   | 'click'
   | 'hover'
   | 'focus'
+  | 'blur'
   | 'fill'
   | 'select'
   | 'check'
@@ -76,6 +77,8 @@ export interface CheckParams extends RefActionParams {
 }
 
 export interface FocusParams extends RefActionParams {}
+
+export interface BlurParams extends RefActionParams {}
 
 export interface InspectParams extends RefActionParams {}
 

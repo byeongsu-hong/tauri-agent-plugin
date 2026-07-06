@@ -7,6 +7,7 @@ export const AGENT_METHODS = [
   'click',
   'hover',
   'focus',
+  'blur',
   'fill',
   'select',
   'check',

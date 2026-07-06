@@ -125,6 +125,15 @@ export function focusRef(ref: string): void {
   element.focus()
 }
 
+export function blurRef(ref: string): void {
+  const normalized = normalizeRef(ref)
+  const element = resolveRef(normalized)
+  if (!('blur' in element) || typeof element.blur !== 'function') {
+    throw new Error(`${normalized} is not blurrable`)
+  }
+  element.blur()
+}
+
 export function checkRef(ref: string, checked = true): void {
   const normalized = normalizeRef(ref)
   const element = resolveRef(normalized)
