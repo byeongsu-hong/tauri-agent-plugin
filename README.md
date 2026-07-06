@@ -108,6 +108,8 @@ tauri-agent state
 tauri-agent record --action start
 ```
 
+Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
+
 ## MCP
 
 Run the MCP server over stdio:
