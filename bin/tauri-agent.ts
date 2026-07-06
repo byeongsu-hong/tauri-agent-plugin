@@ -32,6 +32,13 @@ interface TreeOptions extends ConnectionOptions {
   timeoutMs?: number
 }
 
+interface FindOptions extends ConnectionOptions {
+  role?: string
+  name?: string
+  text?: string
+  limit?: number
+}
+
 const program = new Command()
 
 program
@@ -96,6 +103,21 @@ program
     const result = (await call(options, 'tree', treeParams(options))) as { text: string }
     process.stdout.write(`${result.text}\n`)
   })
+
+program
+  .command('find')
+  .description('Find current snapshot refs by semantic role, name, or text.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+  .option('--role <role>', 'semantic role to match exactly')
+  .option('--name <name>', 'accessible name substring to match')
+  .option('--text <text>', 'visible text substring to match')
+  .option('--limit <count>', 'maximum number of matches', parseNumber)
+  .action(async (options: FindOptions) => printJson(await call(options, 'find', findParams(options))))
 
 program
   .command('click')
@@ -442,6 +464,17 @@ function targetParams(options: ConnectionOptions): Record<string, unknown> {
 
 function treeParams(options: ConnectionOptions): Record<string, unknown> {
   return { ...targetParams(options), scope: options.scope, mode: options.mode }
+}
+
+function findParams(options: FindOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    scope: options.scope,
+    role: options.role,
+    name: options.name,
+    text: options.text,
+    limit: options.limit
+  }
 }
 
 function refActionParams(

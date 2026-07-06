@@ -15,6 +15,7 @@ describe('agent debug protocol', () => {
       'attach',
       'windows',
       'tree',
+      'find',
       'click',
       'hover',
       'focus',
@@ -34,7 +35,7 @@ describe('agent debug protocol', () => {
       'state',
       'record'
     ])
-    expect(isAgentMethod('tree')).toBe(true)
+    expect(isAgentMethod('find')).toBe(true)
     expect(isAgentMethod('unknown')).toBe(false)
   })
 

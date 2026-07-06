@@ -8,6 +8,7 @@ import {
   checkRef,
   clickRef,
   dragRef,
+  findRefs,
   fillRef,
   focusRef,
   hoverRef,
@@ -22,7 +23,16 @@ import {
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
 import { evalResult } from '../guest-js/evaluate'
-import type { AgentEvent, AgentWindow, EvalResult, InspectResult, LogEntry, ScreenshotResult } from '../protocol/types'
+import type {
+  AgentEvent,
+  AgentWindow,
+  EvalResult,
+  FindParams,
+  FindResult,
+  InspectResult,
+  LogEntry,
+  ScreenshotResult
+} from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
   html: string
@@ -66,6 +76,12 @@ export class StaticHtmlAppAdapter {
   async tree(options: SnapshotOptions = {}): Promise<{ text: string }> {
     this.bindGlobals()
     return { text: snapshotDocument(this.dom.window.document, options).text }
+  }
+
+  async find(options: FindParams = {}): Promise<FindResult> {
+    this.bindGlobals()
+    const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
+    return { matches: findRefs(options, snapshot.refs) }
   }
 
   async click(ref: string): Promise<{ ok: true }> {

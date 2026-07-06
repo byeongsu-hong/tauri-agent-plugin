@@ -228,6 +228,38 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'tree', params: { window: 'secondary', mode: 'verbose' } }])
   })
 
+  it('forwards find filters to protocol calls', async () => {
+    const response = {
+      matches: [{ ref: '@3', role: 'button', name: 'Forge', tagName: 'button', text: 'Forge', attributes: {}, states: [] }]
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      find: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'find',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--scope',
+          'main',
+          '--role',
+          'button',
+          '--name',
+          'forge',
+          '--limit',
+          '1'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      { method: 'find', params: { window: 'secondary', scope: 'main', role: 'button', name: 'forge', limit: 1 } }
+    ])
+  })
+
   it.each([
     {
       command: 'logs',

@@ -24,6 +24,14 @@ export class DebuggerSession {
           scope: stringParam(params.scope),
           mode: modeParam(params.mode)
         })
+      case 'find':
+        return this.app.find({
+          scope: stringParam(params.scope),
+          role: stringParam(params.role),
+          name: stringParam(params.name),
+          text: stringParam(params.text),
+          limit: numberParam(params.limit)
+        })
       case 'click':
         return this.app.click(requiredString(params.ref, 'ref'))
       case 'hover':

@@ -44,6 +44,17 @@ describe('DebuggerSession', () => {
         '@8 button "Drop zone"'
       ].join('\n')
     })
+    await expect(session.execute('find', { role: 'button', name: 'forge', limit: 1 })).resolves.toEqual({
+      matches: [
+        expect.objectContaining({
+          ref: '@1',
+          role: 'button',
+          name: 'Forge',
+          tagName: 'button',
+          text: 'Forge'
+        })
+      ]
+    })
     await expect(session.execute('inspect', { ref: '@2' })).resolves.toEqual({
       ref: '@2',
       role: 'textbox',

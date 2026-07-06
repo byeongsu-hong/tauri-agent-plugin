@@ -58,6 +58,17 @@ describe('WebviewAgentInstrumentation', () => {
         '@8 button "Drop zone"'
       ].join('\n')
     )
+    expect(instrumentation.find({ role: 'button', name: 'forge', limit: 1 })).toEqual({
+      matches: [
+        expect.objectContaining({
+          ref: '@1',
+          role: 'button',
+          name: 'Forge',
+          tagName: 'button',
+          text: 'Forge'
+        })
+      ]
+    })
     expect(instrumentation.inspect('@2')).toEqual({
       ref: '@2',
       role: 'textbox',

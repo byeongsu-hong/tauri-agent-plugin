@@ -4,6 +4,7 @@ export type AgentMethod =
   | 'attach'
   | 'windows'
   | 'tree'
+  | 'find'
   | 'click'
   | 'hover'
   | 'focus'
@@ -60,6 +61,14 @@ export interface WindowTarget {
 export interface TreeParams extends WindowTarget {
   scope?: string
   mode?: 'compact' | 'verbose'
+}
+
+export interface FindParams extends WindowTarget {
+  scope?: string
+  role?: string
+  name?: string
+  text?: string
+  limit?: number
 }
 
 export interface RefActionParams extends WindowTarget {
@@ -146,6 +155,10 @@ export interface InspectResult {
   value?: string
   attributes: Record<string, string>
   states: string[]
+}
+
+export interface FindResult {
+  matches: InspectResult[]
 }
 
 export interface EvalResult {

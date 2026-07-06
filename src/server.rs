@@ -86,9 +86,9 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
-        "tree" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill" | "select"
-        | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "wait" | "state"
-        | "record" => {
+        "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
+        | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "wait"
+        | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -389,6 +389,36 @@ mod tests {
         }
     }
 
+    struct FakeFindBackend;
+
+    impl InlineDebuggerBackend for FakeFindBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "find");
+            assert_eq!(params["role"], "button");
+            assert_eq!(params["name"], "Forge");
+            assert_eq!(params["limit"], 1);
+            Ok(serde_json::json!({
+                "matches": [{
+                    "ref": "@1",
+                    "role": "button",
+                    "name": "Forge",
+                    "tagName": "button",
+                    "text": "Forge",
+                    "attributes": {},
+                    "states": []
+                }]
+            }))
+        }
+    }
+
     struct FakeEvalBackend;
 
     impl InlineDebuggerBackend for FakeEvalBackend {
@@ -600,6 +630,33 @@ mod tests {
                     "value": "worker-a",
                     "attributes": {"aria-label": "Agent name"},
                     "states": []
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_find_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeFindBackend,
+            r#"{"jsonrpc":"2.0","id":13,"method":"find","params":{"role":"button","name":"Forge","limit":1}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 13,
+                "result": {
+                    "matches": [{
+                        "ref": "@1",
+                        "role": "button",
+                        "name": "Forge",
+                        "tagName": "button",
+                        "text": "Forge",
+                        "attributes": {},
+                        "states": []
+                    }]
                 }
             })
         );

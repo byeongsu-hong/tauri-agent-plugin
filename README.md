@@ -6,14 +6,14 @@ Headless agent debugger for Tauri apps.
 
 ## Architecture
 
-- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
+- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
 - **MCP Server**: stdio Model Context Protocol wrapper exposing debugger tools for agents.
-- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` inspection/actions, hover, focus, blur, scroll, and drag events, select and checked control changes, JavaScript evaluation, console log capture, event capture, state probes, text waiters, and action recording.
+- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` finding/inspection/actions, hover, focus, blur, scroll, and drag events, select and checked control changes, JavaScript evaluation, console log capture, event capture, state probes, text waiters, and action recording.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
+The live bridge supports `windows`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `find` refreshes the semantic snapshot and returns inspect-shaped matches by role, accessible-name substring, visible-text substring, and optional limit so agents can obtain refs without parsing tree text. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -34,6 +34,7 @@ Prototype against static HTML:
 bun run build
 bun bin/tauri-agent.ts windows --from-html ./screen.html
 bun bin/tauri-agent.ts tree --from-html ./screen.html
+bun bin/tauri-agent.ts find --role button --name Forge --from-html ./screen.html
 bun bin/tauri-agent.ts inspect @4 --from-html ./screen.html
 bun bin/tauri-agent.ts eval "document.title" --from-html ./screen.html
 bun bin/tauri-agent.ts hover @3 --from-html ./screen.html
@@ -67,6 +68,7 @@ Control a live app through endpoint discovery:
 ```bash
 tauri-agent windows --app dev.byeongsu.tauri-agent.fixture
 tauri-agent tree --app dev.byeongsu.tauri-agent.fixture
+tauri-agent find --role button --name Forge --app dev.byeongsu.tauri-agent.fixture
 tauri-agent inspect @4 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent eval "document.title" --app dev.byeongsu.tauri-agent.fixture
 tauri-agent hover @3 --app dev.byeongsu.tauri-agent.fixture
@@ -88,6 +90,7 @@ Core command surface:
 tauri-agent attach
 tauri-agent windows
 tauri-agent tree --window main --mode verbose
+tauri-agent find --role button --name Forge --limit 1
 tauri-agent click @3
 tauri-agent hover @3
 tauri-agent focus @4
@@ -124,6 +127,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_attach`
 - `tauri_windows`
 - `tauri_tree`
+- `tauri_find`
 - `tauri_click`
 - `tauri_hover`
 - `tauri_focus`
@@ -169,6 +173,7 @@ import {
   agentDrag,
   agentEvents,
   agentEval,
+  agentFind,
   agentFocus,
   agentHover,
   agentLogs,
@@ -200,6 +205,7 @@ const agent = new WebviewAgentInstrumentation({
 
 agent.install()
 agent.snapshot()
+agent.find({ role: 'button', name: 'Forge', limit: 1 })
 agent.action({ action: 'click', ref: '@3' })
 agent.hover('@3')
 agent.focus('@4')
@@ -219,6 +225,7 @@ Direct Tauri command helpers use the same bridge:
 
 ```ts
 await agentSnapshot({ scope: 'main' })
+await agentFind({ role: 'button', name: 'Forge', limit: 1 })
 await agentInspect({ ref: '@4' })
 await agentEval({ code: 'document.title' })
 await agentHover({ ref: '@3' })
@@ -267,6 +274,7 @@ Rust command names:
 - `agent_bridge_response`
 - `agent_attach`
 - `agent_snapshot`
+- `agent_find`
 - `agent_action`
 - `agent_inspect`
 - `agent_eval`
