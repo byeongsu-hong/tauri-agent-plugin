@@ -1,5 +1,5 @@
 import type { StaticHtmlAppAdapter } from './static-app'
-import type { AgentMethod, KeyModifier, RecordingEntry, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, RecordingEntry, ScreenshotBackend, WindowAction } from '../protocol/types'
 
 export class DebuggerSession {
   private recording = false
@@ -74,7 +74,10 @@ export class DebuggerSession {
           modifiers: keyModifiersParam(params.modifiers)
         })
       case 'shot':
-        return this.app.shot(stringParam(params.path))
+        return this.app.shot({
+          path: stringParam(params.path),
+          backend: screenshotBackendParam(params.backend)
+        })
       case 'logs':
         return this.app.getLogs(booleanParam(params.clear) ?? false)
       case 'events':
@@ -183,6 +186,16 @@ function keyModifierParam(value: unknown): KeyModifier {
     return value
   }
   throw new Error(`unknown key modifier: ${String(value)}`)
+}
+
+function screenshotBackendParam(value: unknown): ScreenshotBackend | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === 'dom' || value === 'native' || value === 'auto') {
+    return value
+  }
+  throw new Error(`unknown screenshot backend: ${String(value)}`)
 }
 
 function modeParam(value: unknown): 'compact' | 'verbose' | undefined {

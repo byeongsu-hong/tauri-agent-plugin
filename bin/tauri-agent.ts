@@ -8,7 +8,7 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod, KeyModifier, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, ScreenshotBackend, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -79,6 +79,10 @@ interface WaitOptions extends ConnectionOptions {
 
 interface StateOptions extends ConnectionOptions {
   key?: string
+}
+
+interface ShotOptions extends ConnectionOptions {
+  backend?: ScreenshotBackend
 }
 
 const program = new Command()
@@ -384,8 +388,9 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .action(async (path: string | undefined, options: ConnectionOptions) =>
-    printJson(await call(options, 'shot', { ...targetParams(options), path }))
+  .option('--backend <backend>', 'screenshot backend: dom, native, or auto', parseScreenshotBackend)
+  .action(async (path: string | undefined, options: ShotOptions) =>
+    printJson(await call(options, 'shot', { ...targetParams(options), path, backend: options.backend }))
   )
 
 program
@@ -719,6 +724,13 @@ function parseBoolean(value: string): boolean {
   if (value === 'true') return true
   if (value === 'false') return false
   throw new Error(`expected true or false, got ${value}`)
+}
+
+function parseScreenshotBackend(value: string): ScreenshotBackend {
+  if (value === 'dom' || value === 'native' || value === 'auto') {
+    return value
+  }
+  throw new Error(`unknown screenshot backend: ${value}`)
 }
 
 function parseNumber(value: string): number {

@@ -1,7 +1,8 @@
-import type { ScreenshotResult } from '../protocol/types'
+import type { ScreenshotBackend, ScreenshotResult } from '../protocol/types'
 
 export interface ScreenshotOptions {
   path?: string
+  backend?: ScreenshotBackend
 }
 
 export function screenshotDocument(

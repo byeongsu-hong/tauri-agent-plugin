@@ -239,6 +239,15 @@ pub enum KeyModifier {
 pub struct AgentScreenshotRequest {
     pub window: Option<String>,
     pub path: Option<String>,
+    pub backend: Option<ScreenshotBackend>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScreenshotBackend {
+    Dom,
+    Native,
+    Auto,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -957,6 +966,20 @@ mod tests {
                 "pathname": "/agents",
                 "search": "?view=debug",
                 "hash": "#roster"
+            })
+        );
+
+        let screenshot = AgentScreenshotRequest {
+            window: Some("main".into()),
+            path: Some("/tmp/app.png".into()),
+            backend: Some(ScreenshotBackend::Native),
+        };
+        assert_eq!(
+            serde_json::to_value(screenshot).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "path": "/tmp/app.png",
+                "backend": "native"
             })
         );
 

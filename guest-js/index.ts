@@ -180,6 +180,7 @@ export interface AgentDragRequest {
 export interface AgentScreenshotRequest {
   window?: string
   path?: string
+  backend?: ScreenshotOptions['backend']
 }
 
 export interface AgentLogRequest extends LogsParams {

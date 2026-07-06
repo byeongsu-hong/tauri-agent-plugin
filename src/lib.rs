@@ -23,8 +23,8 @@ pub use models::{
     AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentStorageEntry, AgentStorageRequest, AgentStorageResponse, AgentWaitRequest,
     AgentWaitResponse, AgentWindowRequest, Config, CookieAction, InlineServerConfig, KeyModifier,
-    LocationAction, RecordAction, SnapshotMode, StorageAction, StorageArea, WindowAction,
-    WindowBounds, WindowInfo,
+    LocationAction, RecordAction, ScreenshotBackend, SnapshotMode, StorageAction, StorageArea,
+    WindowAction, WindowBounds, WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
