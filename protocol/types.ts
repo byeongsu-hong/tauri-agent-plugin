@@ -21,6 +21,7 @@ export type AgentMethod =
   | 'logs'
   | 'events'
   | 'network'
+  | 'storage'
   | 'wait'
   | 'state'
   | 'record'
@@ -128,6 +129,13 @@ export interface NetworkParams extends WindowTarget {
   clear?: boolean
 }
 
+export interface StorageParams extends WindowTarget {
+  area?: 'local' | 'session'
+  action?: 'get' | 'set' | 'remove' | 'clear'
+  key?: string
+  value?: string
+}
+
 export interface WaitParams extends WindowTarget {
   text?: string
   timeoutMs?: number
@@ -201,6 +209,17 @@ export interface NetworkEntry {
   responseBodySize?: number
   error?: string
   window?: string
+}
+
+export interface StorageEntry {
+  area: 'local' | 'session'
+  key: string
+  value: string
+}
+
+export interface StorageResult {
+  area: 'local' | 'session'
+  entries: StorageEntry[]
 }
 
 export interface ScreenshotResult {

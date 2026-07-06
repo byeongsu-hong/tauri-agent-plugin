@@ -255,6 +255,49 @@ pub struct AgentNetworkEntry {
     pub window: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStorageRequest {
+    pub window: Option<String>,
+    pub area: Option<StorageArea>,
+    pub action: Option<StorageAction>,
+    pub key: Option<String>,
+    pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StorageArea {
+    #[default]
+    Local,
+    Session,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StorageAction {
+    #[default]
+    Get,
+    Set,
+    Remove,
+    Clear,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStorageEntry {
+    pub area: StorageArea,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStorageResponse {
+    pub area: StorageArea,
+    pub entries: Vec<AgentStorageEntry>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEntry {
@@ -553,6 +596,44 @@ mod tests {
                 "responseBodySize": 11,
                 "error": null,
                 "window": "main"
+            })
+        );
+
+        let storage = AgentStorageRequest {
+            window: Some("main".into()),
+            area: Some(StorageArea::Session),
+            action: Some(StorageAction::Set),
+            key: Some("agent.route".into()),
+            value: Some("/agents".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(storage).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "area": "session",
+                "action": "set",
+                "key": "agent.route",
+                "value": "/agents"
+            })
+        );
+
+        let storage_response = AgentStorageResponse {
+            area: StorageArea::Session,
+            entries: vec![AgentStorageEntry {
+                area: StorageArea::Session,
+                key: "agent.route".into(),
+                value: "/agents".into(),
+            }],
+        };
+        assert_eq!(
+            serde_json::to_value(storage_response).unwrap(),
+            serde_json::json!({
+                "area": "session",
+                "entries": [{
+                    "area": "session",
+                    "key": "agent.route",
+                    "value": "/agents"
+                }]
             })
         );
 

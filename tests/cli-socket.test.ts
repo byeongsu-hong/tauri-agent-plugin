@@ -271,6 +271,42 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'network', params: { window: 'secondary', clear: true } }])
   })
 
+  it('forwards storage options to protocol calls', async () => {
+    const response = {
+      area: 'session',
+      entries: [{ area: 'session', key: 'agent.route', value: '/agents' }]
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      storage: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'storage',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--area',
+          'session',
+          '--action',
+          'set',
+          '--key',
+          'agent.route',
+          '--value',
+          '/agents'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      {
+        method: 'storage',
+        params: { window: 'secondary', area: 'session', action: 'set', key: 'agent.route', value: '/agents' }
+      }
+    ])
+  })
+
   it.each([
     {
       command: 'logs',

@@ -40,6 +40,13 @@ interface FindOptions extends ConnectionOptions {
   limit?: number
 }
 
+interface StorageOptions extends ConnectionOptions {
+  area?: 'local' | 'session'
+  action?: 'get' | 'set' | 'remove' | 'clear'
+  key?: string
+  value?: string
+}
+
 const program = new Command()
 
 program
@@ -384,6 +391,22 @@ program
   })
 
 program
+  .command('storage')
+  .description('Inspect or mutate webview localStorage/sessionStorage.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--area <area>', 'storage area: local or session', parseStorageArea, 'local')
+  .option('--action <action>', 'storage action: get, set, remove, or clear', parseStorageAction, 'get')
+  .option('--key <key>', 'storage key')
+  .option('--value <value>', 'storage value for set')
+  .action(async (options: StorageOptions) => {
+    printJson(await call(options, 'storage', storageParams(options)))
+  })
+
+program
   .command('wait')
   .description('Wait for text to appear.')
   .argument('<text>', 'text to wait for')
@@ -498,6 +521,16 @@ function findParams(options: FindOptions): Record<string, unknown> {
   }
 }
 
+function storageParams(options: StorageOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    area: options.area,
+    action: options.action,
+    key: options.key,
+    value: options.value
+  }
+}
+
 function refActionParams(
   options: ConnectionOptions,
   ref: string,
@@ -555,6 +588,20 @@ function parseTreeMode(value: string): 'compact' | 'verbose' {
     return value
   }
   throw new Error(`expected compact or verbose, got ${value}`)
+}
+
+function parseStorageArea(value: string): 'local' | 'session' {
+  if (value === 'local' || value === 'session') {
+    return value
+  }
+  throw new Error(`expected local or session, got ${value}`)
+}
+
+function parseStorageAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
+  if (value === 'get' || value === 'set' || value === 'remove' || value === 'clear') {
+    return value
+  }
+  throw new Error(`expected get, set, remove, or clear, got ${value}`)
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | undefined): number {

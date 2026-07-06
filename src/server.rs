@@ -88,7 +88,7 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
         "windows" => Ok(json!(backend.windows())),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
         | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
-        | "wait" | "state" | "record" => {
+        | "storage" | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -601,6 +601,34 @@ mod tests {
         }
     }
 
+    struct FakeStorageBackend;
+
+    impl InlineDebuggerBackend for FakeStorageBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "storage");
+            assert_eq!(params["area"], "session");
+            assert_eq!(params["action"], "set");
+            assert_eq!(params["key"], "agent.route");
+            assert_eq!(params["value"], "/agents");
+            Ok(serde_json::json!({
+                "area": "session",
+                "entries": [{
+                    "area": "session",
+                    "key": "agent.route",
+                    "value": "/agents"
+                }]
+            }))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -714,6 +742,30 @@ mod tests {
                     "endedAt": "2026-07-07T00:00:00.020Z",
                     "durationMs": 20.0
                 }]
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_storage_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeStorageBackend,
+            r#"{"jsonrpc":"2.0","id":15,"method":"storage","params":{"area":"session","action":"set","key":"agent.route","value":"/agents"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 15,
+                "result": {
+                    "area": "session",
+                    "entries": [{
+                        "area": "session",
+                        "key": "agent.route",
+                        "value": "/agents"
+                    }]
+                }
             })
         );
     }

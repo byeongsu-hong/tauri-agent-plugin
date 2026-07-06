@@ -33,7 +33,9 @@ import type {
   LogEntry,
   NetworkEntry,
   RecordingEntry,
-  ScreenshotResult
+  ScreenshotResult,
+  StorageParams,
+  StorageResult
 } from '../protocol/types'
 
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
@@ -276,6 +278,13 @@ export class WebviewAgentInstrumentation {
     return entries
   }
 
+  storage(options: StorageParams = {}): StorageResult {
+    const area = storageArea(options.area)
+    const store = area === 'session' ? window.sessionStorage : window.localStorage
+    applyStorageAction(store, options)
+    return storageResult(store, area, options.key)
+  }
+
   record(action: 'start' | 'stop' | 'get' | 'clear' = 'get'): Record<string, unknown> {
     switch (action) {
       case 'start':
@@ -399,6 +408,13 @@ export class WebviewAgentInstrumentation {
         return this.events()
       case 'network':
         return this.network({ clear: booleanParam(params, 'clear') ?? false })
+      case 'storage':
+        return this.storage({
+          area: storageAreaParam(params, 'area'),
+          action: storageActionParam(params, 'action'),
+          key: stringParam(params, 'key'),
+          value: stringParam(params, 'value')
+        })
       case 'wait':
         return this.wait({
           text: requiredStringParam(params, 'text'),
@@ -620,4 +636,66 @@ function isRequest(value: RequestInfo | URL): value is Request {
 
 function isTauriIpcUrl(url: string): boolean {
   return url.startsWith('ipc://localhost/')
+}
+
+function storageArea(area: StorageParams['area']): 'local' | 'session' {
+  return area === 'session' ? 'session' : 'local'
+}
+
+function storageAreaParam(params: Record<string, unknown>, key: string): 'local' | 'session' | undefined {
+  const value = params[key]
+  return value === 'local' || value === 'session' ? value : undefined
+}
+
+function storageActionParam(
+  params: Record<string, unknown>,
+  key: string
+): 'get' | 'set' | 'remove' | 'clear' | undefined {
+  const value = params[key]
+  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+}
+
+function applyStorageAction(store: Storage, options: StorageParams): void {
+  const action = options.action ?? 'get'
+  switch (action) {
+    case 'get':
+      return
+    case 'set':
+      store.setItem(requiredStorageKey(options.key), requiredStorageValue(options.value))
+      return
+    case 'remove':
+      store.removeItem(requiredStorageKey(options.key))
+      return
+    case 'clear':
+      store.clear()
+      return
+  }
+}
+
+function storageResult(store: Storage, area: 'local' | 'session', key?: string): StorageResult {
+  const keys = key === undefined
+    ? Array.from({ length: store.length }, (_, index) => store.key(index)).filter((value): value is string => value !== null).sort()
+    : store.getItem(key) === null ? [] : [key]
+  return {
+    area,
+    entries: keys.map((entryKey) => ({
+      area,
+      key: entryKey,
+      value: store.getItem(entryKey) ?? ''
+    }))
+  }
+}
+
+function requiredStorageKey(key: string | undefined): string {
+  if (!key) {
+    throw new Error('storage action requires key')
+  }
+  return key
+}
+
+function requiredStorageValue(value: string | undefined): string {
+  if (value === undefined) {
+    throw new Error('storage set requires value')
+  }
+  return value
 }

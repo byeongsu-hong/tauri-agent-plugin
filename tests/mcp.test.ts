@@ -82,6 +82,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_logs',
       'tauri_events',
       'tauri_network',
+      'tauri_storage',
       'tauri_wait',
       'tauri_state',
       'tauri_record'
@@ -426,6 +427,27 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(network.result.structuredContent).toEqual({ result: [] })
+
+    const storage = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 18,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_storage',
+              arguments: { html, action: 'set', key: 'agent.token', value: 'ready' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(storage.result.structuredContent).toEqual({
+      area: 'local',
+      entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
   })
 
   it('discovers app-scoped endpoint registries for live MCP tool calls', async () => {

@@ -32,7 +32,9 @@ import type {
   InspectResult,
   LogEntry,
   NetworkEntry,
-  ScreenshotResult
+  ScreenshotResult,
+  StorageParams,
+  StorageResult
 } from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
@@ -51,6 +53,10 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private storageAreas = {
+    local: createMemoryStorage(),
+    session: createMemoryStorage()
+  }
 
   constructor(options: StaticHtmlAppOptions) {
     this.label = options.window ?? 'main'
@@ -226,6 +232,13 @@ export class StaticHtmlAppAdapter {
     return entries
   }
 
+  storage(options: StorageParams = {}): StorageResult {
+    const area = storageArea(options.area)
+    const store = this.storageAreas[area]
+    applyStorageAction(store, options)
+    return storageResult(store, area, options.key)
+  }
+
   addLog(level: LogEntry['level'], message: string): void {
     this.logs.push({
       level,
@@ -266,6 +279,14 @@ export class StaticHtmlAppAdapter {
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent
     globalThis.MouseEvent = this.dom.window.MouseEvent
     globalThis.Node = this.dom.window.Node
+    this.bindStorageGlobals()
+  }
+
+  private bindStorageGlobals(): void {
+    defineStorage(this.dom.window, 'localStorage', this.storageAreas.local)
+    defineStorage(this.dom.window, 'sessionStorage', this.storageAreas.session)
+    defineStorage(globalThis, 'localStorage', this.storageAreas.local)
+    defineStorage(globalThis, 'sessionStorage', this.storageAreas.session)
   }
 }
 
@@ -284,4 +305,89 @@ function actionDetail(detail: Record<string, string | number | undefined>): Reco
   return Object.fromEntries(
     Object.entries(detail).filter((entry): entry is [string, string | number] => entry[1] !== undefined)
   )
+}
+
+function storageArea(area: StorageParams['area']): 'local' | 'session' {
+  return area === 'session' ? 'session' : 'local'
+}
+
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>()
+  return {
+    get length() {
+      return values.size
+    },
+    clear() {
+      values.clear()
+    },
+    getItem(key: string) {
+      return values.get(String(key)) ?? null
+    },
+    key(index: number) {
+      return [...values.keys()][index] ?? null
+    },
+    removeItem(key: string) {
+      values.delete(String(key))
+    },
+    setItem(key: string, value: string) {
+      values.set(String(key), String(value))
+    }
+  }
+}
+
+function defineStorage(target: object, key: 'localStorage' | 'sessionStorage', storage: Storage): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value: storage
+  })
+}
+
+function applyStorageAction(store: Storage, options: StorageParams): void {
+  const action = options.action ?? 'get'
+  switch (action) {
+    case 'get':
+      return
+    case 'set':
+      store.setItem(requiredStorageKey(options.key), requiredStorageValue(options.value))
+      return
+    case 'remove':
+      store.removeItem(requiredStorageKey(options.key))
+      return
+    case 'clear':
+      store.clear()
+      return
+  }
+}
+
+function storageResult(
+  store: Storage,
+  area: 'local' | 'session',
+  key?: string
+): StorageResult {
+  const keys = key === undefined
+    ? Array.from({ length: store.length }, (_, index) => store.key(index)).filter((value): value is string => value !== null).sort()
+    : store.getItem(key) === null ? [] : [key]
+  return {
+    area,
+    entries: keys.map((entryKey) => ({
+      area,
+      key: entryKey,
+      value: store.getItem(entryKey) ?? ''
+    }))
+  }
+}
+
+function requiredStorageKey(key: string | undefined): string {
+  if (!key) {
+    throw new Error('storage action requires key')
+  }
+  return key
+}
+
+function requiredStorageValue(value: string | undefined): string {
+  if (value === undefined) {
+    throw new Error('storage set requires value')
+  }
+  return value
 }

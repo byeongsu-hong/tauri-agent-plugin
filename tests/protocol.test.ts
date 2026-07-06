@@ -32,12 +32,14 @@ describe('agent debug protocol', () => {
       'logs',
       'events',
       'network',
+      'storage',
       'wait',
       'state',
       'record'
     ])
     expect(isAgentMethod('find')).toBe(true)
     expect(isAgentMethod('network')).toBe(true)
+    expect(isAgentMethod('storage')).toBe(true)
     expect(isAgentMethod('unknown')).toBe(false)
   })
 

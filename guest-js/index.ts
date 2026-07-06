@@ -25,7 +25,16 @@ import {
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { waitForBridgeResponseTurn } from './bridge-gate'
-import type { AgentEvent, EvalResult, FindResult, LogEntry, NetworkEntry, RecordingEntry } from '../protocol/types'
+import type {
+  AgentEvent,
+  EvalResult,
+  FindResult,
+  LogEntry,
+  NetworkEntry,
+  RecordingEntry,
+  StorageParams,
+  StorageResult
+} from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -57,7 +66,9 @@ export {
   type ScreenshotOptions,
   type ScrollOptions,
   type SnapshotOptions,
-  type SnapshotResult
+  type SnapshotResult,
+  type StorageParams,
+  type StorageResult
 }
 
 export interface AgentSnapshotRequest {
@@ -160,6 +171,10 @@ export interface AgentNetworkRequest {
   clear?: boolean
 }
 
+export interface AgentStorageRequest extends StorageParams {
+  window?: string
+}
+
 export interface AgentWaitRequest {
   window?: string
   text: string
@@ -257,6 +272,10 @@ export async function agentEvents(request: AgentEventsRequest | string = {}): Pr
 
 export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<NetworkEntry[]> {
   return invokeAgentCommand('plugin:agent|agent_network', { request: withCurrentWindow(request) })
+}
+
+export async function agentStorage(request: AgentStorageRequest = {}): Promise<StorageResult> {
+  return invokeAgentCommand('plugin:agent|agent_storage', { request: withCurrentWindow(request) })
 }
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {

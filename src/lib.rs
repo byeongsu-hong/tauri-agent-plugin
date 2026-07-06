@@ -19,8 +19,9 @@ pub use models::{
     AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentLogEntry,
     AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest,
     AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
-    AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest, AgentWaitResponse, Config,
-    InlineServerConfig, RecordAction, SnapshotMode, WindowInfo,
+    AgentSnapshotRequest, AgentStateRequest, AgentStorageEntry, AgentStorageRequest,
+    AgentStorageResponse, AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig,
+    RecordAction, SnapshotMode, StorageAction, StorageArea, WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -118,6 +119,7 @@ impl Builder {
                 commands::agent_logs,
                 commands::agent_events,
                 commands::agent_network,
+                commands::agent_storage,
                 commands::agent_windows,
                 commands::agent_wait,
                 commands::agent_state,
