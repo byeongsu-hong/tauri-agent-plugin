@@ -3,6 +3,7 @@ import {
   clickRef,
   checkRef,
   fillRef,
+  focusRef,
   hoverRef,
   inspectRef,
   pressKey,
@@ -176,6 +177,20 @@ describe('snapshotDocument', () => {
     hoverRef('@1')
 
     expect(seen).toEqual(['mouseover', 'mouseenter', 'mousemove'])
+  })
+
+  it('focuses refs through the current snapshot ref registry', () => {
+    const seen: string[] = []
+    document.body.innerHTML = '<button>Forge</button><input aria-label="Agent name" />'
+    const input = document.querySelector('input')
+    input?.addEventListener('focus', () => seen.push('focus'))
+    input?.addEventListener('focusin', () => seen.push('focusin'))
+
+    snapshotDocument(document)
+    focusRef('@2')
+
+    expect(document.activeElement).toBe(input)
+    expect(seen).toEqual(['focus', 'focusin'])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

@@ -15,8 +15,8 @@ pub use endpoint::{
 pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentCheckRequest,
-    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentHoverRequest, AgentLogEntry,
-    AgentLogRequest, AgentRecordEntry, AgentRecordRequest, AgentRecordResponse,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFocusRequest, AgentHoverRequest,
+    AgentLogEntry, AgentLogRequest, AgentRecordEntry, AgentRecordRequest, AgentRecordResponse,
     AgentScreenshotRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig, RecordAction, SnapshotMode,
     WindowInfo,
@@ -108,6 +108,7 @@ impl Builder {
                 commands::agent_select,
                 commands::agent_check,
                 commands::agent_hover,
+                commands::agent_focus,
                 commands::agent_screenshot,
                 commands::agent_logs,
                 commands::agent_events,

@@ -67,6 +67,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_tree',
       'tauri_click',
       'tauri_hover',
+      'tauri_focus',
       'tauri_fill',
       'tauri_select',
       'tauri_check',
@@ -294,6 +295,24 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(hovered.result.structuredContent).toEqual({ ok: true })
+
+    const focused = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 12,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_focus',
+              arguments: { html, ref: '@1' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(focused.result.structuredContent).toEqual({ ok: true })
   })
 
   it('discovers app-scoped endpoint registries for live MCP tool calls', async () => {

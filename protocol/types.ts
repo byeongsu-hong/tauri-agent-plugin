@@ -6,6 +6,7 @@ export type AgentMethod =
   | 'tree'
   | 'click'
   | 'hover'
+  | 'focus'
   | 'fill'
   | 'select'
   | 'check'
@@ -73,6 +74,8 @@ export interface SelectParams extends RefActionParams {
 export interface CheckParams extends RefActionParams {
   checked?: boolean
 }
+
+export interface FocusParams extends RefActionParams {}
 
 export interface InspectParams extends RefActionParams {}
 
