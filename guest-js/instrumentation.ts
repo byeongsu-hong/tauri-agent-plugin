@@ -4,6 +4,7 @@ import {
   blurRef,
   checkRef,
   clickRef,
+  dragRef,
   fillRef,
   focusRef,
   hoverRef,
@@ -12,6 +13,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  type DragOptions,
   type ScrollOptions,
   type SnapshotOptions,
   type SnapshotResult
@@ -35,8 +37,9 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'fill' | 'press' | 'select' | 'check'
+  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'drag' | 'fill' | 'press' | 'select' | 'check'
   ref?: string
+  toRef?: string
   value?: string
   checked?: boolean
   x?: number
@@ -111,6 +114,9 @@ export class WebviewAgentInstrumentation {
       case 'scroll':
         scrollRef(requiredRef(action.ref), { x: action.x, y: action.y })
         break
+      case 'drag':
+        dragRef(requiredRef(action.ref), { toRef: action.toRef })
+        break
       case 'fill':
         fillRef(requiredRef(action.ref), action.value ?? '')
         break
@@ -162,6 +168,14 @@ export class WebviewAgentInstrumentation {
     scrollRef(ref, options)
     const action: InstrumentedAction = { action: 'scroll', ref, x: options.x, y: options.y }
     this.pushEvent('scroll', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
+  drag(ref: string, options: DragOptions = {}): { ok: true } {
+    dragRef(ref, options)
+    const action: InstrumentedAction = { action: 'drag', ref, toRef: options.toRef }
+    this.pushEvent('drag', serializableAction(action))
     this.recordAction(action)
     return { ok: true }
   }
@@ -304,6 +318,10 @@ export class WebviewAgentInstrumentation {
           x: numberParam(params, 'x'),
           y: numberParam(params, 'y')
         })
+      case 'drag':
+        return this.drag(requiredStringParam(params, 'ref'), {
+          toRef: stringParam(params, 'toRef')
+        })
       case 'fill':
         return this.action({
           action: 'fill',
@@ -384,6 +402,7 @@ function requiredRef(ref: string | undefined): string {
 function serializableAction(action: InstrumentedAction): Record<string, string | boolean | number> {
   const params: Record<string, string | boolean | number> = {}
   if (action.ref) params.ref = action.ref
+  if (action.toRef) params.toRef = action.toRef
   if (action.value) params.value = action.value
   if (action.checked !== undefined) params.checked = action.checked
   if (action.x !== undefined) params.x = action.x

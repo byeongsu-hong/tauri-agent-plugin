@@ -86,8 +86,9 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
-        "tree" | "click" | "hover" | "focus" | "blur" | "scroll" | "fill" | "select" | "check"
-        | "inspect" | "eval" | "press" | "logs" | "events" | "wait" | "state" | "record" => {
+        "tree" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill" | "select"
+        | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "wait" | "state"
+        | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -514,6 +515,25 @@ mod tests {
         }
     }
 
+    struct FakeDragBackend;
+
+    impl InlineDebuggerBackend for FakeDragBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "drag");
+            assert_eq!(params["ref"], "@1");
+            assert_eq!(params["toRef"], "@8");
+            Ok(serde_json::json!({ "ok": true }))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -695,6 +715,23 @@ mod tests {
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 11,
+                "result": { "ok": true }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_drag_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeDragBackend,
+            r#"{"jsonrpc":"2.0","id":12,"method":"drag","params":{"ref":"@1","toRef":"@8"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 12,
                 "result": { "ok": true }
             })
         );

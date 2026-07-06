@@ -37,6 +37,10 @@ export class DebuggerSession {
           x: numberParam(params.x),
           y: numberParam(params.y)
         })
+      case 'drag':
+        return this.app.drag(requiredString(params.ref, 'ref'), {
+          toRef: stringParam(params.toRef)
+        })
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':
@@ -88,7 +92,7 @@ export class DebuggerSession {
     if (!this.recording || method === 'record') {
       return
     }
-    if (!['click', 'hover', 'focus', 'blur', 'scroll', 'fill', 'press'].includes(method)) {
+    if (!['click', 'hover', 'focus', 'blur', 'scroll', 'drag', 'fill', 'press'].includes(method)) {
       return
     }
     this.recordingEntries.push({

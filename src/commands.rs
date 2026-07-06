@@ -5,11 +5,11 @@ use tauri::{AppHandle, Manager, Runtime, State};
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFocusRequest,
-    AgentHoverRequest, AgentInspectRequest, AgentInspectResponse, AgentLogEntry, AgentLogRequest,
-    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
-    AgentWaitResponse, WindowInfo,
+    AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
+    AgentFocusRequest, AgentHoverRequest, AgentInspectRequest, AgentInspectResponse, AgentLogEntry,
+    AgentLogRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentWaitRequest, AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -153,6 +153,16 @@ pub async fn agent_scroll<R: Runtime>(
     request: AgentScrollRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "scroll", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_drag<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentDragRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "drag", &request)?;
     Ok(())
 }
 

@@ -14,6 +14,7 @@ describe('WebviewAgentInstrumentation', () => {
         </select>
         <label><input type="checkbox" aria-label="Notify" /> Notify</label>
         <ul aria-label="Roster"><li>local-worker</li></ul>
+        <button type="button">Drop zone</button>
         <p>Registered worker-a</p>
       </main>
     `
@@ -33,6 +34,7 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.focus('@2')
     instrumentation.blur('@2')
     instrumentation.scroll('@7', { y: 12, x: 3 })
+    instrumentation.drag('@1', { toRef: '@8' })
     instrumentation.action({ action: 'fill', ref: '@2', value: 'worker-a' })
     instrumentation.select('@3', 'remote')
     instrumentation.check('@6', true)
@@ -52,7 +54,8 @@ describe('WebviewAgentInstrumentation', () => {
         '  @4 option "Local worker" selected',
         '  @5 option "Remote worker"',
         '@6 checkbox "Notify"',
-        '@7 list "Roster" 1'
+        '@7 list "Roster" 1',
+        '@8 button "Drop zone"'
       ].join('\n')
     )
     expect(instrumentation.inspect('@2')).toEqual({
@@ -77,6 +80,7 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'focus', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'blur', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
+        expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ kind: 'press', detail: { value: 'Enter' } }),
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
@@ -111,6 +115,7 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ method: 'focus', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'blur', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
+        expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),

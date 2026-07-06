@@ -20,6 +20,7 @@ describe('agent debug protocol', () => {
       'focus',
       'blur',
       'scroll',
+      'drag',
       'fill',
       'select',
       'check',

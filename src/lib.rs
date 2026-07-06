@@ -15,11 +15,11 @@ pub use endpoint::{
 pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFocusRequest,
-    AgentHoverRequest, AgentLogEntry, AgentLogRequest, AgentRecordEntry, AgentRecordRequest,
-    AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
-    AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest, AgentWaitResponse, Config,
-    InlineServerConfig, RecordAction, SnapshotMode, WindowInfo,
+    AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
+    AgentFocusRequest, AgentHoverRequest, AgentLogEntry, AgentLogRequest, AgentRecordEntry,
+    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
+    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
+    AgentWaitResponse, Config, InlineServerConfig, RecordAction, SnapshotMode, WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -111,6 +111,7 @@ impl Builder {
                 commands::agent_focus,
                 commands::agent_blur,
                 commands::agent_scroll,
+                commands::agent_drag,
                 commands::agent_screenshot,
                 commands::agent_logs,
                 commands::agent_events,

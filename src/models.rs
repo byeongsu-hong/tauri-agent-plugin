@@ -166,6 +166,15 @@ pub struct AgentScrollRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentDragRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub to_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -390,6 +399,16 @@ mod tests {
         assert_eq!(
             serde_json::to_value(scroll).unwrap(),
             serde_json::json!({"window": "main", "ref": "@7", "x": 3.0, "y": 12.0})
+        );
+
+        let drag = AgentDragRequest {
+            window: Some("main".into()),
+            ref_id: "@1".into(),
+            to_ref: Some("@8".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(drag).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@1", "toRef": "@8"})
         );
 
         let record = AgentRecordRequest {

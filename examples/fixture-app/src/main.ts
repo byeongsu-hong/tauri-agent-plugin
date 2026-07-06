@@ -3,6 +3,7 @@ import {
   agentAction,
   agentBlur,
   agentCheck,
+  agentDrag,
   agentEval,
   agentEvents,
   agentFocus,
@@ -26,6 +27,7 @@ let hoveredForge = false
 let focusedForge = false
 let blurredForge = false
 let scrolledRoster = false
+let draggedForge = false
 
 const agent = new WebviewAgentInstrumentation({
   state: {
@@ -35,7 +37,8 @@ const agent = new WebviewAgentInstrumentation({
     hoveredForge: () => hoveredForge,
     focusedForge: () => focusedForge,
     blurredForge: () => blurredForge,
-    scrolledRoster: () => scrolledRoster
+    scrolledRoster: () => scrolledRoster,
+    draggedForge: () => draggedForge
   }
 })
 
@@ -94,6 +97,7 @@ function render(): void {
             )
             .join('')}
         </ul>
+        <button type="button" data-action="drop-zone">Deployment queue</button>
         <p role="status" data-status>Ready</p>
         <button type="button" data-action="bridge-self-test">Verify command bridge</button>
       </section>
@@ -104,6 +108,7 @@ function render(): void {
   const forge = appRoot.querySelector<HTMLButtonElement>('[data-action="forge"]')
   const register = appRoot.querySelector<HTMLButtonElement>('[data-action="register"]')
   const rosterList = appRoot.querySelector<HTMLElement>('[aria-label="Roster"]')
+  const dropZone = appRoot.querySelector<HTMLButtonElement>('[data-action="drop-zone"]')
   const status = appRoot.querySelector<HTMLElement>('[data-status]')
 
   forge?.addEventListener('mouseenter', () => {
@@ -117,6 +122,9 @@ function render(): void {
   })
   rosterList?.addEventListener('scroll', () => {
     scrolledRoster = true
+  })
+  dropZone?.addEventListener('drop', () => {
+    draggedForge = true
   })
 
   input?.focus()
@@ -161,12 +169,14 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const rosterRef = tree.match(/(@\d+) list "Roster"/)?.[1]
+  const dropRef = tree.match(/(@\d+) button "Deployment queue"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
   if (rosterRef) await agentScroll({ ref: rosterRef, y: 12 })
+  if (forgeRef) await agentDrag({ ref: forgeRef, toRef: dropRef })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
   await agentAction({ action: 'press', value: 'Escape' })
@@ -193,12 +203,14 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     probes.focusedForge === true &&
     probes.blurredForge === true &&
     probes.scrolledRoster === true &&
+    probes.draggedForge === true &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
     events.some((event) => event.kind === 'click') &&
     events.some((event) => event.kind === 'hover') &&
     events.some((event) => event.kind === 'focus') &&
     events.some((event) => event.kind === 'blur') &&
     events.some((event) => event.kind === 'scroll') &&
+    events.some((event) => event.kind === 'drag') &&
     events.some((event) => event.kind === 'press') &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&

@@ -9,6 +9,7 @@ export const AGENT_METHODS = [
   'focus',
   'blur',
   'scroll',
+  'drag',
   'fill',
   'select',
   'check',

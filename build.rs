@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "agent_focus",
     "agent_blur",
     "agent_scroll",
+    "agent_drag",
     "agent_screenshot",
     "agent_logs",
     "agent_events",
