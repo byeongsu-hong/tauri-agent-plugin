@@ -62,6 +62,20 @@ tauri-agent state
 tauri-agent record --action start
 ```
 
+## Fixture App
+
+`examples/fixture-app` is a minimal Bun + TypeScript + Tauri v2 app wired to this plugin by local path.
+
+```bash
+cd examples/fixture-app
+bun install
+bun run build
+cargo check --manifest-path src-tauri/Cargo.toml
+bun run tauri:dev
+```
+
+Use it as the first real target for live bridge work. Its UI intentionally exposes agent-testable semantics: `Status` and `Agents` navitems, `Forge`, `Agent name`, `Register`, `Roster`, and `Inspect backing`.
+
 ## Package Exports
 
 ```ts
