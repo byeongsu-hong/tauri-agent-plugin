@@ -30,6 +30,8 @@ export class DebuggerSession {
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'inspect':
         return this.app.inspect(requiredString(params.ref, 'ref'))
+      case 'eval':
+        return this.app.evaluate(requiredString(params.code, 'code'))
       case 'press':
         return this.app.press(requiredString(params.key, 'key'))
       case 'shot':

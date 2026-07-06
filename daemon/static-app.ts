@@ -12,7 +12,8 @@ import {
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
-import type { AgentEvent, AgentWindow, InspectResult, LogEntry, ScreenshotResult } from '../protocol/types'
+import { evalResult } from '../guest-js/evaluate'
+import type { AgentEvent, AgentWindow, EvalResult, InspectResult, LogEntry, ScreenshotResult } from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
   html: string
@@ -75,6 +76,11 @@ export class StaticHtmlAppAdapter {
   async inspect(ref: string): Promise<InspectResult> {
     this.bindGlobals()
     return inspectRef(ref)
+  }
+
+  async evaluate(code: string): Promise<EvalResult> {
+    this.bindGlobals()
+    return evalResult(this.dom.window.eval(code))
   }
 
   async press(key: string): Promise<{ ok: true }> {

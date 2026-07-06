@@ -111,6 +111,8 @@ async function executeTool(
     case 'tauri_inspect':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('inspect', pick(args, ['window', 'ref']))
+    case 'tauri_eval':
+      return client.call('eval', pick(args, ['window', 'code']))
     case 'tauri_press':
       return client.call('press', { ...windowParams(args), key: stringField(args, 'key') })
     case 'tauri_shot':
@@ -188,6 +190,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   scope: { type: 'string', description: 'CSS selector used to scope tree/action ref refresh.' },
   mode: { type: 'string', enum: ['compact', 'verbose'] },
   ref: { type: 'string', description: 'Snapshot-local ref such as @3.' },
+  code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
   key: { type: 'string', description: 'Keyboard key, for example Enter.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
@@ -203,6 +206,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
+  tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'key'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow'])),

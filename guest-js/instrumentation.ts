@@ -10,7 +10,16 @@ import {
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import type { AgentEvent, AgentMethod, InspectResult, LogEntry, RecordingEntry, ScreenshotResult } from '../protocol/types'
+import { evalResult } from './evaluate'
+import type {
+  AgentEvent,
+  AgentMethod,
+  EvalResult,
+  InspectResult,
+  LogEntry,
+  RecordingEntry,
+  ScreenshotResult
+} from '../protocol/types'
 
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
 
@@ -95,6 +104,10 @@ export class WebviewAgentInstrumentation {
 
   inspect(ref: string): InspectResult {
     return inspectRef(ref)
+  }
+
+  evaluate(code: string): EvalResult {
+    return evalResult(window.eval(code))
   }
 
   async wait(options: { text: string; timeoutMs?: number }): Promise<{ matched: true; text: string }> {
@@ -209,6 +222,8 @@ export class WebviewAgentInstrumentation {
         })
       case 'inspect':
         return this.inspect(requiredStringParam(params, 'ref'))
+      case 'eval':
+        return this.evaluate(requiredStringParam(params, 'code'))
       case 'press':
         return this.action({ action: 'press', value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '' })
       case 'shot':

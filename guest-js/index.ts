@@ -12,7 +12,8 @@ import {
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import type { AgentEvent, LogEntry, RecordingEntry } from '../protocol/types'
+import { evalResult } from './evaluate'
+import type { AgentEvent, EvalResult, LogEntry, RecordingEntry } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -24,7 +25,9 @@ export {
   resolveRef,
   screenshotDocument,
   snapshotDocument,
+  evalResult,
   type AgentEvent,
+  type EvalResult,
   type InspectResult,
   type LogEntry,
   type RecordingEntry,
@@ -56,6 +59,11 @@ export type AgentActionRequest =
 export interface AgentInspectRequest {
   window?: string
   ref: string
+}
+
+export interface AgentEvalRequest {
+  window?: string
+  code: string
 }
 
 export interface AgentScreenshotRequest {
@@ -116,6 +124,10 @@ export async function agentAction(request: AgentActionRequest): Promise<void> {
 
 export async function agentInspect(request: AgentInspectRequest): Promise<InspectResult> {
   return invoke('plugin:agent|agent_inspect', { request })
+}
+
+export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> {
+  return invoke('plugin:agent|agent_eval', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

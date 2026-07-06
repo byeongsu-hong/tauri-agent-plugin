@@ -18,6 +18,7 @@ describe('agent debug protocol', () => {
       'click',
       'fill',
       'inspect',
+      'eval',
       'press',
       'shot',
       'logs',

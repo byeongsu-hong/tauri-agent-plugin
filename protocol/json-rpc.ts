@@ -7,6 +7,7 @@ export const AGENT_METHODS = [
   'click',
   'fill',
   'inspect',
+  'eval',
   'press',
   'shot',
   'logs',

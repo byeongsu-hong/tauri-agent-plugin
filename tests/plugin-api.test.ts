@@ -9,6 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 import {
   agentAction,
   agentEvents,
+  agentEval,
   agentInspect,
   agentLogs,
   agentRecord,
@@ -28,6 +29,7 @@ describe('plugin command helpers', () => {
   it('routes every direct Tauri command helper through the plugin invoke surface', async () => {
     await agentSnapshot({ window: 'main', scope: 'main' })
     await agentInspect({ window: 'main', ref: '@1' })
+    await agentEval({ window: 'main', code: 'document.title' })
     await agentAction({ window: 'main', action: 'click', ref: '@1' })
     await agentAction({ window: 'main', action: 'press', value: 'Enter' })
     await agentScreenshot({ window: 'main', path: '/tmp/app.svg' })
@@ -41,6 +43,7 @@ describe('plugin command helpers', () => {
     expect(invokeMock.mock.calls).toEqual([
       ['plugin:agent|agent_snapshot', { request: { window: 'main', scope: 'main' } }],
       ['plugin:agent|agent_inspect', { request: { window: 'main', ref: '@1' } }],
+      ['plugin:agent|agent_eval', { request: { window: 'main', code: 'document.title' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'click', ref: '@1' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter' } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'main', path: '/tmp/app.svg' } }],

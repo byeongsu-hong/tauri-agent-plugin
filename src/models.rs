@@ -107,6 +107,13 @@ pub struct AgentInspectResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentEvalRequest {
+    pub window: Option<String>,
+    pub code: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -264,6 +271,15 @@ mod tests {
         assert_eq!(
             serde_json::to_value(inspect).unwrap(),
             serde_json::json!({"window": "main", "ref": "@4"})
+        );
+
+        let eval = AgentEvalRequest {
+            window: Some("main".into()),
+            code: "document.title".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(eval).unwrap(),
+            serde_json::json!({"window": "main", "code": "document.title"})
         );
 
         let record = AgentRecordRequest {

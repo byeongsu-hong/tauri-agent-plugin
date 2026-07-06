@@ -121,6 +121,16 @@ program
   })
 
 program
+  .command('eval')
+  .description('Evaluate JavaScript in the app webview.')
+  .argument('<code>', 'JavaScript expression or snippet')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .action(async (code: string, options: ConnectionOptions) => printJson(await call(options, 'eval', { code })))
+
+program
   .command('press')
   .description('Dispatch a keyboard key.')
   .argument('<key>', 'key name, for example Enter')

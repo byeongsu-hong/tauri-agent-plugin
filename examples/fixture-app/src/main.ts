@@ -1,6 +1,7 @@
 import {
   WebviewAgentInstrumentation,
   agentAction,
+  agentEval,
   agentEvents,
   agentInspect,
   agentLogs,
@@ -116,6 +117,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const tree = await agentSnapshot({ scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
+  const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
   await agentAction({ action: 'press', value: 'Escape' })
   const state = await agentState()
   const logs = await agentLogs()
@@ -129,6 +131,8 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     tree.includes('Ducktape') &&
     inspected?.role === 'textbox' &&
     inspected.name === 'Agent name' &&
+    evaluated.type === 'string' &&
+    evaluated.value === 'Command bridge running' &&
     isRecord(state) &&
     probes.route === activeView &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
