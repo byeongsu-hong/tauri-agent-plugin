@@ -438,11 +438,15 @@ export class WebviewAgentInstrumentation {
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const startedAtMs = Date.now()
+      const url = fetchUrl(input)
+      if (isTauriIpcUrl(url)) {
+        return originalFetch.call(window, input, init)
+      }
       const entry: NetworkEntry = {
         id: `fetch-${++this.networkEntryId}`,
         type: 'fetch',
         method: fetchMethod(input, init),
-        url: fetchUrl(input),
+        url,
         startedAt: new Date(startedAtMs).toISOString()
       }
       const requestBodySize = bodySize(requestBody(input, init))
@@ -612,4 +616,8 @@ function finishNetworkEntry(entry: NetworkEntry, startedAtMs: number): void {
 
 function isRequest(value: RequestInfo | URL): value is Request {
   return typeof Request !== 'undefined' && value instanceof Request
+}
+
+function isTauriIpcUrl(url: string): boolean {
+  return url.startsWith('ipc://localhost/')
 }

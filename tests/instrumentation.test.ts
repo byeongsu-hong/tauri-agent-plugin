@@ -34,6 +34,7 @@ describe('WebviewAgentInstrumentation', () => {
 
     console.info('booted')
     const fetchResponse = await window.fetch('/api/agents', { method: 'POST', body: 'worker-a' })
+    await window.fetch('ipc://localhost/plugin%3Aagent%7Cagent_bridge_response', { method: 'POST', body: '{}' })
     const tree = instrumentation.snapshot()
     instrumentation.record('start')
     instrumentation.action({ action: 'click', ref: '@1' })
