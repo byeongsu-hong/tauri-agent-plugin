@@ -114,6 +114,15 @@ pub struct AgentEvalRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSelectRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -280,6 +289,16 @@ mod tests {
         assert_eq!(
             serde_json::to_value(eval).unwrap(),
             serde_json::json!({"window": "main", "code": "document.title"})
+        );
+
+        let select = AgentSelectRequest {
+            window: Some("main".into()),
+            ref_id: "@4".into(),
+            value: Some("remote".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(select).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@4", "value": "remote"})
         );
 
         let record = AgentRecordRequest {

@@ -5,6 +5,7 @@ import {
   fillRef,
   inspectRef,
   pressKey,
+  selectRef,
   snapshotDocument,
   type SnapshotOptions,
   type SnapshotResult
@@ -28,7 +29,7 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'fill' | 'press'
+  action: 'click' | 'fill' | 'press' | 'select'
   ref?: string
   value?: string
 }
@@ -95,6 +96,9 @@ export class WebviewAgentInstrumentation {
       case 'press':
         pressKey(action.value ?? '')
         break
+      case 'select':
+        selectRef(requiredRef(action.ref), action.value)
+        break
     }
 
     this.pushEvent(action.action, serializableAction(action))
@@ -104,6 +108,14 @@ export class WebviewAgentInstrumentation {
 
   inspect(ref: string): InspectResult {
     return inspectRef(ref)
+  }
+
+  select(ref: string, value?: string): { ok: true } {
+    selectRef(ref, value)
+    const action: InstrumentedAction = { action: 'select', ref, value }
+    this.pushEvent('select', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
   }
 
   evaluate(code: string): EvalResult {
@@ -220,6 +232,8 @@ export class WebviewAgentInstrumentation {
           ref: requiredStringParam(params, 'ref'),
           value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
         })
+      case 'select':
+        return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
       case 'inspect':
         return this.inspect(requiredStringParam(params, 'ref'))
       case 'eval':

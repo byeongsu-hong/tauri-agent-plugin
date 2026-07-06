@@ -67,6 +67,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_tree',
       'tauri_click',
       'tauri_fill',
+      'tauri_select',
       'tauri_inspect',
       'tauri_eval',
       'tauri_press',
@@ -229,6 +230,28 @@ describe('tauri-agent MCP server', () => {
       value: 'Agent name',
       text: 'Agent name'
     })
+
+    const selected = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 9,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_select',
+              arguments: {
+                html: '<main><select aria-label="Worker"><option value="local">Local worker</option><option value="remote">Remote worker</option></select></main>',
+                ref: '@1',
+                value: 'remote'
+              }
+            }
+          })
+        )
+      )
+    )
+
+    expect(selected.result.structuredContent).toEqual({ ok: true })
   })
 
   it('discovers app-scoped endpoint registries for live MCP tool calls', async () => {

@@ -8,6 +8,10 @@ describe('WebviewAgentInstrumentation', () => {
       <main aria-label="Ducktape">
         <button>Forge</button>
         <input aria-label="Agent name" />
+        <select aria-label="Worker">
+          <option value="local">Local worker</option>
+          <option value="remote">Remote worker</option>
+        </select>
         <p>Registered worker-a</p>
       </main>
     `
@@ -24,6 +28,7 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.record('start')
     instrumentation.action({ action: 'click', ref: '@1' })
     instrumentation.action({ action: 'fill', ref: '@2', value: 'worker-a' })
+    instrumentation.select('@3', 'remote')
     instrumentation.action({ action: 'press', value: 'Enter' })
 
     await expect(instrumentation.wait({ text: 'Registered worker-a', timeoutMs: 1 })).resolves.toEqual({
@@ -31,7 +36,16 @@ describe('WebviewAgentInstrumentation', () => {
       text: 'Registered worker-a'
     })
 
-    expect(tree.text).toBe('main "Ducktape"\n@1 button "Forge"\n@2 textbox "Agent name" empty')
+    expect(tree.text).toBe(
+      [
+        'main "Ducktape"',
+        '@1 button "Forge"',
+        '@2 textbox "Agent name" empty',
+        '@3 combobox "Worker"',
+        '  @4 option "Local worker" selected',
+        '  @5 option "Remote worker"'
+      ].join('\n')
+    )
     expect(instrumentation.inspect('@2')).toEqual({
       ref: '@2',
       role: 'textbox',
@@ -59,7 +73,8 @@ describe('WebviewAgentInstrumentation', () => {
       url: window.location.href,
       title: '',
       values: {
-        'Agent name': 'worker-a'
+        'Agent name': 'worker-a',
+        Worker: 'remote'
       },
       probes: {
         route: '/agents'
@@ -79,6 +94,7 @@ describe('WebviewAgentInstrumentation', () => {
       entries: [
         expect.objectContaining({ method: 'click', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
+        expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'press', params: { value: 'Enter' } })
       ]
     })

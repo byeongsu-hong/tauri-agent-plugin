@@ -6,14 +6,14 @@ Headless agent debugger for Tauri apps.
 
 ## Architecture
 
-- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
+- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `select`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
 - **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
 - **MCP Server**: stdio Model Context Protocol wrapper exposing debugger tools for agents.
-- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` inspection/actions, JavaScript evaluation, console log capture, event capture, state probes, text waiters, and action recording.
+- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` inspection/actions, select control changes, JavaScript evaluation, console log capture, event capture, state probes, text waiters, and action recording.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `click`, `fill`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
+The live bridge supports `windows`, `tree`, `click`, `fill`, `select`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -37,6 +37,7 @@ bun bin/tauri-agent.ts tree --from-html ./screen.html
 bun bin/tauri-agent.ts inspect @4 --from-html ./screen.html
 bun bin/tauri-agent.ts eval "document.title" --from-html ./screen.html
 bun bin/tauri-agent.ts fill @4 worker-a --from-html ./screen.html
+bun bin/tauri-agent.ts select @3 remote --from-html ./screen.html
 bun bin/tauri-agent.ts wait "Registered" --from-html ./screen.html
 bun bin/tauri-agent.ts state --from-html ./screen.html
 bun bin/tauri-agent.ts record --from-html ./screen.html
@@ -63,7 +64,8 @@ tauri-agent tree --app dev.byeongsu.tauri-agent.fixture
 tauri-agent inspect @4 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent eval "document.title" --app dev.byeongsu.tauri-agent.fixture
 tauri-agent fill @4 worker-a --app dev.byeongsu.tauri-agent.fixture
-tauri-agent click @5 --app dev.byeongsu.tauri-agent.fixture
+tauri-agent select @5 remote --app dev.byeongsu.tauri-agent.fixture
+tauri-agent click @3 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent wait "Registered worker-a" --app dev.byeongsu.tauri-agent.fixture
 tauri-agent state --app dev.byeongsu.tauri-agent.fixture
 ```
@@ -76,6 +78,7 @@ tauri-agent windows
 tauri-agent tree --window main
 tauri-agent click @3
 tauri-agent fill @4 worker-a
+tauri-agent select @5 remote
 tauri-agent inspect @4
 tauri-agent eval "document.title"
 tauri-agent press Enter
@@ -102,6 +105,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_tree`
 - `tauri_click`
 - `tauri_fill`
+- `tauri_select`
 - `tauri_inspect`
 - `tauri_eval`
 - `tauri_press`
@@ -139,6 +143,7 @@ import {
   agentInspect,
   agentRecord,
   agentSnapshot,
+  agentSelect,
   agentState,
   agentWait,
   snapshotDocument
@@ -162,6 +167,7 @@ const agent = new WebviewAgentInstrumentation({
 agent.install()
 agent.snapshot()
 agent.action({ action: 'click', ref: '@3' })
+agent.select('@5', 'remote')
 agent.evaluate('document.title')
 agent.screenshot()
 agent.logs()
@@ -175,6 +181,7 @@ Direct Tauri command helpers use the same bridge:
 await agentSnapshot({ scope: 'main' })
 await agentInspect({ ref: '@4' })
 await agentEval({ code: 'document.title' })
+await agentSelect({ ref: '@5', value: 'remote' })
 await agentLogs()
 await agentEvents()
 await agentWait({ text: 'Ready', timeoutMs: 1000 })
@@ -217,6 +224,7 @@ Rust command names:
 - `agent_action`
 - `agent_inspect`
 - `agent_eval`
+- `agent_select`
 - `agent_screenshot`
 - `agent_logs`
 - `agent_events`

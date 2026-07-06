@@ -6,6 +6,7 @@ import {
   inspectRef,
   pressKey,
   resolveRef,
+  selectRef,
   snapshotDocument,
   type InspectResult,
   type SnapshotOptions,
@@ -24,6 +25,7 @@ export {
   pressKey,
   resolveRef,
   screenshotDocument,
+  selectRef,
   snapshotDocument,
   evalResult,
   type AgentEvent,
@@ -64,6 +66,12 @@ export interface AgentInspectRequest {
 export interface AgentEvalRequest {
   window?: string
   code: string
+}
+
+export interface AgentSelectRequest {
+  window?: string
+  ref: string
+  value?: string
 }
 
 export interface AgentScreenshotRequest {
@@ -128,6 +136,10 @@ export async function agentInspect(request: AgentInspectRequest): Promise<Inspec
 
 export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> {
   return invoke('plugin:agent|agent_eval', { request })
+}
+
+export async function agentSelect(request: AgentSelectRequest): Promise<void> {
+  return invoke('plugin:agent|agent_select', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {
