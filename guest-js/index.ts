@@ -10,6 +10,7 @@ import {
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
+import type { AgentEvent, LogEntry, RecordingEntry } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -20,6 +21,9 @@ export {
   resolveRef,
   screenshotDocument,
   snapshotDocument,
+  type AgentEvent,
+  type LogEntry,
+  type RecordingEntry,
   type ScreenshotOptions,
   type SnapshotOptions,
   type SnapshotResult
@@ -31,16 +35,59 @@ export interface AgentSnapshotRequest {
   mode?: SnapshotOptions['mode']
 }
 
-export interface AgentActionRequest {
-  window?: string
-  ref: string
-  action: 'click' | 'fill' | 'press'
-  value?: string
-}
+export type AgentActionRequest =
+  | {
+      window?: string
+      ref: string
+      action: 'click' | 'fill'
+      value?: string
+    }
+  | {
+      window?: string
+      action: 'press'
+      value: string
+      ref?: string
+    }
 
 export interface AgentScreenshotRequest {
   window?: string
   path?: string
+}
+
+export interface AgentLogRequest {
+  window?: string
+  follow?: boolean
+}
+
+export interface AgentEventsRequest {
+  window?: string
+  follow?: boolean
+}
+
+export interface AgentWaitRequest {
+  window?: string
+  text: string
+  timeoutMs?: number
+}
+
+export interface AgentStateRequest {
+  window?: string
+  key?: string
+}
+
+export interface AgentRecordRequest {
+  window?: string
+  action?: 'start' | 'stop' | 'get' | 'clear'
+}
+
+export interface AgentWaitResponse {
+  matched: boolean
+  text: string
+}
+
+export interface AgentRecordResponse {
+  recording: boolean
+  entries: RecordingEntry[]
 }
 
 export interface WindowInfo {
@@ -62,8 +109,26 @@ export async function agentScreenshot(request: AgentScreenshotRequest = {}): Pro
   return invoke('plugin:agent|agent_screenshot', { request })
 }
 
-export async function agentEvents(window?: string): Promise<void> {
-  return invoke('plugin:agent|agent_events', { window })
+export async function agentLogs(request: AgentLogRequest = {}): Promise<LogEntry[]> {
+  return invoke('plugin:agent|agent_logs', { request })
+}
+
+export async function agentEvents(request: AgentEventsRequest | string = {}): Promise<AgentEvent[]> {
+  return invoke('plugin:agent|agent_events', {
+    request: typeof request === 'string' ? { window: request } : request
+  })
+}
+
+export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {
+  return invoke('plugin:agent|agent_wait', { request })
+}
+
+export async function agentState(request: AgentStateRequest = {}): Promise<Record<string, unknown>> {
+  return invoke('plugin:agent|agent_state', { request })
+}
+
+export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
+  return invoke('plugin:agent|agent_record', { request })
 }
 
 export async function agentWindows(): Promise<WindowInfo[]> {

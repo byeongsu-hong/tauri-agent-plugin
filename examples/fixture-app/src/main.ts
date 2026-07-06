@@ -1,4 +1,14 @@
-import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+import {
+  WebviewAgentInstrumentation,
+  agentAction,
+  agentEvents,
+  agentLogs,
+  agentRecord,
+  agentScreenshot,
+  agentSnapshot,
+  agentState,
+  agentWait
+} from '@byeongsu-hong/tauri-plugin-agent'
 import './style.css'
 
 const roster = ['local-worker', 'remote-worker', 'backup-worker']
@@ -57,6 +67,7 @@ function render(): void {
             .join('')}
         </ul>
         <p role="status" data-status>Ready</p>
+        <button type="button" data-action="bridge-self-test">Verify command bridge</button>
       </section>
     </main>
   `
@@ -79,6 +90,10 @@ function render(): void {
     console.info(`registered ${name}`)
   })
 
+  appRoot.querySelector<HTMLButtonElement>('[data-action="bridge-self-test"]')?.addEventListener('click', () => {
+    void runCommandBridgeSelfTest(status)
+  })
+
   for (const nav of Array.from(appRoot.querySelectorAll<HTMLButtonElement>('[data-nav]'))) {
     nav.addEventListener('click', () => {
       activeView = nav.dataset.nav ?? 'agents'
@@ -92,6 +107,38 @@ function render(): void {
       if (status) status.textContent = `Inspecting ${selectedWorker}`
     })
   }
+}
+
+async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<void> {
+  if (!status) return
+  status.textContent = 'Command bridge running'
+  const tree = await agentSnapshot({ scope: 'main' })
+  await agentAction({ action: 'press', value: 'Escape' })
+  const state = await agentState()
+  const logs = await agentLogs()
+  const events = await agentEvents()
+  const shot = await agentScreenshot()
+  const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
+  const record = await agentRecord()
+  const probes = isRecord(state.probes) ? state.probes : {}
+
+  const verified =
+    tree.includes('Ducktape') &&
+    isRecord(state) &&
+    probes.route === activeView &&
+    logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
+    events.some((event) => event.kind === 'click') &&
+    events.some((event) => event.kind === 'press') &&
+    shot.startsWith('data:image/svg+xml;base64,') &&
+    wait.matched &&
+    !record.recording
+
+  status.textContent = verified ? 'Command bridge verified' : 'Command bridge failed'
+  console.info(status.textContent)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function mustFindAppRoot(): HTMLDivElement {

@@ -5,6 +5,7 @@ mod commands;
 mod endpoint;
 mod error;
 mod models;
+mod screenshot;
 mod server;
 
 pub use endpoint::{

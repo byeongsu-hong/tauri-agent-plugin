@@ -1,12 +1,15 @@
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
-    AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
+    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
     AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
     AgentScreenshotRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
     AgentWaitResponse, WindowInfo,
 };
+use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
 
 #[tauri::command]
@@ -33,59 +36,68 @@ pub async fn agent_attach<R: Runtime>(
 #[tauri::command]
 pub async fn agent_snapshot<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentSnapshotRequest,
 ) -> Result<String> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_snapshot is reserved for the guest JS semantic-tree bridge in v0".into(),
-    ))
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "tree", &request)?;
+    snapshot_text_from_bridge(result)
 }
 
 #[tauri::command]
 pub async fn agent_action<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentActionRequest,
 ) -> Result<()> {
-    ensure_window(&app, request.window.as_deref())?;
-    if !request.ref_id.starts_with('@') {
-        return Err(Error::StaleRef(request.ref_id));
+    if !matches!(&request.action, AgentAction::Press) {
+        match request.ref_id.as_deref() {
+            Some(ref_id) if ref_id.starts_with('@') => {}
+            Some(ref_id) => return Err(Error::StaleRef(ref_id.to_string())),
+            None => {
+                return Err(Error::BridgeUnavailable(
+                    "agent_action requires ref for click and fill".into(),
+                ))
+            }
+        }
     }
-    Err(Error::BridgeUnavailable(
-        "agent_action is reserved for the guest JS ref registry in v0".into(),
-    ))
+    let method = match &request.action {
+        AgentAction::Click => "click",
+        AgentAction::Fill => "fill",
+        AgentAction::Press => "press",
+    };
+    request_bridge(&bridge, &app, request.window.as_deref(), method, &request)?;
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn agent_screenshot<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentScreenshotRequest,
 ) -> Result<String> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_screenshot will use native capture after the bridge is wired".into(),
-    ))
+    let path = request.path.clone();
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)?;
+    screenshot_return_value(result, path.as_deref())
 }
 
 #[tauri::command]
 pub async fn agent_logs<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentLogRequest,
 ) -> Result<Vec<AgentLogEntry>> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_logs needs guest console instrumentation and is not active in Rust bridge v0".into(),
-    ))
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "logs", &request)?;
+    decode_bridge_result(result)
 }
 
 #[tauri::command]
 pub async fn agent_events<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentEventsRequest,
 ) -> Result<Vec<AgentEventEntry>> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_events needs a stream transport and is not active in v0".into(),
-    ))
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "events", &request)?;
+    decode_bridge_result(result)
 }
 
 #[tauri::command]
@@ -96,34 +108,72 @@ pub async fn agent_windows<R: Runtime>(app: AppHandle<R>) -> Result<Vec<WindowIn
 #[tauri::command]
 pub async fn agent_wait<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentWaitRequest,
 ) -> Result<AgentWaitResponse> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_wait needs guest text waiters and is not active in Rust bridge v0".into(),
-    ))
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "wait", &request)?;
+    decode_bridge_result(result)
 }
 
 #[tauri::command]
 pub async fn agent_state<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentStateRequest,
 ) -> Result<serde_json::Value> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_state needs guest state probes and is not active in Rust bridge v0".into(),
-    ))
+    let key = request.key.clone();
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "state", &request)?;
+    Ok(match key {
+        Some(key) => result.get(&key).cloned().unwrap_or(Value::Null),
+        None => result,
+    })
 }
 
 #[tauri::command]
 pub async fn agent_record<R: Runtime>(
     app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
     request: AgentRecordRequest,
 ) -> Result<AgentRecordResponse> {
-    ensure_window(&app, request.window.as_deref())?;
-    Err(Error::BridgeUnavailable(
-        "agent_record needs guest action recording and is not active in Rust bridge v0".into(),
-    ))
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "record", &request)?;
+    decode_bridge_result(result)
+}
+
+fn request_bridge<R: Runtime, T: Serialize>(
+    bridge: &AgentBridge,
+    app: &AppHandle<R>,
+    window: Option<&str>,
+    method: &str,
+    request: &T,
+) -> Result<Value> {
+    let params = serde_json::to_value(request)
+        .map_err(|_| Error::BridgeUnavailable("failed to serialize agent bridge request".into()))?;
+    bridge.request_webview(app, window, method, params)
+}
+
+fn snapshot_text_from_bridge(result: Value) -> Result<String> {
+    result
+        .get("text")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| Error::BridgeUnavailable("snapshot bridge returned no text".into()))
+}
+
+fn screenshot_return_value(result: Value, path: Option<&str>) -> Result<String> {
+    let data_url = result
+        .get("dataUrl")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::BridgeUnavailable("screenshot bridge returned no dataUrl".into()))?;
+    let Some(path) = path else {
+        return Ok(data_url.to_string());
+    };
+    write_data_url_to_path(data_url, path)?;
+    Ok(path.to_string())
+}
+
+fn decode_bridge_result<T: DeserializeOwned>(result: Value) -> Result<T> {
+    serde_json::from_value(result)
+        .map_err(|_| Error::BridgeUnavailable("malformed bridge result".into()))
 }
 
 pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
@@ -148,4 +198,80 @@ pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>)
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_helpers_decode_bridge_results() {
+        let screenshot_path = std::env::temp_dir().join(format!(
+            "tauri-agent-command-shot-{}.svg",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&screenshot_path);
+        let screenshot_path = screenshot_path.to_string_lossy().into_owned();
+
+        assert_eq!(
+            snapshot_text_from_bridge(serde_json::json!({"text": "main \"Ducktape\""})).unwrap(),
+            "main \"Ducktape\""
+        );
+        assert_eq!(
+            screenshot_return_value(
+                serde_json::json!({
+                    "dataUrl": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+                    "mime": "image/svg+xml"
+                }),
+                None,
+            )
+            .unwrap(),
+            "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+        );
+        assert_eq!(
+            screenshot_return_value(
+                serde_json::json!({
+                    "dataUrl": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+                    "mime": "image/svg+xml"
+                }),
+                Some(&screenshot_path),
+            )
+            .unwrap(),
+            screenshot_path
+        );
+        let _ = std::fs::remove_file(&screenshot_path);
+
+        let logs = decode_bridge_result::<Vec<AgentLogEntry>>(serde_json::json!([
+            {
+                "level": "info",
+                "message": "booted",
+                "timestamp": "2026-07-06T14:00:00.000Z"
+            }
+        ]))
+        .unwrap();
+        assert_eq!(logs[0].message, "booted");
+        assert_eq!(logs[0].window, None);
+    }
+
+    #[test]
+    fn command_helpers_fail_clearly_on_malformed_bridge_results() {
+        assert_eq!(
+            snapshot_text_from_bridge(serde_json::json!({"value": "missing"}))
+                .unwrap_err()
+                .to_string(),
+            "live bridge unavailable: snapshot bridge returned no text"
+        );
+        assert_eq!(
+            screenshot_return_value(serde_json::json!({"mime": "image/svg+xml"}), None)
+                .unwrap_err()
+                .to_string(),
+            "live bridge unavailable: screenshot bridge returned no dataUrl"
+        );
+        assert_eq!(
+            decode_bridge_result::<Vec<AgentLogEntry>>(serde_json::json!({"level": "info"}))
+                .unwrap_err()
+                .to_string(),
+            "live bridge unavailable: malformed bridge result"
+        );
+    }
 }

@@ -77,7 +77,7 @@ pub enum SnapshotMode {
 pub struct AgentActionRequest {
     pub window: Option<String>,
     #[serde(rename = "ref")]
-    pub ref_id: String,
+    pub ref_id: Option<String>,
     pub action: AgentAction,
     pub value: Option<String>,
 }
@@ -241,6 +241,22 @@ mod tests {
         assert_eq!(
             serde_json::to_value(record).unwrap(),
             serde_json::json!({"window": null, "action": "start"})
+        );
+
+        let press = AgentActionRequest {
+            window: Some("main".into()),
+            ref_id: None,
+            action: AgentAction::Press,
+            value: Some("Enter".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(press).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "ref": null,
+                "action": "press",
+                "value": "Enter"
+            })
         );
     }
 }
