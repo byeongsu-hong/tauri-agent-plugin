@@ -5,6 +5,7 @@ export type AgentMethod =
   | 'windows'
   | 'tree'
   | 'click'
+  | 'hover'
   | 'fill'
   | 'select'
   | 'check'

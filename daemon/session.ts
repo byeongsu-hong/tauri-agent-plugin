@@ -26,6 +26,8 @@ export class DebuggerSession {
         })
       case 'click':
         return this.app.click(requiredString(params.ref, 'ref'))
+      case 'hover':
+        return this.app.hover(requiredString(params.ref, 'ref'))
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':
@@ -77,7 +79,7 @@ export class DebuggerSession {
     if (!this.recording || method === 'record') {
       return
     }
-    if (!['click', 'fill', 'press'].includes(method)) {
+    if (!['click', 'hover', 'fill', 'press'].includes(method)) {
       return
     }
     this.recordingEntries.push({

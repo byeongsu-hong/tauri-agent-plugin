@@ -4,6 +4,7 @@ import {
   agentCheck,
   agentEval,
   agentEvents,
+  agentHover,
   agentInspect,
   agentLogs,
   agentRecord,
@@ -18,12 +19,14 @@ import './style.css'
 const roster = ['local-worker', 'remote-worker', 'backup-worker']
 let activeView = 'agents'
 let selectedWorker = roster[0]
+let hoveredForge = false
 
 const agent = new WebviewAgentInstrumentation({
   state: {
     route: () => activeView,
     registeredCount: () => roster.length,
-    selectedWorker: () => selectedWorker
+    selectedWorker: () => selectedWorker,
+    hoveredForge: () => hoveredForge
   }
 })
 
@@ -89,8 +92,13 @@ function render(): void {
   `
 
   const input = appRoot.querySelector<HTMLInputElement>('input[name="agentName"]')
+  const forge = appRoot.querySelector<HTMLButtonElement>('[data-action="forge"]')
   const register = appRoot.querySelector<HTMLButtonElement>('[data-action="register"]')
   const status = appRoot.querySelector<HTMLElement>('[data-status]')
+
+  forge?.addEventListener('mouseenter', () => {
+    hoveredForge = true
+  })
 
   input?.focus()
   input?.addEventListener('input', () => {
@@ -130,10 +138,12 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   status.textContent = 'Command bridge running'
   const tree = await agentSnapshot({ scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
+  const forgeRef = tree.match(/(@\d+) button "Forge"/)?.[1]
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  if (forgeRef) await agentHover({ ref: forgeRef })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
   await agentAction({ action: 'press', value: 'Escape' })
@@ -156,8 +166,10 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     values['Worker priority'] === 'remote' &&
     isRecord(state) &&
     probes.route === activeView &&
+    probes.hoveredForge === true &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
     events.some((event) => event.kind === 'click') &&
+    events.some((event) => event.kind === 'hover') &&
     events.some((event) => event.kind === 'press') &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&

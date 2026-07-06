@@ -3,6 +3,7 @@ import {
   clickRef,
   checkRef,
   fillRef,
+  hoverRef,
   inspectRef,
   pressKey,
   resolveRef,
@@ -161,6 +162,20 @@ describe('snapshotDocument', () => {
     expect((resolveRef('@3') as HTMLInputElement).checked).toBe(false)
     expect(seen).toEqual(['input:Notify', 'change:Notify', 'input:Local', 'change:Local'])
     expect(() => checkRef('@2', false)).toThrow('radio @2 cannot be unchecked directly')
+  })
+
+  it('dispatches hover events through the current snapshot ref registry', () => {
+    const seen: string[] = []
+    document.body.innerHTML = '<button>Forge</button>'
+    const button = document.querySelector('button')
+    button?.addEventListener('mouseover', () => seen.push('mouseover'))
+    button?.addEventListener('mouseenter', () => seen.push('mouseenter'))
+    button?.addEventListener('mousemove', () => seen.push('mousemove'))
+
+    snapshotDocument(document)
+    hoverRef('@1')
+
+    expect(seen).toEqual(['mouseover', 'mouseenter', 'mousemove'])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

@@ -56,6 +56,7 @@ describe('DebuggerSession', () => {
 
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
+    await expect(session.execute('hover', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('fill', { ref: '@2', text: 'worker-a' })).resolves.toEqual({ ok: true })
     await expect(session.execute('select', { ref: '@3', value: 'remote' })).resolves.toEqual({ ok: true })
     await expect(session.execute('check', { ref: '@6', checked: true })).resolves.toEqual({ ok: true })
@@ -88,6 +89,7 @@ describe('DebuggerSession', () => {
       expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
+        expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } }),
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } })
       ])
@@ -96,6 +98,7 @@ describe('DebuggerSession', () => {
       recording: true,
       entries: [
         expect.objectContaining({ method: 'click', params: { ref: '@1' } }),
+        expect.objectContaining({ method: 'hover', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ method: 'press', params: { key: 'Enter' } })
       ]

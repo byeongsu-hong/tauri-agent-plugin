@@ -4,6 +4,7 @@ import {
   clickRef,
   currentRefRegistry,
   fillRef,
+  hoverRef,
   inspectRef,
   pressKey,
   resolveRef,
@@ -23,6 +24,7 @@ export {
   checkRef,
   currentRefRegistry,
   fillRef,
+  hoverRef,
   inspectRef,
   pressKey,
   resolveRef,
@@ -80,6 +82,11 @@ export interface AgentCheckRequest {
   window?: string
   ref: string
   checked?: boolean
+}
+
+export interface AgentHoverRequest {
+  window?: string
+  ref: string
 }
 
 export interface AgentScreenshotRequest {
@@ -152,6 +159,10 @@ export async function agentSelect(request: AgentSelectRequest): Promise<void> {
 
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {
   return invoke('plugin:agent|agent_check', { request })
+}
+
+export async function agentHover(request: AgentHoverRequest): Promise<void> {
+  return invoke('plugin:agent|agent_hover', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {
