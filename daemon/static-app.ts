@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { JSDOM } from 'jsdom'
 
 import {
+  blurRef,
   checkRef,
   clickRef,
   fillRef,
@@ -81,6 +82,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     focusRef(ref)
     this.pushEvent('focus', { ref })
+    return { ok: true }
+  }
+
+  async blur(ref: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    blurRef(ref)
+    this.pushEvent('blur', { ref })
     return { ok: true }
   }
 

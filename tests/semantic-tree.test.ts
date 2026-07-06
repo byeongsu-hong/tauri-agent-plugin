@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  blurRef,
   clickRef,
   checkRef,
   fillRef,
@@ -191,6 +192,21 @@ describe('snapshotDocument', () => {
 
     expect(document.activeElement).toBe(input)
     expect(seen).toEqual(['focus', 'focusin'])
+  })
+
+  it('blurs refs through the current snapshot ref registry', () => {
+    const seen: string[] = []
+    document.body.innerHTML = '<input aria-label="Agent name" />'
+    const input = document.querySelector('input')
+    input?.addEventListener('blur', () => seen.push('blur'))
+    input?.addEventListener('focusout', () => seen.push('focusout'))
+
+    snapshotDocument(document)
+    focusRef('@1')
+    blurRef('@1')
+
+    expect(document.activeElement).not.toBe(input)
+    expect(seen).toEqual(['blur', 'focusout'])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

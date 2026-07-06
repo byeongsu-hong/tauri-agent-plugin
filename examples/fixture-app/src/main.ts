@@ -1,6 +1,7 @@
 import {
   WebviewAgentInstrumentation,
   agentAction,
+  agentBlur,
   agentCheck,
   agentEval,
   agentEvents,
@@ -22,6 +23,7 @@ let activeView = 'agents'
 let selectedWorker = roster[0]
 let hoveredForge = false
 let focusedForge = false
+let blurredForge = false
 
 const agent = new WebviewAgentInstrumentation({
   state: {
@@ -29,7 +31,8 @@ const agent = new WebviewAgentInstrumentation({
     registeredCount: () => roster.length,
     selectedWorker: () => selectedWorker,
     hoveredForge: () => hoveredForge,
-    focusedForge: () => focusedForge
+    focusedForge: () => focusedForge,
+    blurredForge: () => blurredForge
   }
 })
 
@@ -105,6 +108,9 @@ function render(): void {
   forge?.addEventListener('focus', () => {
     focusedForge = true
   })
+  forge?.addEventListener('blur', () => {
+    blurredForge = true
+  })
 
   input?.focus()
   input?.addEventListener('input', () => {
@@ -150,6 +156,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
   if (forgeRef) await agentFocus({ ref: forgeRef })
+  if (forgeRef) await agentBlur({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
   if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
@@ -175,10 +182,12 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     probes.route === activeView &&
     probes.hoveredForge === true &&
     probes.focusedForge === true &&
+    probes.blurredForge === true &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
     events.some((event) => event.kind === 'click') &&
     events.some((event) => event.kind === 'hover') &&
     events.some((event) => event.kind === 'focus') &&
+    events.some((event) => event.kind === 'blur') &&
     events.some((event) => event.kind === 'press') &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&

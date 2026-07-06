@@ -8,6 +8,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import {
   agentAction,
+  agentBlur,
   agentCheck,
   agentEvents,
   agentEval,
@@ -38,6 +39,7 @@ describe('plugin command helpers', () => {
     await agentCheck({ window: 'main', ref: '@3', checked: true })
     await agentHover({ window: 'main', ref: '@4' })
     await agentFocus({ window: 'main', ref: '@5' })
+    await agentBlur({ window: 'main', ref: '@6' })
     await agentAction({ window: 'main', action: 'click', ref: '@1' })
     await agentAction({ window: 'main', action: 'press', value: 'Enter' })
     await agentScreenshot({ window: 'main', path: '/tmp/app.svg' })
@@ -56,6 +58,7 @@ describe('plugin command helpers', () => {
       ['plugin:agent|agent_check', { request: { window: 'main', ref: '@3', checked: true } }],
       ['plugin:agent|agent_hover', { request: { window: 'main', ref: '@4' } }],
       ['plugin:agent|agent_focus', { request: { window: 'main', ref: '@5' } }],
+      ['plugin:agent|agent_blur', { request: { window: 'main', ref: '@6' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'click', ref: '@1' } }],
       ['plugin:agent|agent_action', { request: { window: 'main', action: 'press', value: 'Enter' } }],
       ['plugin:agent|agent_screenshot', { request: { window: 'main', path: '/tmp/app.svg' } }],

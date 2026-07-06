@@ -120,6 +120,21 @@ program
   })
 
 program
+  .command('blur')
+  .description('Blur a snapshot-local ref.')
+  .argument('<ref>', 'snapshot-local ref, for example @4')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+  .action(async (ref: string, options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', { scope: options.scope })
+    printJson(await client.call('blur', { ref }))
+  })
+
+program
   .command('fill')
   .description('Fill a snapshot-local ref.')
   .argument('<ref>', 'snapshot-local ref, for example @4')

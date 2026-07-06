@@ -54,6 +54,7 @@ describe('tauri-agent CLI', () => {
     })
     expect(JSON.parse(runCli(['hover', '@1', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['focus', '@2', '--from-html', path]))).toEqual({ ok: true })
+    expect(JSON.parse(runCli(['blur', '@2', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['fill', '@2', 'worker-a', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['select', '@3', 'remote', '--from-html', path]))).toEqual({ ok: true })
     expect(JSON.parse(runCli(['check', '@6', 'true', '--from-html', path]))).toEqual({ ok: true })

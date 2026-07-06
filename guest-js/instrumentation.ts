@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
+  blurRef,
   checkRef,
   clickRef,
   fillRef,
@@ -32,7 +33,7 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'focus' | 'fill' | 'press' | 'select' | 'check'
+  action: 'click' | 'hover' | 'focus' | 'blur' | 'fill' | 'press' | 'select' | 'check'
   ref?: string
   value?: string
   checked?: boolean
@@ -100,6 +101,9 @@ export class WebviewAgentInstrumentation {
       case 'focus':
         focusRef(requiredRef(action.ref))
         break
+      case 'blur':
+        blurRef(requiredRef(action.ref))
+        break
       case 'fill':
         fillRef(requiredRef(action.ref), action.value ?? '')
         break
@@ -135,6 +139,14 @@ export class WebviewAgentInstrumentation {
     focusRef(ref)
     const action: InstrumentedAction = { action: 'focus', ref }
     this.pushEvent('focus', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
+  blur(ref: string): { ok: true } {
+    blurRef(ref)
+    const action: InstrumentedAction = { action: 'blur', ref }
+    this.pushEvent('blur', serializableAction(action))
     this.recordAction(action)
     return { ok: true }
   }
@@ -270,6 +282,8 @@ export class WebviewAgentInstrumentation {
         return this.hover(requiredStringParam(params, 'ref'))
       case 'focus':
         return this.focus(requiredStringParam(params, 'ref'))
+      case 'blur':
+        return this.blur(requiredStringParam(params, 'ref'))
       case 'fill':
         return this.action({
           action: 'fill',

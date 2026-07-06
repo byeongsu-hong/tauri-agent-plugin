@@ -26,6 +26,7 @@ describe('example fixture Tauri app', () => {
     const appTs = readFileSync('examples/fixture-app/src/main.ts', 'utf8')
     expect(appTs).toContain('new WebviewAgentInstrumentation')
     expect(appTs).toContain('agentAction')
+    expect(appTs).toContain('agentBlur')
     expect(appTs).toContain('agentCheck')
     expect(appTs).toContain('agentEval')
     expect(appTs).toContain('agentFocus')

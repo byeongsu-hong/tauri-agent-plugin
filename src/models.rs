@@ -148,6 +148,14 @@ pub struct AgentFocusRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentBlurRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentAction {
     Click,
     Fill,
@@ -351,6 +359,15 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_value(focus).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@2"})
+        );
+
+        let blur = AgentBlurRequest {
+            window: Some("main".into()),
+            ref_id: "@2".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(blur).unwrap(),
             serde_json::json!({"window": "main", "ref": "@2"})
         );
 
