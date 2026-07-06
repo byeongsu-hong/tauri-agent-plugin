@@ -70,9 +70,11 @@ export class StaticHtmlAppAdapter {
     this.url = options.url ?? 'tauri-agent://static'
     this.dom = new JSDOM(options.html, {
       pretendToBeVisual: true,
+      runScripts: 'outside-only',
       url: this.url
     })
     this.bindGlobals()
+    this.installRuntimeLogCapture()
   }
 
   async attach(): Promise<{ attached: true; windows: AgentWindow[] }> {
@@ -335,6 +337,23 @@ export class StaticHtmlAppAdapter {
     defineStorage(globalThis, 'localStorage', this.storageAreas.local)
     defineStorage(globalThis, 'sessionStorage', this.storageAreas.session)
   }
+
+  private installRuntimeLogCapture(): void {
+    this.dom.window.addEventListener(
+      'error',
+      (event) => {
+        this.addLog('error', `Uncaught error: ${runtimeErrorMessage(event)}`)
+      },
+      { capture: true }
+    )
+    this.dom.window.addEventListener(
+      'unhandledrejection',
+      (event) => {
+        this.addLog('error', `Unhandled rejection: ${errorLikeMessage((event as PromiseRejectionEvent).reason)}`)
+      },
+      { capture: true }
+    )
+  }
 }
 
 function requiredDataUrlBody(dataUrl: string | undefined): string {
@@ -402,6 +421,46 @@ function defineStorage(target: object, key: 'localStorage' | 'sessionStorage', s
     enumerable: true,
     value: storage
   })
+}
+
+function runtimeErrorMessage(event: Event): string {
+  const errorEvent = event as ErrorEvent
+  return errorLikeMessage(errorEvent.error) || errorEvent.message || 'Unknown runtime error'
+}
+
+function errorLikeMessage(value: unknown): string {
+  if (value instanceof Error) {
+    return messageWithStack(value.message, value.stack) || value.name
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const formatted = messageWithStack(
+      typeof record.message === 'string' ? record.message : undefined,
+      typeof record.stack === 'string' ? record.stack : undefined
+    )
+    if (formatted) {
+      return formatted
+    }
+  }
+  try {
+    const serialized = JSON.stringify(value)
+    if (serialized) {
+      return serialized
+    }
+  } catch {
+    // Fall through to String(value).
+  }
+  return String(value)
+}
+
+function messageWithStack(message?: string, stack?: string): string {
+  if (message && stack) {
+    return stack.includes(message) ? stack : `${message}\n${stack}`
+  }
+  return stack || message || ''
 }
 
 function applyStorageAction(store: Storage, options: StorageParams): void {

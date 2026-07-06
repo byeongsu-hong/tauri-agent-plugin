@@ -83,6 +83,12 @@ export class WebviewAgentInstrumentation {
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
   private originalFetch?: typeof window.fetch
   private networkEntryId = 0
+  private readonly handleRuntimeError = (event: ErrorEvent): void => {
+    this.pushLog('error', `Uncaught error: ${runtimeErrorMessage(event)}`)
+  }
+  private readonly handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    this.pushLog('error', `Unhandled rejection: ${errorLikeMessage(event.reason)}`)
+  }
 
   constructor(private readonly options: InstrumentationOptions = {}) {}
 
@@ -99,6 +105,8 @@ export class WebviewAgentInstrumentation {
       }
     }
     this.installNetworkCapture()
+    window.addEventListener('error', this.handleRuntimeError, { capture: true })
+    window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     window.__TAURI_AGENT__ = this
     this.installBridge()
   }
@@ -112,6 +120,8 @@ export class WebviewAgentInstrumentation {
       window.fetch = this.originalFetch
       this.originalFetch = undefined
     }
+    window.removeEventListener('error', this.handleRuntimeError, { capture: true })
+    window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     this.bridgeUnlisten?.()
     this.bridgeUnlisten = undefined
     this.bridgeInstalled = false
@@ -697,6 +707,45 @@ function isRequest(value: RequestInfo | URL): value is Request {
 
 function isTauriIpcUrl(url: string): boolean {
   return url.startsWith('ipc://localhost/')
+}
+
+function runtimeErrorMessage(event: ErrorEvent): string {
+  return errorLikeMessage(event.error) || event.message || 'Unknown runtime error'
+}
+
+function errorLikeMessage(value: unknown): string {
+  if (value instanceof Error) {
+    return messageWithStack(value.message, value.stack) || value.name
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const formatted = messageWithStack(
+      typeof record.message === 'string' ? record.message : undefined,
+      typeof record.stack === 'string' ? record.stack : undefined
+    )
+    if (formatted) {
+      return formatted
+    }
+  }
+  try {
+    const serialized = JSON.stringify(value)
+    if (serialized) {
+      return serialized
+    }
+  } catch {
+    // Fall through to String(value).
+  }
+  return String(value)
+}
+
+function messageWithStack(message?: string, stack?: string): string {
+  if (message && stack) {
+    return stack.includes(message) ? stack : `${message}\n${stack}`
+  }
+  return stack || message || ''
 }
 
 function storageArea(area: StorageParams['area']): 'local' | 'session' {

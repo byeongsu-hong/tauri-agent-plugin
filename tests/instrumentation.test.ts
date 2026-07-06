@@ -244,6 +244,46 @@ describe('WebviewAgentInstrumentation', () => {
     localStorage.clear()
     sessionStorage.clear()
   })
+
+  it('captures runtime errors and unhandled rejections as logs', () => {
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    const suppressHarnessUnhandled = (event: Event) => event.stopImmediatePropagation()
+    window.addEventListener('error', suppressHarnessUnhandled, { capture: true })
+    window.addEventListener('unhandledrejection', suppressHarnessUnhandled, { capture: true })
+
+    try {
+      const runtimeError = new Event('error', { cancelable: true }) as ErrorEvent
+      Object.defineProperties(runtimeError, {
+        message: { value: 'runtime boom' },
+        error: { value: { message: 'runtime boom', stack: 'Error: runtime boom' } }
+      })
+      runtimeError.preventDefault()
+      window.dispatchEvent(runtimeError)
+
+      const rejection = new Event('unhandledrejection') as PromiseRejectionEvent
+      Object.defineProperty(rejection, 'reason', {
+        value: { message: 'promise boom', stack: 'eval code@\nrunCallback@user-script' }
+      })
+      window.dispatchEvent(rejection)
+
+      const objectRejection = new Event('unhandledrejection') as PromiseRejectionEvent
+      Object.defineProperty(objectRejection, 'reason', { value: { code: 'E_RUNTIME' } })
+      window.dispatchEvent(objectRejection)
+
+      expect(instrumentation.logs()).toEqual([
+        expect.objectContaining({ level: 'error', message: expect.stringContaining('runtime boom') }),
+        expect.objectContaining({ level: 'error', message: expect.stringContaining('promise boom') }),
+        expect.objectContaining({ level: 'error', message: expect.stringContaining('E_RUNTIME') })
+      ])
+      expect(instrumentation.logs({ clear: true })).toHaveLength(3)
+      expect(instrumentation.logs()).toEqual([])
+    } finally {
+      window.removeEventListener('error', suppressHarnessUnhandled, { capture: true })
+      window.removeEventListener('unhandledrejection', suppressHarnessUnhandled, { capture: true })
+      instrumentation.dispose()
+    }
+  })
 })
 
 function decodeDataUrl(dataUrl: string): string {
