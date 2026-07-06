@@ -281,4 +281,37 @@ describe('DebuggerSession', () => {
     })
     await expect(session.execute('cookies', { action: 'clear' })).resolves.toEqual({ entries: [] })
   })
+
+  it('captures static runtime errors and unhandled rejections as logs', async () => {
+    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html, title: 'Ducktape' }))
+
+    await session.execute('eval', {
+      code: [
+        'const suppressHarnessUnhandled = (event) => event.stopImmediatePropagation()',
+        'window.addEventListener("error", suppressHarnessUnhandled, { capture: true })',
+        'window.addEventListener("unhandledrejection", suppressHarnessUnhandled, { capture: true })',
+        'const runtimeError = new Event("error", { cancelable: true })',
+        'Object.defineProperties(runtimeError, { message: { value: "static boom" }, error: { value: { message: "static boom", stack: "Error: static boom" } } })',
+        'runtimeError.preventDefault()',
+        'window.dispatchEvent(runtimeError)',
+        'const rejection = new Event("unhandledrejection")',
+        'Object.defineProperty(rejection, "reason", { value: { message: "static promise boom", stack: "eval code@\\nrunCallback@user-script" } })',
+        'window.dispatchEvent(rejection)',
+        'const objectRejection = new Event("unhandledrejection")',
+        'Object.defineProperty(objectRejection, "reason", { value: { code: "E_STATIC_RUNTIME" } })',
+        'window.dispatchEvent(objectRejection)',
+        'window.removeEventListener("error", suppressHarnessUnhandled, { capture: true })',
+        'window.removeEventListener("unhandledrejection", suppressHarnessUnhandled, { capture: true })',
+        '"ok"'
+      ].join('; ')
+    })
+
+    await expect(session.execute('logs', {})).resolves.toEqual([
+      expect.objectContaining({ level: 'error', message: expect.stringContaining('static boom'), window: 'main' }),
+      expect.objectContaining({ level: 'error', message: expect.stringContaining('static promise boom'), window: 'main' }),
+      expect.objectContaining({ level: 'error', message: expect.stringContaining('E_STATIC_RUNTIME'), window: 'main' })
+    ])
+    await expect(session.execute('logs', { clear: true })).resolves.toHaveLength(3)
+    await expect(session.execute('logs', {})).resolves.toEqual([])
+  })
 })
