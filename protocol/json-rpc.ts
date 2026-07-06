@@ -3,6 +3,7 @@ import type { AgentMethod, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcSucce
 export const AGENT_METHODS = [
   'attach',
   'windows',
+  'window',
   'tree',
   'find',
   'click',

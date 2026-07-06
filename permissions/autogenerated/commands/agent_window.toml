@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-window"
+description = "Enables the agent_window command without any pre-configured scope."
+commands.allow = ["agent_window"]
+
+[[permission]]
+identifier = "deny-agent-window"
+description = "Denies the agent_window command without any pre-configured scope."
+commands.deny = ["agent_window"]

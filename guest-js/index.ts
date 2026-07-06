@@ -26,6 +26,7 @@ import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { waitForBridgeResponseTurn } from './bridge-gate'
 import type {
+  AgentWindow,
   AgentEvent,
   CookieParams,
   CookieResult,
@@ -40,6 +41,8 @@ import type {
   RecordingEntry,
   StorageParams,
   StorageResult,
+  WindowAction,
+  WindowBounds,
   WaitParams,
   WaitResult
 } from '../protocol/types'
@@ -64,6 +67,7 @@ export {
   snapshotDocument,
   evalResult,
   type AgentEvent,
+  type AgentWindow,
   type CookieParams,
   type CookieResult,
   type DragOptions,
@@ -83,6 +87,8 @@ export {
   type SnapshotResult,
   type StorageParams,
   type StorageResult,
+  type WindowAction,
+  type WindowBounds,
   type WaitParams,
   type WaitResult
 }
@@ -211,6 +217,15 @@ export interface AgentRecordRequest {
   action?: 'start' | 'stop' | 'get' | 'clear'
 }
 
+export interface AgentWindowRequest {
+  window?: string
+  action?: WindowAction
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
 export interface AgentWaitResponse extends WaitResult {}
 
 export interface AgentRecordResponse {
@@ -223,6 +238,11 @@ export interface WindowInfo {
   title?: string
   focused: boolean
   visible: boolean
+  minimized?: boolean
+  maximized?: boolean
+  scaleFactor?: number
+  innerBounds?: WindowBounds
+  outerBounds?: WindowBounds
 }
 
 export async function agentSnapshot(request: AgentSnapshotRequest = {}): Promise<string> {
@@ -313,6 +333,10 @@ export async function agentState(request: AgentStateRequest = {}): Promise<Recor
 
 export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
   return invokeAgentCommand('plugin:agent|agent_record', { request: withCurrentWindow(request) })
+}
+
+export async function agentWindow(request: AgentWindowRequest = {}): Promise<AgentWindow> {
+  return invokeAgentCommand('plugin:agent|agent_window', { request: withCurrentWindow(request) })
 }
 
 export async function agentWindows(): Promise<WindowInfo[]> {

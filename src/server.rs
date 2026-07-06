@@ -14,7 +14,8 @@ use serde_json::{json, Value};
 use crate::screenshot::write_data_url_to_path;
 use crate::{
     bridge::AgentBridge, commands, write_endpoint_registry, AgentAttachRequest,
-    AgentEndpointDescriptor, EndpointRegistryError, Error, InlineServerConfig, WindowInfo,
+    AgentEndpointDescriptor, AgentWindowRequest, EndpointRegistryError, Error, InlineServerConfig,
+    WindowAction, WindowInfo,
 };
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -60,6 +61,21 @@ impl Drop for InlineDebuggerServer {
 pub(crate) trait InlineDebuggerBackend {
     fn windows(&self) -> Vec<WindowInfo>;
     fn ensure_window(&self, label: Option<&str>) -> crate::Result<()>;
+    fn window_control(&self, request: AgentWindowRequest) -> crate::Result<WindowInfo> {
+        if !matches!(request.action, None | Some(WindowAction::Get)) {
+            return Err(Error::BridgeUnavailable(
+                "window control is not active in this backend".into(),
+            ));
+        }
+        let label = request.window.as_deref();
+        self.windows()
+            .into_iter()
+            .find(|window| match label {
+                Some(label) => window.label == label,
+                None => true,
+            })
+            .ok_or_else(|| Error::WindowNotFound(label.unwrap_or("default").to_string()))
+    }
     fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
         let _ = (method, params);
         Err(Error::BridgeUnavailable(
@@ -86,6 +102,7 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
+        "window" => handle_window(backend, request.params),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
         | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
         | "storage" | "cookies" | "location" | "wait" | "state" | "record" => {
@@ -164,6 +181,10 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
         commands::ensure_window(&self.app, label)
     }
 
+    fn window_control(&self, request: AgentWindowRequest) -> crate::Result<WindowInfo> {
+        commands::control_window(&self.app, request)
+    }
+
     fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
         let window = params
             .get("window")
@@ -236,6 +257,14 @@ fn handle_attach(
         "attached": true,
         "windows": backend.windows()
     }))
+}
+
+fn handle_window(
+    backend: &impl InlineDebuggerBackend,
+    params: Option<Value>,
+) -> crate::Result<Value> {
+    let request = parse_params::<AgentWindowRequest>(params)?;
+    Ok(json!(backend.window_control(request)?))
 }
 
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
@@ -349,6 +378,46 @@ mod tests {
                 Some("main") | None => Ok(()),
                 Some(label) => Err(Error::WindowNotFound(label.to_string())),
             }
+        }
+
+        fn window_control(&self, request: AgentWindowRequest) -> crate::Result<WindowInfo> {
+            self.ensure_window(request.window.as_deref())?;
+            let mut window = self.windows().remove(0);
+            match request.action.unwrap_or(WindowAction::Get) {
+                WindowAction::Get => {}
+                WindowAction::SetSize => {
+                    let width = request.width.unwrap();
+                    let height = request.height.unwrap();
+                    if let Some(bounds) = &mut window.inner_bounds {
+                        bounds.width = width;
+                        bounds.height = height;
+                    }
+                    if let Some(bounds) = &mut window.outer_bounds {
+                        bounds.width = width;
+                        bounds.height = height;
+                    }
+                }
+                WindowAction::SetPosition => {
+                    let x = request.x.unwrap();
+                    let y = request.y.unwrap();
+                    if let Some(bounds) = &mut window.inner_bounds {
+                        bounds.x = x;
+                        bounds.y = y;
+                    }
+                    if let Some(bounds) = &mut window.outer_bounds {
+                        bounds.x = x;
+                        bounds.y = y;
+                    }
+                }
+                WindowAction::Focus => window.focused = true,
+                WindowAction::Show => window.visible = true,
+                WindowAction::Hide => window.visible = false,
+                WindowAction::Minimize => window.minimized = Some(true),
+                WindowAction::Unminimize => window.minimized = Some(false),
+                WindowAction::Maximize => window.maximized = Some(true),
+                WindowAction::Unmaximize => window.maximized = Some(false),
+            }
+            Ok(window)
         }
     }
 
@@ -718,6 +787,29 @@ mod tests {
                     "innerBounds": {"x": 10, "y": 20, "width": 800, "height": 600},
                     "outerBounds": {"x": 4, "y": 12, "width": 824, "height": 648}
                 }]
+            })
+        );
+
+        let window = respond_to_json_rpc_line(
+            &backend,
+            r#"{"jsonrpc":"2.0","id":3,"method":"window","params":{"window":"main","action":"setSize","width":640,"height":480}}"#,
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&window).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "result": {
+                    "label": "main",
+                    "title": "Fixture",
+                    "focused": true,
+                    "visible": true,
+                    "minimized": false,
+                    "maximized": false,
+                    "scaleFactor": 2.0,
+                    "innerBounds": {"x": 10, "y": 20, "width": 640, "height": 480},
+                    "outerBounds": {"x": 4, "y": 12, "width": 640, "height": 480}
+                }
             })
         );
 

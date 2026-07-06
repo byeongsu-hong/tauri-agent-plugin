@@ -1,5 +1,5 @@
 import type { StaticHtmlAppAdapter } from './static-app'
-import type { AgentMethod, RecordingEntry } from '../protocol/types'
+import type { AgentMethod, RecordingEntry, WindowAction } from '../protocol/types'
 
 export class DebuggerSession {
   private recording = false
@@ -19,6 +19,15 @@ export class DebuggerSession {
         return this.app.attach()
       case 'windows':
         return this.app.windows()
+      case 'window':
+        return this.app.window({
+          window: stringParam(params.window),
+          action: windowActionParam(params.action),
+          x: numberParam(params.x),
+          y: numberParam(params.y),
+          width: numberParam(params.width),
+          height: numberParam(params.height)
+        })
       case 'tree':
         return this.app.tree({
           scope: stringParam(params.scope),
@@ -174,4 +183,25 @@ function cookieActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' |
 
 function locationActionParam(value: unknown): 'get' | 'push' | 'replace' | undefined {
   return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
+}
+
+function windowActionParam(value: unknown): WindowAction | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (
+    value === 'get' ||
+    value === 'focus' ||
+    value === 'show' ||
+    value === 'hide' ||
+    value === 'minimize' ||
+    value === 'unminimize' ||
+    value === 'maximize' ||
+    value === 'unmaximize' ||
+    value === 'setSize' ||
+    value === 'setPosition'
+  ) {
+    return value
+  }
+  throw new Error(`unknown window action: ${String(value)}`)
 }

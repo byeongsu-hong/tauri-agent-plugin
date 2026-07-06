@@ -1,7 +1,7 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, JavaScript eval, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage and cookie access, location control, and window discovery."
+description = "Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, JavaScript eval, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage and cookie access, location control, and window discovery/control."
 permissions = [
   "allow-agent-bridge-response",
   "allow-agent-attach",
@@ -25,6 +25,7 @@ permissions = [
   "allow-agent-cookies",
   "allow-agent-location",
   "allow-agent-windows",
+  "allow-agent-window",
   "allow-agent-wait",
   "allow-agent-state",
   "allow-agent-record",
