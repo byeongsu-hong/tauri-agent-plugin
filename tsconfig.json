@@ -15,6 +15,7 @@
     "bin/**/*.ts",
     "daemon/**/*.ts",
     "guest-js/**/*.ts",
+    "mcp/**/*.ts",
     "protocol/**/*.ts",
     "tests/**/*.ts",
     "tsup.config.ts",
