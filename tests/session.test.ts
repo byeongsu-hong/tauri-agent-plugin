@@ -104,6 +104,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toMatchObject([
       { level: 'info', message: 'booted', window: 'main' }
     ])
+    await expect(session.execute('network', {})).resolves.toEqual([])
     await expect(session.execute('events', {})).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),

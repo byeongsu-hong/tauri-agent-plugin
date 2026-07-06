@@ -20,6 +20,7 @@ export type AgentMethod =
   | 'shot'
   | 'logs'
   | 'events'
+  | 'network'
   | 'wait'
   | 'state'
   | 'record'
@@ -122,6 +123,11 @@ export interface EventsParams extends WindowTarget {
   follow?: boolean
 }
 
+export interface NetworkParams extends WindowTarget {
+  follow?: boolean
+  clear?: boolean
+}
+
 export interface WaitParams extends WindowTarget {
   text?: string
   timeoutMs?: number
@@ -179,6 +185,22 @@ export interface AgentEvent {
   timestamp: string
   window?: string
   detail?: unknown
+}
+
+export interface NetworkEntry {
+  id: string
+  type: 'fetch'
+  method: string
+  url: string
+  status?: number
+  ok?: boolean
+  startedAt: string
+  endedAt?: string
+  durationMs?: number
+  requestBodySize?: number
+  responseBodySize?: number
+  error?: string
+  window?: string
 }
 
 export interface ScreenshotResult {

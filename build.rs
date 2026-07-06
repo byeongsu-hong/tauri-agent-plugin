@@ -16,6 +16,7 @@ const COMMANDS: &[&str] = &[
     "agent_screenshot",
     "agent_logs",
     "agent_events",
+    "agent_network",
     "agent_windows",
     "agent_wait",
     "agent_state",

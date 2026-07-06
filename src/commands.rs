@@ -7,9 +7,10 @@ use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
     AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
     AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
-    AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest,
-    AgentStateRequest, AgentWaitRequest, AgentWaitResponse, WindowInfo,
+    AgentInspectResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
+    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
+    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
+    AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -204,6 +205,22 @@ pub async fn agent_events<R: Runtime>(
     request: AgentEventsRequest,
 ) -> Result<Vec<AgentEventEntry>> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "events", &request)?;
+    decode_bridge_result(result)
+}
+
+#[tauri::command]
+pub async fn agent_network<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentNetworkRequest,
+) -> Result<Vec<AgentNetworkEntry>> {
+    let result = request_bridge(
+        &bridge,
+        &app,
+        request.window.as_deref(),
+        "network",
+        &request,
+    )?;
     decode_bridge_result(result)
 }
 

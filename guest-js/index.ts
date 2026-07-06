@@ -25,7 +25,7 @@ import {
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { waitForBridgeResponseTurn } from './bridge-gate'
-import type { AgentEvent, EvalResult, FindResult, LogEntry, RecordingEntry } from '../protocol/types'
+import type { AgentEvent, EvalResult, FindResult, LogEntry, NetworkEntry, RecordingEntry } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -52,6 +52,7 @@ export {
   type FindResult,
   type InspectResult,
   type LogEntry,
+  type NetworkEntry,
   type RecordingEntry,
   type ScreenshotOptions,
   type ScrollOptions,
@@ -153,6 +154,12 @@ export interface AgentEventsRequest {
   follow?: boolean
 }
 
+export interface AgentNetworkRequest {
+  window?: string
+  follow?: boolean
+  clear?: boolean
+}
+
 export interface AgentWaitRequest {
   window?: string
   text: string
@@ -246,6 +253,10 @@ export async function agentEvents(request: AgentEventsRequest | string = {}): Pr
   return invokeAgentCommand('plugin:agent|agent_events', {
     request: withCurrentWindow(typeof request === 'string' ? { window: request } : request)
   })
+}
+
+export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<NetworkEntry[]> {
+  return invokeAgentCommand('plugin:agent|agent_network', { request: withCurrentWindow(request) })
 }
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {

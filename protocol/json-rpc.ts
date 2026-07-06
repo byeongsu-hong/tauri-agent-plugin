@@ -20,6 +20,7 @@ export const AGENT_METHODS = [
   'shot',
   'logs',
   'events',
+  'network',
   'wait',
   'state',
   'record'

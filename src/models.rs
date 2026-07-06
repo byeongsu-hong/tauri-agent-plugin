@@ -228,6 +228,33 @@ pub struct AgentEventsRequest {
     pub follow: Option<bool>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentNetworkRequest {
+    pub window: Option<String>,
+    pub follow: Option<bool>,
+    pub clear: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentNetworkEntry {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub entry_type: String,
+    pub method: String,
+    pub url: String,
+    pub status: Option<u16>,
+    pub ok: Option<bool>,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_ms: Option<f64>,
+    pub request_body_size: Option<u64>,
+    pub response_body_size: Option<u64>,
+    pub error: Option<String>,
+    pub window: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEntry {
@@ -483,6 +510,50 @@ mod tests {
         assert_eq!(
             serde_json::to_value(record).unwrap(),
             serde_json::json!({"window": null, "action": "start"})
+        );
+
+        let network = AgentNetworkRequest {
+            window: Some("main".into()),
+            follow: Some(true),
+            clear: Some(true),
+        };
+        assert_eq!(
+            serde_json::to_value(network).unwrap(),
+            serde_json::json!({"window": "main", "follow": true, "clear": true})
+        );
+
+        let network_entry = AgentNetworkEntry {
+            id: "fetch-1".into(),
+            entry_type: "fetch".into(),
+            method: "POST".into(),
+            url: "https://example.test/api/agents".into(),
+            status: Some(201),
+            ok: Some(true),
+            started_at: "2026-07-07T00:00:00.000Z".into(),
+            ended_at: Some("2026-07-07T00:00:00.050Z".into()),
+            duration_ms: Some(50.0),
+            request_body_size: Some(8),
+            response_body_size: Some(11),
+            error: None,
+            window: Some("main".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(network_entry).unwrap(),
+            serde_json::json!({
+                "id": "fetch-1",
+                "type": "fetch",
+                "method": "POST",
+                "url": "https://example.test/api/agents",
+                "status": 201,
+                "ok": true,
+                "startedAt": "2026-07-07T00:00:00.000Z",
+                "endedAt": "2026-07-07T00:00:00.050Z",
+                "durationMs": 50.0,
+                "requestBodySize": 8,
+                "responseBodySize": 11,
+                "error": null,
+                "window": "main"
+            })
         );
 
         let press = AgentActionRequest {

@@ -11,6 +11,7 @@ import {
   agentHover,
   agentInspect,
   agentLogs,
+  agentNetwork,
   agentRecord,
   agentScreenshot,
   agentSelect,
@@ -179,6 +180,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const dropRef = tree.match(/(@\d+) button "Deployment queue"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
@@ -190,6 +192,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const state = await agentState()
   const logs = await agentLogs()
   const events = await agentEvents()
+  const network = await agentNetwork()
   const shot = await agentScreenshot()
   const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
   const record = await agentRecord()
@@ -220,6 +223,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     events.some((event) => event.kind === 'scroll') &&
     events.some((event) => event.kind === 'drag') &&
     events.some((event) => event.kind === 'press') &&
+    network.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')) &&
     shot.startsWith('data:image/svg+xml;base64,') &&
     wait.matched &&
     !record.recording

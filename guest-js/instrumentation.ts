@@ -31,6 +31,7 @@ import type {
   FindResult,
   InspectResult,
   LogEntry,
+  NetworkEntry,
   RecordingEntry,
   ScreenshotResult
 } from '../protocol/types'
@@ -66,9 +67,12 @@ export class WebviewAgentInstrumentation {
   private bridgeUnlisten?: UnlistenFn
   private capturedLogs: LogEntry[] = []
   private capturedEvents: AgentEvent[] = []
+  private capturedNetwork: NetworkEntry[] = []
   private recording = false
   private recordingEntries: RecordingEntry[] = []
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
+  private originalFetch?: typeof window.fetch
+  private networkEntryId = 0
 
   constructor(private readonly options: InstrumentationOptions = {}) {}
 
@@ -84,6 +88,7 @@ export class WebviewAgentInstrumentation {
         this.originalConsole.get(level)?.apply(console, args)
       }
     }
+    this.installNetworkCapture()
     window.__TAURI_AGENT__ = this
     this.installBridge()
   }
@@ -93,6 +98,10 @@ export class WebviewAgentInstrumentation {
       console[level] = original
     }
     this.originalConsole.clear()
+    if (this.originalFetch) {
+      window.fetch = this.originalFetch
+      this.originalFetch = undefined
+    }
     this.bridgeUnlisten?.()
     this.bridgeUnlisten = undefined
     this.bridgeInstalled = false
@@ -259,6 +268,14 @@ export class WebviewAgentInstrumentation {
     return [...this.capturedEvents]
   }
 
+  network(options: { clear?: boolean } = {}): NetworkEntry[] {
+    const entries = this.capturedNetwork.map((entry) => ({ ...entry }))
+    if (options.clear) {
+      this.capturedNetwork = []
+    }
+    return entries
+  }
+
   record(action: 'start' | 'stop' | 'get' | 'clear' = 'get'): Record<string, unknown> {
     switch (action) {
       case 'start':
@@ -380,6 +397,8 @@ export class WebviewAgentInstrumentation {
         return this.logs()
       case 'events':
         return this.events()
+      case 'network':
+        return this.network({ clear: booleanParam(params, 'clear') ?? false })
       case 'wait':
         return this.wait({
           text: requiredStringParam(params, 'text'),
@@ -408,6 +427,46 @@ export class WebviewAgentInstrumentation {
       detail,
       timestamp: new Date().toISOString()
     })
+  }
+
+  private installNetworkCapture(): void {
+    if (typeof window.fetch !== 'function' || this.originalFetch) {
+      return
+    }
+    const originalFetch = window.fetch
+    this.originalFetch = originalFetch
+
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const startedAtMs = Date.now()
+      const entry: NetworkEntry = {
+        id: `fetch-${++this.networkEntryId}`,
+        type: 'fetch',
+        method: fetchMethod(input, init),
+        url: fetchUrl(input),
+        startedAt: new Date(startedAtMs).toISOString()
+      }
+      const requestBodySize = bodySize(requestBody(input, init))
+      if (requestBodySize !== undefined) {
+        entry.requestBodySize = requestBodySize
+      }
+      this.capturedNetwork.push(entry)
+
+      try {
+        const response = await originalFetch.call(window, input, init)
+        entry.status = response.status
+        entry.ok = response.ok
+        const responseBodySize = await clonedResponseBodySize(response)
+        if (responseBodySize !== undefined) {
+          entry.responseBodySize = responseBodySize
+        }
+        finishNetworkEntry(entry, startedAtMs)
+        return response
+      } catch (error) {
+        entry.error = error instanceof Error ? error.message : String(error)
+        finishNetworkEntry(entry, startedAtMs)
+        throw error
+      }
+    }
   }
 
   private recordAction(action: InstrumentedAction): void {
@@ -487,4 +546,70 @@ function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | u
 function recordActionParam(params: Record<string, unknown>): 'start' | 'stop' | 'get' | 'clear' {
   const action = params.action
   return action === 'start' || action === 'stop' || action === 'clear' ? action : 'get'
+}
+
+function fetchMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  const method = init?.method ?? (isRequest(input) ? input.method : undefined) ?? 'GET'
+  return method.toUpperCase()
+}
+
+function fetchUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') {
+    return new URL(input, window.location.href).href
+  }
+  if (input instanceof URL) {
+    return input.href
+  }
+  if (isRequest(input)) {
+    return input.url
+  }
+  return String(input)
+}
+
+function requestBody(input: RequestInfo | URL, init?: RequestInit): BodyInit | null | undefined {
+  if (init?.body !== undefined) {
+    return init.body
+  }
+  return isRequest(input) ? input.body : undefined
+}
+
+function bodySize(body: BodyInit | ReadableStream<Uint8Array> | null | undefined): number | undefined {
+  if (body === null || body === undefined) {
+    return undefined
+  }
+  if (typeof body === 'string') {
+    return new TextEncoder().encode(body).byteLength
+  }
+  if (body instanceof URLSearchParams) {
+    return new TextEncoder().encode(body.toString()).byteLength
+  }
+  if (body instanceof ArrayBuffer) {
+    return body.byteLength
+  }
+  if (ArrayBuffer.isView(body)) {
+    return body.byteLength
+  }
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return body.size
+  }
+  return undefined
+}
+
+async function clonedResponseBodySize(response: Response): Promise<number | undefined> {
+  try {
+    const body = await response.clone().text()
+    return new TextEncoder().encode(body).byteLength
+  } catch {
+    return undefined
+  }
+}
+
+function finishNetworkEntry(entry: NetworkEntry, startedAtMs: number): void {
+  const endedAtMs = Date.now()
+  entry.endedAt = new Date(endedAtMs).toISOString()
+  entry.durationMs = Math.max(0, endedAtMs - startedAtMs)
+}
+
+function isRequest(value: RequestInfo | URL): value is Request {
+  return typeof Request !== 'undefined' && value instanceof Request
 }

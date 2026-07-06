@@ -144,6 +144,8 @@ async function executeTool(
       return client.call('logs', pick(args, ['window', 'follow']))
     case 'tauri_events':
       return client.call('events', pick(args, ['window', 'follow']))
+    case 'tauri_network':
+      return client.call('network', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_wait':
       return client.call('wait', pick(args, ['window', 'text', 'timeoutMs']))
     case 'tauri_state':
@@ -226,6 +228,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
+  clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
   timeoutMs: { type: 'number' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
 }
@@ -250,6 +253,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_shot', 'Screenshot', 'Capture a DOM-rendered SVG screenshot.', schema(['window', 'path'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow'])),
+  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
   tool('tauri_wait', 'Wait', 'Wait for text to appear.', schema(['window', 'text', 'timeoutMs'], ['text'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
