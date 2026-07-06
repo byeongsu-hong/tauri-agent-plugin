@@ -12,7 +12,7 @@ Headless agent debugger for Tauri apps.
 - **Tauri Plugin**: opt-in inline loopback server, app-scoped endpoint registry, Tauri permissions, window discovery, and a request/response bridge into instrumented webviews.
 - **CLI**: agent-facing commands backed by the same protocol path.
 
-The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. Native screenshot capture is still a separate platform-specific fallback path; `shot` currently returns an explicit unavailable error in the inline server.
+The live bridge supports `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. `shot` currently uses a DOM-rendered SVG fallback that can return a data URL or write a `.svg` file; native pixel capture remains a separate platform-specific fallback path.
 
 ## Bun + TypeScript
 
@@ -72,7 +72,7 @@ tauri-agent tree --window main
 tauri-agent click @3
 tauri-agent fill @4 worker-a
 tauri-agent press Enter
-tauri-agent shot /tmp/app.png
+tauri-agent shot /tmp/app.svg
 tauri-agent logs --follow
 tauri-agent events --follow
 tauri-agent wait "Registered"
@@ -116,6 +116,7 @@ const agent = new WebviewAgentInstrumentation({
 agent.install()
 agent.snapshot()
 agent.action({ action: 'click', ref: '@3' })
+agent.screenshot()
 agent.logs()
 agent.events()
 agent.state()

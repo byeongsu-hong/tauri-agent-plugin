@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -44,6 +44,12 @@ describe('tauri-agent CLI', () => {
       matched: true,
       text: 'Registered worker-a'
     })
+    const shotPath = join(tmpdir(), 'tauri-agent-static-shot.svg')
+    expect(JSON.parse(runCli(['shot', shotPath, '--from-html', path]))).toEqual({
+      path: shotPath,
+      mime: 'image/svg+xml'
+    })
+    expect(readFileSync(shotPath, 'utf8')).toContain('Ducktape')
     expect(JSON.parse(runCli(['record', '--from-html', path]))).toEqual({
       recording: false,
       entries: []

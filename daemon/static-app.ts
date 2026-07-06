@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+
 import { JSDOM } from 'jsdom'
 
 import {
@@ -7,6 +10,7 @@ import {
   snapshotDocument,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
+import { screenshotDocument } from '../guest-js/screenshot'
 import type { AgentEvent, AgentWindow, LogEntry, ScreenshotResult } from '../protocol/types'
 
 export interface StaticHtmlAppOptions {
@@ -75,9 +79,13 @@ export class StaticHtmlAppAdapter {
   }
 
   async shot(path?: string): Promise<ScreenshotResult> {
-    const result = path
-      ? { path, mime: 'image/png' }
-      : { dataUrl: 'data:image/png;base64,', mime: 'image/png' }
+    this.bindGlobals()
+    const screenshot = screenshotDocument(this.dom.window.document, { path })
+    const result = path ? { path, mime: screenshot.mime } : screenshot
+    if (path) {
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, Buffer.from(requiredDataUrlBody(screenshot.dataUrl), 'base64'))
+    }
     this.pushEvent('shot', result)
     return result
   }
@@ -155,4 +163,15 @@ export class StaticHtmlAppAdapter {
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent
     globalThis.Node = this.dom.window.Node
   }
+}
+
+function requiredDataUrlBody(dataUrl: string | undefined): string {
+  if (!dataUrl?.startsWith('data:')) {
+    throw new Error('missing screenshot data URL')
+  }
+  const [, body] = dataUrl.split(',', 2)
+  if (!body) {
+    throw new Error('invalid screenshot data URL')
+  }
+  return body
 }
