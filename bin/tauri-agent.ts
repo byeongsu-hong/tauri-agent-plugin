@@ -77,6 +77,10 @@ interface WaitOptions extends ConnectionOptions {
   timeoutMs?: number
 }
 
+interface StateOptions extends ConnectionOptions {
+  key?: string
+}
+
 const program = new Command()
 
 program
@@ -514,7 +518,8 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .action(async (options: ConnectionOptions) => printJson(await call(options, 'state', targetParams(options))))
+  .option('--key <key>', 'return one top-level state field')
+  .action(async (options: StateOptions) => printJson(await call(options, 'state', stateParams(options))))
 
 program
   .command('record')
@@ -653,6 +658,13 @@ function waitParams(options: WaitOptions, text: string | undefined): Record<stri
     role: options.role,
     name: options.name,
     timeoutMs: options.timeoutMs
+  }
+}
+
+function stateParams(options: StateOptions): Record<string, unknown> {
+  return {
+    ...targetParams(options),
+    key: options.key
   }
 }
 

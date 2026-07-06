@@ -279,7 +279,7 @@ export class WebviewAgentInstrumentation {
     throw new Error(`wait timed out for text: ${text}`)
   }
 
-  state(): Record<string, unknown> {
+  state(key?: string): unknown {
     const values: Record<string, string | boolean> = {}
     for (const input of Array.from(document.querySelectorAll('input, textarea, select'))) {
       const control = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -294,12 +294,13 @@ export class WebviewAgentInstrumentation {
       probes[key] = read()
     }
 
-    return {
+    const state = {
       url: window.location.href,
       title: document.title,
       values,
       probes
     }
+    return stateValue(state, key)
   }
 
   screenshot(options: ScreenshotOptions = {}): ScreenshotResult {
@@ -502,7 +503,7 @@ export class WebviewAgentInstrumentation {
           timeoutMs: numberParam(params, 'timeoutMs')
         })
       case 'state':
-        return this.state()
+        return this.state(stringParam(params, 'key'))
       case 'record':
         return this.record(recordActionParam(params))
       default:
@@ -605,6 +606,10 @@ function serializableAction(action: InstrumentedAction): Record<string, unknown>
   if (action.x !== undefined) params.x = action.x
   if (action.y !== undefined) params.y = action.y
   return params
+}
+
+function stateValue(state: Record<string, unknown>, key: string | undefined): unknown {
+  return key === undefined ? state : state[key] ?? null
 }
 
 function controlName(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {

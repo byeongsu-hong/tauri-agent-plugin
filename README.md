@@ -49,6 +49,7 @@ bun bin/tauri-agent.ts check @6 true --from-html ./screen.html
 bun bin/tauri-agent.ts wait "Registered" --from-html ./screen.html
 bun bin/tauri-agent.ts wait --role button --name Forge --from-html ./screen.html
 bun bin/tauri-agent.ts state --from-html ./screen.html
+bun bin/tauri-agent.ts state --key values --from-html ./screen.html
 bun bin/tauri-agent.ts network --from-html ./screen.html
 bun bin/tauri-agent.ts logs --clear --from-html ./screen.html
 bun bin/tauri-agent.ts events --clear --from-html ./screen.html
@@ -92,6 +93,7 @@ tauri-agent click @3 --app dev.byeongsu.tauri-agent.fixture
 tauri-agent wait "Registered worker-a" --app dev.byeongsu.tauri-agent.fixture
 tauri-agent wait --role button --name Forge --app dev.byeongsu.tauri-agent.fixture
 tauri-agent state --app dev.byeongsu.tauri-agent.fixture
+tauri-agent state --key probes --app dev.byeongsu.tauri-agent.fixture
 tauri-agent network --app dev.byeongsu.tauri-agent.fixture
 tauri-agent logs --clear --app dev.byeongsu.tauri-agent.fixture
 tauri-agent events --clear --app dev.byeongsu.tauri-agent.fixture
@@ -132,11 +134,12 @@ tauri-agent location --action push --url /agents
 tauri-agent wait "Registered"
 tauri-agent wait --role button --name Forge
 tauri-agent state
+tauri-agent state --key values
 tauri-agent record --action start
 ```
 
 Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
-`tree --interactive` polls the debugger endpoint and streams changed semantic tree snapshots as newline-delimited JSON. `logs --follow`, `events --follow`, and `network --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `logs --clear`, `events --clear`, or `network --clear` to read and reset captured buffers. Use `--timeout-ms <ms>` for bounded polling sessions in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
+`tree --interactive` polls the debugger endpoint and streams changed semantic tree snapshots as newline-delimited JSON. `logs --follow`, `events --follow`, and `network --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `logs --clear`, `events --clear`, or `network --clear` to read and reset captured buffers. Use `state --key <field>` to return one top-level state field such as `values` or `probes`; missing keys return `null`. Use `--timeout-ms <ms>` for bounded polling sessions in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
 
 ## MCP
 

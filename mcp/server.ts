@@ -266,7 +266,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   checked: { type: 'boolean', description: 'Desired checked state. Defaults to true.' },
   code: { type: 'string', description: 'JavaScript expression or snippet evaluated in the app webview.' },
   text: { type: 'string' },
-  key: { type: 'string', description: 'Keyboard key, for example Enter, or storage key.' },
+  key: { type: 'string', description: 'Keyboard key, storage key, or top-level state field.' },
   modifiers: {
     type: 'array',
     items: { type: 'string', enum: ['Alt', 'Control', 'Meta', 'Shift'] },

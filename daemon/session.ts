@@ -108,7 +108,7 @@ export class DebuggerSession {
           timeoutMs: numberParam(params.timeoutMs)
         })
       case 'state':
-        return this.app.state()
+        return this.app.state(stringParam(params.key))
       case 'record':
         return this.handleRecord(params)
     }
