@@ -15,6 +15,8 @@ describe('screenshotDocument', () => {
     const svg = decodeDataUrl(screenshot.dataUrl ?? '')
 
     expect(screenshot.mime).toBe('image/svg+xml')
+    expect(screenshot.width).toBeGreaterThan(0)
+    expect(screenshot.height).toBeGreaterThan(0)
     expect(svg).toContain('Ducktape')
     expect(svg).toContain('Fixture')
     expect(svg).not.toContain('<script')

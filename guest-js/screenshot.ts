@@ -31,7 +31,9 @@ export function screenshotDocument(
   return {
     ...(options.path ? { path: options.path } : {}),
     dataUrl: `data:image/svg+xml;base64,${base64EncodeUtf8(svg)}`,
-    mime: 'image/svg+xml'
+    mime: 'image/svg+xml',
+    width,
+    height
   }
 }
 

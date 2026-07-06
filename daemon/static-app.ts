@@ -151,7 +151,9 @@ export class StaticHtmlAppAdapter {
   async shot(path?: string): Promise<ScreenshotResult> {
     this.bindGlobals()
     const screenshot = screenshotDocument(this.dom.window.document, { path })
-    const result = path ? { path, mime: screenshot.mime } : screenshot
+    const result = path
+      ? { path, mime: screenshot.mime, width: screenshot.width, height: screenshot.height }
+      : screenshot
     if (path) {
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, Buffer.from(requiredDataUrlBody(screenshot.dataUrl), 'base64'))

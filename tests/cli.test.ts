@@ -83,10 +83,15 @@ describe('tauri-agent CLI', () => {
       text: 'Registered worker-a'
     })
     const shotPath = join(tmpdir(), 'tauri-agent-static-shot.svg')
-    expect(JSON.parse(runCli(['shot', shotPath, '--from-html', path]))).toEqual({
+    const shot = JSON.parse(runCli(['shot', shotPath, '--from-html', path]))
+    expect(shot).toEqual({
       path: shotPath,
-      mime: 'image/svg+xml'
+      mime: 'image/svg+xml',
+      width: expect.any(Number),
+      height: expect.any(Number)
     })
+    expect(shot.width).toBeGreaterThan(0)
+    expect(shot.height).toBeGreaterThan(0)
     expect(readFileSync(shotPath, 'utf8')).toContain('Ducktape')
     expect(JSON.parse(runCli(['record', '--from-html', path]))).toEqual({
       recording: false,
