@@ -7,6 +7,10 @@ const html = `
   <main aria-label="Ducktape">
     <button>Forge</button>
     <label>Agent name <input aria-label="Agent name" value="" /></label>
+    <select aria-label="Worker">
+      <option value="local">Local worker</option>
+      <option value="remote">Remote worker</option>
+    </select>
     <p>Registered worker-a</p>
   </main>
 `
@@ -25,7 +29,14 @@ describe('DebuggerSession', () => {
       { label: 'main', title: 'Ducktape', focused: true, visible: true }
     ])
     await expect(session.execute('tree', { window: 'main' })).resolves.toEqual({
-      text: ['main "Ducktape"', '@1 button "Forge"', '@2 textbox "Agent name" empty'].join('\n')
+      text: [
+        'main "Ducktape"',
+        '@1 button "Forge"',
+        '@2 textbox "Agent name" empty',
+        '@3 combobox "Worker"',
+        '  @4 option "Local worker" selected',
+        '  @5 option "Remote worker"'
+      ].join('\n')
     })
     await expect(session.execute('inspect', { ref: '@2' })).resolves.toEqual({
       ref: '@2',
@@ -44,6 +55,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('fill', { ref: '@2', text: 'worker-a' })).resolves.toEqual({ ok: true })
+    await expect(session.execute('select', { ref: '@3', value: 'remote' })).resolves.toEqual({ ok: true })
     await expect(
       session.execute('eval', { code: 'document.querySelector("input")?.value' })
     ).resolves.toEqual({
@@ -57,7 +69,8 @@ describe('DebuggerSession', () => {
       url: 'tauri-agent://static',
       title: 'Ducktape',
       values: {
-        'Agent name': 'worker-a'
+        'Agent name': 'worker-a',
+        Worker: 'remote'
       }
     })
     await expect(session.execute('wait', { text: 'Registered worker-a', timeoutMs: 1 })).resolves.toEqual({

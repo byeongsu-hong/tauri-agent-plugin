@@ -7,6 +7,7 @@ import {
   agentLogs,
   agentRecord,
   agentScreenshot,
+  agentSelect,
   agentSnapshot,
   agentState,
   agentWait
@@ -54,6 +55,14 @@ function render(): void {
         <label>
           Agent name
           <input aria-label="Agent name" name="agentName" autocomplete="off" />
+        </label>
+        <label>
+          Worker priority
+          <select aria-label="Worker priority" name="workerPriority">
+            <option value="local">Local</option>
+            <option value="remote">Remote</option>
+            <option value="backup">Backup</option>
+          </select>
         </label>
         <button type="button" data-action="register" disabled>Register</button>
         <ul aria-label="Roster">
@@ -116,8 +125,10 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   status.textContent = 'Command bridge running'
   const tree = await agentSnapshot({ scope: 'main' })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
+  const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const inspected = agentNameRef ? await agentInspect({ ref: agentNameRef }) : null
   const evaluated = await agentEval({ code: 'document.querySelector("[data-status]")?.textContent' })
+  if (priorityRef) await agentSelect({ ref: priorityRef, value: 'remote' })
   await agentAction({ action: 'press', value: 'Escape' })
   const state = await agentState()
   const logs = await agentLogs()
@@ -126,6 +137,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
   const record = await agentRecord()
   const probes = isRecord(state.probes) ? state.probes : {}
+  const values = isRecord(state.values) ? state.values : {}
 
   const verified =
     tree.includes('Ducktape') &&
@@ -133,6 +145,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     inspected.name === 'Agent name' &&
     evaluated.type === 'string' &&
     evaluated.value === 'Command bridge running' &&
+    values['Worker priority'] === 'remote' &&
     isRecord(state) &&
     probes.route === activeView &&
     logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&

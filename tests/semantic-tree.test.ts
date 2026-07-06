@@ -5,6 +5,7 @@ import {
   inspectRef,
   pressKey,
   resolveRef,
+  selectRef,
   snapshotDocument
 } from '../guest-js/semantic-tree'
 
@@ -95,6 +96,38 @@ describe('snapshotDocument', () => {
 
     expect(seen).toEqual(['clicked', 'input', 'key:Enter'])
     expect((resolveRef('@2') as HTMLInputElement).value).toBe('worker-a')
+  })
+
+  it('exposes select controls and chooses options by value or label', () => {
+    const seen: string[] = []
+    document.body.innerHTML = `
+      <select aria-label="Worker">
+        <option value="">Choose worker</option>
+        <option value="local">Local worker</option>
+        <option value="remote" selected>Remote worker</option>
+      </select>
+    `
+    document.querySelector('select')?.addEventListener('input', () => seen.push('input'))
+    document.querySelector('select')?.addEventListener('change', () => seen.push('change'))
+
+    const snapshot = snapshotDocument(document)
+
+    expect(snapshot.text).toBe(
+      [
+        '@1 combobox "Worker"',
+        '  @2 option "Choose worker"',
+        '  @3 option "Local worker"',
+        '  @4 option "Remote worker" selected'
+      ].join('\n')
+    )
+
+    selectRef('@1', 'local')
+    expect((resolveRef('@1') as HTMLSelectElement).value).toBe('local')
+    selectRef('@1', 'Remote worker')
+    expect((resolveRef('@1') as HTMLSelectElement).value).toBe('remote')
+    selectRef('@3')
+    expect((resolveRef('@1') as HTMLSelectElement).value).toBe('local')
+    expect(seen).toEqual(['input', 'change', 'input', 'change', 'input', 'change'])
   })
 
   it('inspects snapshot-local refs with structured element details', () => {

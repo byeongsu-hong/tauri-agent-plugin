@@ -6,6 +6,7 @@ export type AgentMethod =
   | 'tree'
   | 'click'
   | 'fill'
+  | 'select'
   | 'inspect'
   | 'eval'
   | 'press'
@@ -61,6 +62,10 @@ export interface RefActionParams extends WindowTarget {
 
 export interface FillParams extends RefActionParams {
   text: string
+}
+
+export interface SelectParams extends RefActionParams {
+  value?: string
 }
 
 export interface InspectParams extends RefActionParams {}

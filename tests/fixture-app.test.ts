@@ -28,6 +28,7 @@ describe('example fixture Tauri app', () => {
     expect(appTs).toContain('agentAction')
     expect(appTs).toContain('agentEval')
     expect(appTs).toContain('agentInspect')
+    expect(appTs).toContain('agentSelect')
     expect(appTs).toContain('agentSnapshot')
     expect(appTs).toContain('data-action="bridge-self-test"')
     expect(appTs).toContain('data-view="agents"')

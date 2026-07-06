@@ -28,6 +28,8 @@ export class DebuggerSession {
         return this.app.click(requiredString(params.ref, 'ref'))
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
+      case 'select':
+        return this.app.select(requiredString(params.ref, 'ref'), stringParam(params.value))
       case 'inspect':
         return this.app.inspect(requiredString(params.ref, 'ref'))
       case 'eval':

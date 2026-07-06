@@ -23,6 +23,7 @@ let currentRefs = new Map<string, Element>()
 const REF_ROLES = new Set([
   'button',
   'checkbox',
+  'combobox',
   'item',
   'link',
   'list',
@@ -121,6 +122,29 @@ export function fillRef(ref: string, value: string): void {
   setNativeValue(element, value)
   element.dispatchEvent(new Event('input', { bubbles: true }))
   element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+export function selectRef(ref: string, value?: string): void {
+  const element = resolveRef(ref)
+  if (element instanceof HTMLOptionElement) {
+    const select = element.parentElement
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error(`${normalizeRef(ref)} is not attached to a select control`)
+    }
+    setSelectValue(select, element.value)
+    return
+  }
+  if (!(element instanceof HTMLSelectElement)) {
+    throw new Error(`${normalizeRef(ref)} is not selectable`)
+  }
+  if (value === undefined || value.length === 0) {
+    throw new Error('missing select value')
+  }
+  const option = findOption(element, value)
+  if (!option) {
+    throw new Error(`option not found for ${normalizeRef(ref)}: ${value}`)
+  }
+  setSelectValue(element, option.value)
 }
 
 export function pressKey(key: string, target: Element | Document = document): void {
@@ -285,6 +309,9 @@ function semanticRole(element: Element): string | null {
     case 'section':
       return element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby') ? 'region' : null
     case 'select':
+      return 'combobox'
+    case 'option':
+      return 'option'
     case 'textarea':
       return 'textbox'
     default:
@@ -371,7 +398,7 @@ function listCount(element: Element): number {
 
 function stateFlags(element: Element, role: string): string[] {
   const flags: string[] = []
-  if (hasTrueState(element, 'aria-selected')) flags.push('selected')
+  if (isSelected(element)) flags.push('selected')
   if (isChecked(element)) flags.push('checked')
   if (isDisabled(element)) flags.push('disabled')
   if (hasTrueState(element, 'aria-expanded')) flags.push('expanded')
@@ -403,6 +430,10 @@ function elementAttributes(element: Element): Record<string, string> {
 
 function isChecked(element: Element): boolean {
   return hasTrueState(element, 'aria-checked') || ('checked' in element && Boolean(element.checked))
+}
+
+function isSelected(element: Element): boolean {
+  return hasTrueState(element, 'aria-selected') || (element instanceof HTMLOptionElement && element.selected)
 }
 
 function isDisabled(element: Element): boolean {
@@ -471,4 +502,16 @@ function setNativeValue(
     return
   }
   element.value = value
+}
+
+function findOption(select: HTMLSelectElement, value: string): HTMLOptionElement | undefined {
+  return Array.from(select.options).find(
+    (option) => option.value === value || normalizeText(option.textContent ?? '') === value
+  )
+}
+
+function setSelectValue(select: HTMLSelectElement, value: string): void {
+  setNativeValue(select, value)
+  select.dispatchEvent(new Event('input', { bubbles: true }))
+  select.dispatchEvent(new Event('change', { bubbles: true }))
 }

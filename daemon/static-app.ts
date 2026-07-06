@@ -8,6 +8,7 @@ import {
   fillRef,
   inspectRef,
   pressKey,
+  selectRef,
   snapshotDocument,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
@@ -70,6 +71,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     fillRef(ref, text)
     this.pushEvent('fill', { ref, text })
+    return { ok: true }
+  }
+
+  async select(ref: string, value?: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    selectRef(ref, value)
+    this.pushEvent('select', value === undefined ? { ref } : { ref, value })
     return { ok: true }
   }
 
@@ -170,6 +178,7 @@ export class StaticHtmlAppAdapter {
     globalThis.Document = this.dom.window.Document
     globalThis.Event = this.dom.window.Event
     globalThis.HTMLInputElement = this.dom.window.HTMLInputElement
+    globalThis.HTMLOptionElement = this.dom.window.HTMLOptionElement
     globalThis.HTMLSelectElement = this.dom.window.HTMLSelectElement
     globalThis.HTMLTextAreaElement = this.dom.window.HTMLTextAreaElement
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent

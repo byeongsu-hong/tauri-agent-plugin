@@ -86,8 +86,8 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
-        "tree" | "click" | "fill" | "inspect" | "eval" | "press" | "logs" | "events" | "wait"
-        | "state" | "record" => {
+        "tree" | "click" | "fill" | "select" | "inspect" | "eval" | "press" | "logs" | "events"
+        | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -402,6 +402,25 @@ mod tests {
         }
     }
 
+    struct FakeSelectBackend;
+
+    impl InlineDebuggerBackend for FakeSelectBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "select");
+            assert_eq!(params["ref"], "@4");
+            assert_eq!(params["value"], "remote");
+            Ok(serde_json::json!({ "ok": true }))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -482,6 +501,23 @@ mod tests {
                     "value": "Fixture",
                     "text": "Fixture"
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_select_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeSelectBackend,
+            r#"{"jsonrpc":"2.0","id":6,"method":"select","params":{"ref":"@4","value":"remote"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "result": { "ok": true }
             })
         );
     }

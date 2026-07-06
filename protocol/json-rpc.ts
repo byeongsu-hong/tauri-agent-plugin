@@ -6,6 +6,7 @@ export const AGENT_METHODS = [
   'tree',
   'click',
   'fill',
+  'select',
   'inspect',
   'eval',
   'press',

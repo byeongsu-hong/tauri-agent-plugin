@@ -17,7 +17,7 @@ function htmlFile(): string {
   const path = join(dir, 'screen.html')
   writeFileSync(
     path,
-    '<main aria-label="Ducktape"><button>Forge</button><label>Agent name<input aria-label="Agent name"></label><p>Registered worker-a</p></main>'
+    '<main aria-label="Ducktape"><button>Forge</button><label>Agent name<input aria-label="Agent name"></label><select aria-label="Worker"><option value="local">Local worker</option><option value="remote">Remote worker</option></select><p>Registered worker-a</p></main>'
   )
   return path
 }
@@ -30,7 +30,14 @@ describe('tauri-agent CLI', () => {
       { label: 'main', title: 'Tauri App', focused: true, visible: true }
     ])
     expect(runCli(['tree', '--from-html', path])).toBe(
-      'main "Ducktape"\n@1 button "Forge"\n@2 textbox "Agent name" empty'
+      [
+        'main "Ducktape"',
+        '@1 button "Forge"',
+        '@2 textbox "Agent name" empty',
+        '@3 combobox "Worker"',
+        '  @4 option "Local worker" selected',
+        '  @5 option "Remote worker"'
+      ].join('\n')
     )
     expect(JSON.parse(runCli(['inspect', '@2', '--from-html', path]))).toEqual({
       ref: '@2',
@@ -45,6 +52,7 @@ describe('tauri-agent CLI', () => {
       states: ['empty']
     })
     expect(JSON.parse(runCli(['fill', '@2', 'worker-a', '--from-html', path]))).toEqual({ ok: true })
+    expect(JSON.parse(runCli(['select', '@3', 'remote', '--from-html', path]))).toEqual({ ok: true })
     expect(
       JSON.parse(runCli(['eval', 'document.querySelector("input")?.getAttribute("aria-label")', '--from-html', path]))
     ).toEqual({
@@ -55,7 +63,7 @@ describe('tauri-agent CLI', () => {
     expect(JSON.parse(runCli(['state', '--from-html', path]))).toEqual({
       url: 'tauri-agent://static',
       title: 'Tauri App',
-      values: { 'Agent name': '' }
+      values: { 'Agent name': '', Worker: 'local' }
     })
     expect(JSON.parse(runCli(['logs', '--from-html', path]))).toEqual([])
     expect(JSON.parse(runCli(['events', '--from-html', path]))).toEqual([])

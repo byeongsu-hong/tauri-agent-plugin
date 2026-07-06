@@ -7,7 +7,8 @@ use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEvalRequest,
     AgentEventEntry, AgentEventsRequest, AgentInspectRequest, AgentInspectResponse, AgentLogEntry,
     AgentLogRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
-    AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest, AgentWaitResponse, WindowInfo,
+    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
+    AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -92,6 +93,16 @@ pub async fn agent_eval<R: Runtime>(
     request: AgentEvalRequest,
 ) -> Result<Value> {
     request_bridge(&bridge, &app, request.window.as_deref(), "eval", &request)
+}
+
+#[tauri::command]
+pub async fn agent_select<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentSelectRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "select", &request)?;
+    Ok(())
 }
 
 #[tauri::command]
