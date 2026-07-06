@@ -102,6 +102,8 @@ async function executeTool(
       return client.call('windows')
     case 'tauri_tree':
       return client.call('tree', pick(args, ['window', 'scope', 'mode']))
+    case 'tauri_find':
+      return client.call('find', pick(args, ['window', 'scope', 'role', 'name', 'text', 'limit']))
     case 'tauri_click':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('click', pick(args, ['window', 'ref']))
@@ -210,6 +212,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   window: { type: 'string', description: 'Tauri window label.' },
   scope: { type: 'string', description: 'CSS selector used to scope tree/action ref refresh.' },
   mode: { type: 'string', enum: ['compact', 'verbose'] },
+  role: { type: 'string', description: 'Semantic role to match exactly.' },
+  name: { type: 'string', description: 'Accessible name substring to match.' },
   ref: { type: 'string', description: 'Snapshot-local ref such as @3.' },
   toRef: { type: 'string', description: 'Snapshot-local drag target ref such as @8.' },
   value: { type: 'string', description: 'Option value or visible label.' },
@@ -219,6 +223,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   key: { type: 'string', description: 'Keyboard key, for example Enter.' },
   x: { type: 'number', description: 'Horizontal scroll delta.' },
   y: { type: 'number', description: 'Vertical scroll delta.' },
+  limit: { type: 'number', description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
   timeoutMs: { type: 'number' },
@@ -229,6 +234,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_attach', 'Attach', 'Attach to a debuggable Tauri app.', schema(['window'])),
   tool('tauri_windows', 'Windows', 'List known Tauri windows.', baseSchema()),
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
+  tool('tauri_find', 'Find', 'Find current snapshot refs by semantic role, name, or text.', schema(['window', 'scope', 'role', 'name', 'text', 'limit'])),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_hover', 'Hover', 'Hover a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_focus', 'Focus', 'Focus a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),

@@ -44,6 +44,17 @@ describe('tauri-agent CLI', () => {
         '@8 button "Drop zone"'
       ].join('\n')
     )
+    expect(JSON.parse(runCli(['find', '--role', 'button', '--name', 'forge', '--limit', '1', '--from-html', path]))).toEqual({
+      matches: [
+        expect.objectContaining({
+          ref: '@1',
+          role: 'button',
+          name: 'Forge',
+          tagName: 'button',
+          text: 'Forge'
+        })
+      ]
+    })
     expect(JSON.parse(runCli(['inspect', '@2', '--from-html', path]))).toEqual({
       ref: '@2',
       role: 'textbox',

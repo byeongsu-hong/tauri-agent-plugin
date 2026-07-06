@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-find"
+description = "Enables the agent_find command without any pre-configured scope."
+commands.allow = ["agent_find"]
+
+[[permission]]
+identifier = "deny-agent-find"
+description = "Denies the agent_find command without any pre-configured scope."
+commands.deny = ["agent_find"]

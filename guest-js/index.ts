@@ -6,6 +6,7 @@ import {
   clickRef,
   currentRefRegistry,
   dragRef,
+  findRefs,
   fillRef,
   focusRef,
   hoverRef,
@@ -23,7 +24,7 @@ import {
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
-import type { AgentEvent, EvalResult, LogEntry, RecordingEntry } from '../protocol/types'
+import type { AgentEvent, EvalResult, FindResult, LogEntry, RecordingEntry } from '../protocol/types'
 export { WebviewAgentInstrumentation, type InstrumentationOptions } from './instrumentation'
 
 export {
@@ -32,6 +33,7 @@ export {
   checkRef,
   currentRefRegistry,
   dragRef,
+  findRefs,
   fillRef,
   focusRef,
   hoverRef,
@@ -46,6 +48,7 @@ export {
   type AgentEvent,
   type DragOptions,
   type EvalResult,
+  type FindResult,
   type InspectResult,
   type LogEntry,
   type RecordingEntry,
@@ -59,6 +62,15 @@ export interface AgentSnapshotRequest {
   window?: string
   scope?: string
   mode?: SnapshotOptions['mode']
+}
+
+export interface AgentFindRequest {
+  window?: string
+  scope?: string
+  role?: string
+  name?: string
+  text?: string
+  limit?: number
 }
 
 export type AgentActionRequest =
@@ -175,6 +187,10 @@ export interface WindowInfo {
 
 export async function agentSnapshot(request: AgentSnapshotRequest = {}): Promise<string> {
   return invoke('plugin:agent|agent_snapshot', { request: withCurrentWindow(request) })
+}
+
+export async function agentFind(request: AgentFindRequest = {}): Promise<FindResult> {
+  return invoke('plugin:agent|agent_find', { request: withCurrentWindow(request) })
 }
 
 export async function agentAction(request: AgentActionRequest): Promise<void> {

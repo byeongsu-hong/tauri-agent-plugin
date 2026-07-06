@@ -6,6 +6,7 @@ import {
   agentDrag,
   agentEval,
   agentEvents,
+  agentFind,
   agentFocus,
   agentHover,
   agentInspect,
@@ -169,8 +170,9 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   if (!status) return
   status.textContent = 'Command bridge running'
   const tree = await agentSnapshot({ scope: 'main' })
+  const foundForge = await agentFind({ scope: 'main', role: 'button', name: 'Forge', limit: 1 })
   const agentNameRef = tree.match(/(@\d+) textbox "Agent name"/)?.[1]
-  const forgeRef = tree.match(/(@\d+) button "Forge"/)?.[1]
+  const forgeRef = foundForge.matches[0]?.ref ?? tree.match(/(@\d+) button "Forge"/)?.[1]
   const priorityRef = tree.match(/(@\d+) combobox "Worker priority"/)?.[1]
   const notifyRef = tree.match(/(@\d+) checkbox "Notify agents"/)?.[1]
   const rosterRef = tree.match(/(@\d+) list "Roster"/)?.[1]
@@ -196,6 +198,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
 
   const verified =
     tree.includes('Ducktape') &&
+    foundForge.matches.some((match) => match.role === 'button' && match.name === 'Forge') &&
     inspected?.role === 'textbox' &&
     inspected.name === 'Agent name' &&
     evaluated.type === 'string' &&

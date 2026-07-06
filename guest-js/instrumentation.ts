@@ -6,6 +6,7 @@ import {
   checkRef,
   clickRef,
   dragRef,
+  findRefs,
   fillRef,
   focusRef,
   hoverRef,
@@ -25,6 +26,8 @@ import type {
   AgentEvent,
   AgentMethod,
   EvalResult,
+  FindParams,
+  FindResult,
   InspectResult,
   LogEntry,
   RecordingEntry,
@@ -97,6 +100,11 @@ export class WebviewAgentInstrumentation {
 
   snapshot(options: SnapshotOptions = {}): SnapshotResult {
     return snapshotDocument(document, options)
+  }
+
+  find(options: FindParams = {}): FindResult {
+    const snapshot = this.snapshot({ scope: options.scope })
+    return { matches: findRefs(options, snapshot.refs) }
   }
 
   action(action: InstrumentedAction): { ok: true } {
@@ -321,6 +329,14 @@ export class WebviewAgentInstrumentation {
     switch (request.method) {
       case 'tree':
         return { text: this.snapshot({ scope: stringParam(params, 'scope'), mode: modeParam(params) }).text }
+      case 'find':
+        return this.find({
+          scope: stringParam(params, 'scope'),
+          role: stringParam(params, 'role'),
+          name: stringParam(params, 'name'),
+          text: stringParam(params, 'text'),
+          limit: numberParam(params, 'limit')
+        })
       case 'click':
         return this.action({ action: 'click', ref: requiredStringParam(params, 'ref') })
       case 'hover':

@@ -83,6 +83,17 @@ pub struct AgentActionRequest {
     pub value: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentFindRequest {
+    pub window: Option<String>,
+    pub scope: Option<String>,
+    pub role: Option<String>,
+    pub name: Option<String>,
+    pub text: Option<String>,
+    pub limit: Option<u64>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInspectRequest {
@@ -103,6 +114,12 @@ pub struct AgentInspectResponse {
     pub value: Option<String>,
     pub attributes: BTreeMap<String, String>,
     pub states: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentFindResponse {
+    pub matches: Vec<AgentInspectResponse>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -323,6 +340,54 @@ mod tests {
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
             serde_json::json!({"window": "main", "text": "Registered", "timeoutMs": 250})
+        );
+
+        let find = AgentFindRequest {
+            window: Some("main".into()),
+            scope: Some("main".into()),
+            role: Some("button".into()),
+            name: Some("Forge".into()),
+            text: None,
+            limit: Some(1),
+        };
+        assert_eq!(
+            serde_json::to_value(find).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "scope": "main",
+                "role": "button",
+                "name": "Forge",
+                "text": null,
+                "limit": 1
+            })
+        );
+
+        let find_response = AgentFindResponse {
+            matches: vec![AgentInspectResponse {
+                ref_id: "@1".into(),
+                role: "button".into(),
+                name: "Forge".into(),
+                tag_name: "button".into(),
+                text: "Forge".into(),
+                value: None,
+                attributes: BTreeMap::new(),
+                states: Vec::new(),
+            }],
+        };
+        assert_eq!(
+            serde_json::to_value(find_response).unwrap(),
+            serde_json::json!({
+                "matches": [{
+                    "ref": "@1",
+                    "role": "button",
+                    "name": "Forge",
+                    "tagName": "button",
+                    "text": "Forge",
+                    "value": null,
+                    "attributes": {},
+                    "states": []
+                }]
+            })
         );
 
         let inspect = AgentInspectRequest {

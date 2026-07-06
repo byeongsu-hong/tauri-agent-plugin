@@ -4,6 +4,7 @@ export const AGENT_METHODS = [
   'attach',
   'windows',
   'tree',
+  'find',
   'click',
   'hover',
   'focus',

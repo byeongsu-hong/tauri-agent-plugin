@@ -1,4 +1,4 @@
-import type { InspectResult } from '../protocol/types'
+import type { FindParams, InspectResult } from '../protocol/types'
 
 export interface SnapshotOptions {
   scope?: string
@@ -108,6 +108,26 @@ export function inspectRef(ref: string, refs: Map<string, Element> = currentRefs
     attributes: elementAttributes(element),
     states: stateFlags(element, role)
   }
+}
+
+export function findRefs(options: FindParams = {}, refs: Map<string, Element> = currentRefs): InspectResult[] {
+  const limit = normalizedLimit(options.limit)
+  if (limit === 0) {
+    return []
+  }
+
+  const matches: InspectResult[] = []
+  for (const ref of refs.keys()) {
+    const inspected = inspectRef(ref, refs)
+    if (!matchesFindOptions(inspected, options)) {
+      continue
+    }
+    matches.push(inspected)
+    if (matches.length >= limit) {
+      break
+    }
+  }
+  return matches
 }
 
 export function clickRef(ref: string): void {
@@ -555,6 +575,33 @@ function elementHasStyleValue(element: Element, property: string, value: string)
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+function normalizedLimit(value: number | undefined): number {
+  if (value === undefined) {
+    return Number.POSITIVE_INFINITY
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0
+  }
+  return Math.floor(value)
+}
+
+function matchesFindOptions(inspected: InspectResult, options: FindParams): boolean {
+  return (
+    matchesOptionalText(inspected.role, options.role, 'exact') &&
+    matchesOptionalText(inspected.name, options.name, 'contains') &&
+    matchesOptionalText(inspected.text, options.text, 'contains')
+  )
+}
+
+function matchesOptionalText(actual: string, expected: string | undefined, mode: 'contains' | 'exact'): boolean {
+  if (expected === undefined || expected.length === 0) {
+    return true
+  }
+  const normalizedActual = normalizeText(actual).toLowerCase()
+  const normalizedExpected = normalizeText(expected).toLowerCase()
+  return mode === 'exact' ? normalizedActual === normalizedExpected : normalizedActual.includes(normalizedExpected)
 }
 
 function escapeName(value: string): string {

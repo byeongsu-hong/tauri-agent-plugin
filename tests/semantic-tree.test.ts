@@ -4,6 +4,7 @@ import {
   clickRef,
   checkRef,
   dragRef,
+  findRefs,
   fillRef,
   focusRef,
   hoverRef,
@@ -299,5 +300,28 @@ describe('snapshotDocument', () => {
       states: []
     })
     expect(() => inspectRef('@9')).toThrow('stale ref @9; run tree again')
+  })
+
+  it('finds current snapshot refs by role, name, text, and limit', () => {
+    document.body.innerHTML = `
+      <main aria-label="Ducktape">
+        <button data-action="forge">Forge</button>
+        <label>Agent name<input aria-label="Agent name"></label>
+        <ul aria-label="Roster">
+          <li aria-selected="true">local-worker <button>Inspect backing</button></li>
+          <li>remote-worker <button>Inspect backing</button></li>
+        </ul>
+      </main>
+    `
+
+    snapshotDocument(document)
+
+    expect(findRefs({ role: 'button', name: 'inspect' })).toEqual([
+      expect.objectContaining({ ref: '@5', role: 'button', name: 'Inspect backing' }),
+      expect.objectContaining({ ref: '@7', role: 'button', name: 'Inspect backing' })
+    ])
+    expect(findRefs({ role: 'item', text: 'remote-worker', limit: 1 })).toEqual([
+      expect.objectContaining({ ref: '@6', role: 'item', name: 'remote-worker' })
+    ])
   })
 })
