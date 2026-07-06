@@ -298,6 +298,33 @@ pub struct AgentStorageResponse {
     pub entries: Vec<AgentStorageEntry>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLocationRequest {
+    pub window: Option<String>,
+    pub action: Option<LocationAction>,
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LocationAction {
+    #[default]
+    Get,
+    Push,
+    Replace,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLocationResponse {
+    pub href: String,
+    pub origin: String,
+    pub pathname: String,
+    pub search: String,
+    pub hash: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEntry {
@@ -634,6 +661,38 @@ mod tests {
                     "key": "agent.route",
                     "value": "/agents"
                 }]
+            })
+        );
+
+        let location = AgentLocationRequest {
+            window: Some("main".into()),
+            action: Some(LocationAction::Push),
+            url: Some("/agents?view=debug#roster".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(location).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "action": "push",
+                "url": "/agents?view=debug#roster"
+            })
+        );
+
+        let location_response = AgentLocationResponse {
+            href: "tauri-agent://static/agents?view=debug#roster".into(),
+            origin: "null".into(),
+            pathname: "/agents".into(),
+            search: "?view=debug".into(),
+            hash: "#roster".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(location_response).unwrap(),
+            serde_json::json!({
+                "href": "tauri-agent://static/agents?view=debug#roster",
+                "origin": "null",
+                "pathname": "/agents",
+                "search": "?view=debug",
+                "hash": "#roster"
             })
         );
 

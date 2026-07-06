@@ -22,6 +22,7 @@ export type AgentMethod =
   | 'events'
   | 'network'
   | 'storage'
+  | 'location'
   | 'wait'
   | 'state'
   | 'record'
@@ -136,6 +137,11 @@ export interface StorageParams extends WindowTarget {
   value?: string
 }
 
+export interface LocationParams extends WindowTarget {
+  action?: 'get' | 'push' | 'replace'
+  url?: string
+}
+
 export interface WaitParams extends WindowTarget {
   text?: string
   timeoutMs?: number
@@ -220,6 +226,14 @@ export interface StorageEntry {
 export interface StorageResult {
   area: 'local' | 'session'
   entries: StorageEntry[]
+}
+
+export interface LocationResult {
+  href: string
+  origin: string
+  pathname: string
+  search: string
+  hash: string
 }
 
 export interface ScreenshotResult {

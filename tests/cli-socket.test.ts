@@ -307,6 +307,41 @@ describe('tauri-agent CLI socket mode', () => {
     ])
   })
 
+  it('forwards location options to protocol calls', async () => {
+    const response = {
+      href: 'tauri-agent://static/agents?view=debug#roster',
+      origin: 'null',
+      pathname: '/agents',
+      search: '?view=debug',
+      hash: '#roster'
+    }
+    const { port, requests } = await startCapturingRpcServer({
+      location: response
+    })
+
+    expect(
+      JSON.parse(
+        await runCliAsync([
+          'location',
+          '--port',
+          String(port),
+          '--window',
+          'secondary',
+          '--action',
+          'push',
+          '--url',
+          '/agents?view=debug#roster'
+        ])
+      )
+    ).toEqual(response)
+    expect(requests).toEqual([
+      {
+        method: 'location',
+        params: { window: 'secondary', action: 'push', url: '/agents?view=debug#roster' }
+      }
+    ])
+  })
+
   it.each([
     {
       command: 'logs',

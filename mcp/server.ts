@@ -148,6 +148,8 @@ async function executeTool(
       return client.call('network', pick(args, ['window', 'follow', 'clear']))
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
+    case 'tauri_location':
+      return client.call('location', pick(args, ['window', 'action', 'url']))
     case 'tauri_wait':
       return client.call('wait', pick(args, ['window', 'text', 'timeoutMs']))
     case 'tauri_state':
@@ -232,6 +234,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   follow: { type: 'boolean', description: 'Reserved for future streaming.' },
   clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
   area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
+  url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
   timeoutMs: { type: 'number' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
 }
@@ -258,6 +261,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
+  tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text to appear.', schema(['window', 'text', 'timeoutMs'], ['text'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
@@ -299,6 +303,12 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
 function storageSchema(): JsonSchema {
   const inputSchema = schema(['window', 'area', 'key', 'value'])
   inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  return inputSchema
+}
+
+function locationSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'url'])
+  inputSchema.properties.action = { type: 'string', enum: ['get', 'push', 'replace'] }
   return inputSchema
 }
 

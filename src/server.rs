@@ -88,7 +88,7 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
         "windows" => Ok(json!(backend.windows())),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
         | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
-        | "storage" | "wait" | "state" | "record" => {
+        | "storage" | "location" | "wait" | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -629,6 +629,32 @@ mod tests {
         }
     }
 
+    struct FakeLocationBackend;
+
+    impl InlineDebuggerBackend for FakeLocationBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "location");
+            assert_eq!(params["window"], "main");
+            assert_eq!(params["action"], "push");
+            assert_eq!(params["url"], "/agents?view=debug#roster");
+            Ok(serde_json::json!({
+                "href": "tauri-agent://static/agents?view=debug#roster",
+                "origin": "null",
+                "pathname": "/agents",
+                "search": "?view=debug",
+                "hash": "#roster"
+            }))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -765,6 +791,29 @@ mod tests {
                         "key": "agent.route",
                         "value": "/agents"
                     }]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_location_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeLocationBackend,
+            r#"{"jsonrpc":"2.0","id":16,"method":"location","params":{"window":"main","action":"push","url":"/agents?view=debug#roster"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 16,
+                "result": {
+                    "href": "tauri-agent://static/agents?view=debug#roster",
+                    "origin": "null",
+                    "pathname": "/agents",
+                    "search": "?view=debug",
+                    "hash": "#roster"
                 }
             })
         );

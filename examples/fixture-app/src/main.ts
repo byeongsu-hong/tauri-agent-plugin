@@ -10,6 +10,7 @@ import {
   agentFocus,
   agentHover,
   agentInspect,
+  agentLocation,
   agentLogs,
   agentNetwork,
   agentRecord,
@@ -187,6 +188,8 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     value: fixtureWindowLabel
   })
   const storageRead = await agentStorage({ key: 'fixture:lastSelfTest' })
+  const locationSet = await agentLocation({ action: 'push', url: '/agents?bridge=1#self-test' })
+  const locationRead = await agentLocation()
   await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
@@ -215,9 +218,15 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     evaluated.value === 'Command bridge running' &&
     storageSet.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
     storageRead.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+    locationSet.pathname === '/agents' &&
+    locationSet.search === '?bridge=1' &&
+    locationSet.hash === '#self-test' &&
+    locationRead.href === locationSet.href &&
     values['Notify agents'] === true &&
     values['Worker priority'] === 'remote' &&
     isRecord(state) &&
+    typeof state.url === 'string' &&
+    state.url.includes('/agents?bridge=1#self-test') &&
     probes.route === activeView &&
     probes.hoveredForge === true &&
     probes.focusedForge === true &&

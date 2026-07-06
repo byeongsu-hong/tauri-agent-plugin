@@ -7,10 +7,11 @@ use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
     AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
     AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
-    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
-    AgentStorageResponse, AgentWaitRequest, AgentWaitResponse, WindowInfo,
+    AgentInspectResponse, AgentLocationRequest, AgentLocationResponse, AgentLogEntry,
+    AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest, AgentRecordRequest,
+    AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
+    AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest, AgentStorageResponse,
+    AgentWaitRequest, AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -235,6 +236,22 @@ pub async fn agent_storage<R: Runtime>(
         &app,
         request.window.as_deref(),
         "storage",
+        &request,
+    )?;
+    decode_bridge_result(result)
+}
+
+#[tauri::command]
+pub async fn agent_location<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentLocationRequest,
+) -> Result<AgentLocationResponse> {
+    let result = request_bridge(
+        &bridge,
+        &app,
+        request.window.as_deref(),
+        "location",
         &request,
     )?;
     decode_bridge_result(result)

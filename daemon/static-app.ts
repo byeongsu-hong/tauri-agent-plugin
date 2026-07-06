@@ -30,6 +30,8 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  LocationParams,
+  LocationResult,
   LogEntry,
   NetworkEntry,
   ScreenshotResult,
@@ -198,7 +200,7 @@ export class StaticHtmlAppAdapter {
     }
 
     return {
-      url: this.url,
+      url: this.dom.window.location.href,
       title: this.title,
       values
     }
@@ -237,6 +239,11 @@ export class StaticHtmlAppAdapter {
     const store = this.storageAreas[area]
     applyStorageAction(store, options)
     return storageResult(store, area, options.key)
+  }
+
+  location(options: LocationParams = {}): LocationResult {
+    applyLocationAction(this.dom, options)
+    return locationResult(this.dom.window.location)
   }
 
   addLog(level: LogEntry['level'], message: string): void {
@@ -390,4 +397,36 @@ function requiredStorageValue(value: string | undefined): string {
     throw new Error('storage set requires value')
   }
   return value
+}
+
+function applyLocationAction(dom: JSDOM, options: LocationParams): void {
+  const action = options.action ?? 'get'
+  switch (action) {
+    case 'get':
+      return
+    case 'push':
+    case 'replace': {
+      const href = new URL(requiredLocationUrl(options.url), dom.window.location.href).href
+      dom.reconfigure({ url: href })
+      dom.window.dispatchEvent(new dom.window.PopStateEvent('popstate'))
+      return
+    }
+  }
+}
+
+function locationResult(location: Location): LocationResult {
+  return {
+    href: location.href,
+    origin: location.origin,
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash
+  }
+}
+
+function requiredLocationUrl(url: string | undefined): string {
+  if (!url) {
+    throw new Error('location action requires url')
+  }
+  return url
 }

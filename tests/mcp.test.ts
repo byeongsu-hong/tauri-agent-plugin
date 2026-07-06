@@ -83,6 +83,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_events',
       'tauri_network',
       'tauri_storage',
+      'tauri_location',
       'tauri_wait',
       'tauri_state',
       'tauri_record'
@@ -447,6 +448,30 @@ describe('tauri-agent MCP server', () => {
     expect(storage.result.structuredContent).toEqual({
       area: 'local',
       entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
+    })
+
+    const location = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 19,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_location',
+              arguments: { html, action: 'push', url: '/agents?view=debug#roster' }
+            }
+          })
+        )
+      )
+    )
+
+    expect(location.result.structuredContent).toEqual({
+      href: 'tauri-agent://static/agents?view=debug#roster',
+      origin: 'null',
+      pathname: '/agents',
+      search: '?view=debug',
+      hash: '#roster'
     })
   })
 

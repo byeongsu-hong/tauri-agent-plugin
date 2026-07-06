@@ -30,6 +30,8 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  LocationParams,
+  LocationResult,
   LogEntry,
   NetworkEntry,
   RecordingEntry,
@@ -285,6 +287,11 @@ export class WebviewAgentInstrumentation {
     return storageResult(store, area, options.key)
   }
 
+  location(options: LocationParams = {}): LocationResult {
+    applyLocationAction(options)
+    return locationResult(window.location)
+  }
+
   record(action: 'start' | 'stop' | 'get' | 'clear' = 'get'): Record<string, unknown> {
     switch (action) {
       case 'start':
@@ -414,6 +421,11 @@ export class WebviewAgentInstrumentation {
           action: storageActionParam(params, 'action'),
           key: stringParam(params, 'key'),
           value: stringParam(params, 'value')
+        })
+      case 'location':
+        return this.location({
+          action: locationActionParam(params, 'action'),
+          url: stringParam(params, 'url')
         })
       case 'wait':
         return this.wait({
@@ -698,4 +710,42 @@ function requiredStorageValue(value: string | undefined): string {
     throw new Error('storage set requires value')
   }
   return value
+}
+
+function locationActionParam(params: Record<string, unknown>, key: string): 'get' | 'push' | 'replace' | undefined {
+  const value = params[key]
+  return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
+}
+
+function applyLocationAction(options: LocationParams): void {
+  const action = options.action ?? 'get'
+  switch (action) {
+    case 'get':
+      return
+    case 'push':
+      window.history.pushState(null, '', requiredLocationUrl(options.url))
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    case 'replace':
+      window.history.replaceState(null, '', requiredLocationUrl(options.url))
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+  }
+}
+
+function locationResult(location: Location): LocationResult {
+  return {
+    href: location.href,
+    origin: location.origin,
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash
+  }
+}
+
+function requiredLocationUrl(url: string | undefined): string {
+  if (!url) {
+    throw new Error('location action requires url')
+  }
+  return url
 }

@@ -16,12 +16,13 @@ pub use error::Error;
 pub use models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
     AgentCheckRequest, AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest,
-    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentLogEntry,
-    AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest,
-    AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
-    AgentSnapshotRequest, AgentStateRequest, AgentStorageEntry, AgentStorageRequest,
-    AgentStorageResponse, AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig,
-    RecordAction, SnapshotMode, StorageAction, StorageArea, WindowInfo,
+    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
+    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
+    AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest, AgentRecordResponse,
+    AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest,
+    AgentStateRequest, AgentStorageEntry, AgentStorageRequest, AgentStorageResponse,
+    AgentWaitRequest, AgentWaitResponse, Config, InlineServerConfig, LocationAction, RecordAction,
+    SnapshotMode, StorageAction, StorageArea, WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -120,6 +121,7 @@ impl Builder {
                 commands::agent_events,
                 commands::agent_network,
                 commands::agent_storage,
+                commands::agent_location,
                 commands::agent_windows,
                 commands::agent_wait,
                 commands::agent_state,

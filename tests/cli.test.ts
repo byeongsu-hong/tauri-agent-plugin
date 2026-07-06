@@ -96,6 +96,15 @@ describe('tauri-agent CLI', () => {
       area: 'local',
       entries: [{ area: 'local', key: 'agent.token', value: 'ready' }]
     })
+    expect(
+      JSON.parse(runCli(['location', '--action', 'push', '--url', '/agents?view=debug#roster', '--from-html', path]))
+    ).toEqual({
+      href: 'tauri-agent://static/agents?view=debug#roster',
+      origin: 'null',
+      pathname: '/agents',
+      search: '?view=debug',
+      hash: '#roster'
+    })
     expect(JSON.parse(runCli(['wait', 'Registered worker-a', '--from-html', path]))).toEqual({
       matched: true,
       text: 'Registered worker-a'
