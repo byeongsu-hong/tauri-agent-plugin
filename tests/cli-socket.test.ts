@@ -120,6 +120,20 @@ async function startCapturingRpcServer(responses: Record<string, RpcResponse>): 
   return { port: address.port, requests }
 }
 
+function staticWindowInfo(title: string): Record<string, unknown> {
+  return {
+    label: 'main',
+    title,
+    focused: true,
+    visible: true,
+    minimized: false,
+    maximized: false,
+    scaleFactor: 1,
+    innerBounds: { x: 0, y: 0, width: 1024, height: 768 },
+    outerBounds: { x: 0, y: 0, width: 1024, height: 768 }
+  }
+}
+
 describe('tauri-agent CLI socket mode', () => {
   it('controls a persistent headless debugger daemon', async () => {
     const port = 45138
@@ -154,7 +168,7 @@ describe('tauri-agent CLI socket mode', () => {
     )
 
     expect(JSON.parse(runCli(['windows', '--app', appId], env))).toEqual([
-      { label: 'main', title: 'Tauri App', focused: true, visible: true }
+      staticWindowInfo('Tauri App')
     ])
   }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 

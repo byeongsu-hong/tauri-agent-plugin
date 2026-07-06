@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State};
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
@@ -358,10 +358,28 @@ pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo>
             title: window.title().ok(),
             focused: window.is_focused().unwrap_or(false),
             visible: window.is_visible().unwrap_or(false),
+            minimized: window.is_minimized().ok(),
+            maximized: window.is_maximized().ok(),
+            scale_factor: window.scale_factor().ok(),
+            inner_bounds: window_bounds(window.inner_position().ok(), window.inner_size().ok()),
+            outer_bounds: window_bounds(window.outer_position().ok(), window.outer_size().ok()),
         })
         .collect::<Vec<_>>();
     windows.sort_by(|a, b| a.label.cmp(&b.label));
     windows
+}
+
+fn window_bounds(
+    position: Option<PhysicalPosition<i32>>,
+    size: Option<PhysicalSize<u32>>,
+) -> Option<crate::models::WindowBounds> {
+    let (position, size) = (position?, size?);
+    Some(crate::models::WindowBounds {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    })
 }
 
 pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {

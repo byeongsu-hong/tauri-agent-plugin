@@ -17,7 +17,7 @@ describe('debugger JSON-RPC transport', () => {
     const client = new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
 
     await expect(client.call('windows')).resolves.toEqual([
-      { label: 'main', title: 'Ducktape', focused: true, visible: true }
+      staticWindowInfo('Ducktape')
     ])
     await expect(client.call('tree')).resolves.toEqual({
       text: 'main "Ducktape"\n@1 textbox "Agent name" empty'
@@ -100,5 +100,19 @@ class FlakyResetTransport {
       throw error
     }
     return JSON.stringify(createSuccessResponse(request.id, this.result))
+  }
+}
+
+function staticWindowInfo(title: string): Record<string, unknown> {
+  return {
+    label: 'main',
+    title,
+    focused: true,
+    visible: true,
+    minimized: false,
+    maximized: false,
+    scaleFactor: 1,
+    innerBounds: { x: 0, y: 0, width: 1024, height: 768 },
+    outerBounds: { x: 0, y: 0, width: 1024, height: 768 }
   }
 }

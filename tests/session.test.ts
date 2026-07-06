@@ -26,10 +26,10 @@ describe('DebuggerSession', () => {
 
     await expect(session.execute('attach', {})).resolves.toEqual({
       attached: true,
-      windows: [{ label: 'main', title: 'Ducktape', focused: true, visible: true }]
+      windows: [staticWindowInfo('Ducktape')]
     })
     await expect(session.execute('windows', {})).resolves.toEqual([
-      { label: 'main', title: 'Ducktape', focused: true, visible: true }
+      staticWindowInfo('Ducktape')
     ])
     await expect(session.execute('tree', { window: 'main' })).resolves.toEqual({
       text: [
@@ -315,3 +315,17 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toEqual([])
   })
 })
+
+function staticWindowInfo(title: string): Record<string, unknown> {
+  return {
+    label: 'main',
+    title,
+    focused: true,
+    visible: true,
+    minimized: false,
+    maximized: false,
+    scaleFactor: 1,
+    innerBounds: { x: 0, y: 0, width: 1024, height: 768 },
+    outerBounds: { x: 0, y: 0, width: 1024, height: 768 }
+  }
+}

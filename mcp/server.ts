@@ -243,7 +243,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_attach', 'Attach', 'Attach to a debuggable Tauri app.', schema(['window'])),
-  tool('tauri_windows', 'Windows', 'List known Tauri windows.', baseSchema()),
+  tool('tauri_windows', 'Windows', 'List known Tauri windows with focus, visibility, state, scale, and bounds metadata.', baseSchema()),
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
   tool('tauri_find', 'Find', 'Find current snapshot refs by semantic role, name, or text.', schema(['window', 'scope', 'role', 'name', 'text', 'limit'])),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),

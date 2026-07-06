@@ -601,7 +601,7 @@ describe('tauri-agent MCP server', () => {
       )
 
       expect(response.result.structuredContent).toEqual({
-        result: [{ label: 'main', title: 'Ducktape', focused: true, visible: true }]
+        result: [staticWindowInfo('Ducktape')]
       })
     } finally {
       server.close()
@@ -625,4 +625,18 @@ async function listen(server: Server): Promise<number> {
     throw new Error('server did not bind a TCP port')
   }
   return address.port
+}
+
+function staticWindowInfo(title: string): Record<string, unknown> {
+  return {
+    label: 'main',
+    title,
+    focused: true,
+    visible: true,
+    minimized: false,
+    maximized: false,
+    scaleFactor: 1,
+    innerBounds: { x: 0, y: 0, width: 1024, height: 768 },
+    outerBounds: { x: 0, y: 0, width: 1024, height: 768 }
+  }
 }

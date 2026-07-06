@@ -29,7 +29,7 @@ describe('tauri-agent CLI', () => {
     const path = htmlFile()
 
     expect(JSON.parse(runCli(['windows', '--from-html', path]))).toEqual([
-      { label: 'main', title: 'Tauri App', focused: true, visible: true }
+      staticWindowInfo('Tauri App')
     ])
     expect(runCli(['tree', '--from-html', path])).toBe(
       [
@@ -137,3 +137,17 @@ describe('tauri-agent CLI', () => {
     })
   }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 })
+
+function staticWindowInfo(title: string): Record<string, unknown> {
+  return {
+    label: 'main',
+    title,
+    focused: true,
+    visible: true,
+    minimized: false,
+    maximized: false,
+    scaleFactor: 1,
+    innerBounds: { x: 0, y: 0, width: 1024, height: 768 },
+    outerBounds: { x: 0, y: 0, width: 1024, height: 768 }
+  }
+}
