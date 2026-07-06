@@ -4,6 +4,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, ref 
 
 #### This default permission set includes the following:
 
+- `allow-agent-bridge-response`
 - `allow-agent-attach`
 - `allow-agent-snapshot`
 - `allow-agent-action`
@@ -72,6 +73,32 @@ Enables the agent_attach command without any pre-configured scope.
 <td>
 
 Denies the agent_attach command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-bridge-response`
+
+</td>
+<td>
+
+Enables the agent_bridge_response command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-bridge-response`
+
+</td>
+<td>
+
+Denies the agent_bridge_response command without any pre-configured scope.
 
 </td>
 </tr>

@@ -201,6 +201,9 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
   }
   if (options.app) {
     const endpoint = await readEndpointRegistry(options.app)
+    if (!isProcessAlive(endpoint.pid)) {
+      throw new Error(`debugger endpoint for app ${options.app} is stale: pid ${endpoint.pid} is not running`)
+    }
     return new DebuggerClient(
       new SocketTransport(
         endpoint.transport === 'tcp'
@@ -227,4 +230,13 @@ function exitBridgePending(): never {
     'live Tauri attach needs --app for endpoint discovery, --port for a known daemon, or --from-html for deterministic protocol prototyping.\n'
   )
   process.exit(2)
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
+  }
 }

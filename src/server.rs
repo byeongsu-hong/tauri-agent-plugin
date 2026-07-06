@@ -12,10 +12,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::{
-    commands, write_endpoint_registry, AgentAttachRequest, AgentEndpointDescriptor,
-    EndpointRegistryError, Error, InlineServerConfig, WindowInfo,
+    bridge::AgentBridge, commands, write_endpoint_registry, AgentAttachRequest,
+    AgentEndpointDescriptor, EndpointRegistryError, Error, InlineServerConfig, WindowInfo,
 };
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum InlineServerError {
@@ -59,6 +59,12 @@ impl Drop for InlineDebuggerServer {
 pub(crate) trait InlineDebuggerBackend {
     fn windows(&self) -> Vec<WindowInfo>;
     fn ensure_window(&self, label: Option<&str>) -> crate::Result<()>;
+    fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+        let _ = (method, params);
+        Err(Error::BridgeUnavailable(
+            "guest bridge methods are not active in this backend".into(),
+        ))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,9 +85,11 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
-        "tree" | "click" | "fill" | "press" | "shot" | "logs" | "events" | "wait" | "state"
-        | "record" => Err(Error::BridgeUnavailable(
-            "guest bridge methods are not active in the inline Rust server yet",
+        "tree" | "click" | "fill" | "press" | "logs" | "events" | "wait" | "state" | "record" => {
+            backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
+        }
+        "shot" => Err(Error::BridgeUnavailable(
+            "agent_screenshot will use native capture after the bridge is wired".into(),
         )),
         method => {
             return error_response(
@@ -154,6 +162,15 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
     fn ensure_window(&self, label: Option<&str>) -> crate::Result<()> {
         commands::ensure_window(&self.app, label)
     }
+
+    fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+        let window = params
+            .get("window")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let bridge = self.app.state::<AgentBridge>();
+        bridge.request_webview(&self.app, window.as_deref(), method, params)
+    }
 }
 
 fn accept_loop<B>(listener: TcpListener, backend: Arc<B>, shutdown: Arc<AtomicBool>)
@@ -222,7 +239,7 @@ fn handle_attach(
 
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
     serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|_| {
-        Error::BridgeUnavailable("invalid JSON-RPC params for inline Rust server method")
+        Error::BridgeUnavailable("invalid JSON-RPC params for inline Rust server method".into())
     })
 }
 

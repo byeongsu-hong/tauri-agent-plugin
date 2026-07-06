@@ -1,5 +1,6 @@
 use tauri::{plugin::TauriPlugin, Manager, Runtime};
 
+mod bridge;
 mod commands;
 mod endpoint;
 mod error;
@@ -35,6 +36,12 @@ impl Agent {
     pub fn endpoint(&self) -> Option<&AgentEndpointDescriptor> {
         self.endpoint.as_ref()
     }
+
+    fn cleanup_endpoint(&self) {
+        if let Some(endpoint) = &self.endpoint {
+            let _ = remove_endpoint_registry(endpoint.app_id(), None);
+        }
+    }
 }
 
 pub trait AgentExt<R: Runtime> {
@@ -58,6 +65,7 @@ impl Builder {
         tauri::plugin::Builder::<R, Option<Config>>::new("agent")
             .setup(|app, api| {
                 let config = api.config().clone().unwrap_or_default();
+                app.manage(bridge::AgentBridge::default());
                 let endpoint = if config.inline_server.enabled {
                     let server = server::start_inline_debugger_server(
                         app.clone(),
@@ -73,7 +81,23 @@ impl Builder {
                 app.manage(Agent { config, endpoint });
                 Ok(())
             })
+            .on_event(|app, event| {
+                if matches!(
+                    event,
+                    tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
+                ) {
+                    if let Some(agent) = app.try_state::<Agent>() {
+                        agent.cleanup_endpoint();
+                    }
+                }
+            })
+            .on_drop(|app| {
+                if let Some(agent) = app.try_state::<Agent>() {
+                    agent.cleanup_endpoint();
+                }
+            })
             .invoke_handler(tauri::generate_handler![
+                commands::agent_bridge_response,
                 commands::agent_attach,
                 commands::agent_snapshot,
                 commands::agent_action,

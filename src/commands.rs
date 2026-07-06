@@ -1,5 +1,6 @@
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime, State};
 
+use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
     AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
@@ -7,6 +8,15 @@ use crate::models::{
     AgentWaitResponse, WindowInfo,
 };
 use crate::{Error, Result};
+
+#[tauri::command]
+pub async fn agent_bridge_response(
+    bridge: State<'_, AgentBridge>,
+    response: AgentBridgeResponse,
+) -> Result<()> {
+    bridge.complete(response);
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn agent_attach<R: Runtime>(
@@ -27,7 +37,7 @@ pub async fn agent_snapshot<R: Runtime>(
 ) -> Result<String> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_snapshot is reserved for the guest JS semantic-tree bridge in v0",
+        "agent_snapshot is reserved for the guest JS semantic-tree bridge in v0".into(),
     ))
 }
 
@@ -41,7 +51,7 @@ pub async fn agent_action<R: Runtime>(
         return Err(Error::StaleRef(request.ref_id));
     }
     Err(Error::BridgeUnavailable(
-        "agent_action is reserved for the guest JS ref registry in v0",
+        "agent_action is reserved for the guest JS ref registry in v0".into(),
     ))
 }
 
@@ -52,7 +62,7 @@ pub async fn agent_screenshot<R: Runtime>(
 ) -> Result<String> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_screenshot will use native capture after the bridge is wired",
+        "agent_screenshot will use native capture after the bridge is wired".into(),
     ))
 }
 
@@ -63,7 +73,7 @@ pub async fn agent_logs<R: Runtime>(
 ) -> Result<Vec<AgentLogEntry>> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_logs needs guest console instrumentation and is not active in Rust bridge v0",
+        "agent_logs needs guest console instrumentation and is not active in Rust bridge v0".into(),
     ))
 }
 
@@ -74,7 +84,7 @@ pub async fn agent_events<R: Runtime>(
 ) -> Result<Vec<AgentEventEntry>> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_events needs a stream transport and is not active in v0",
+        "agent_events needs a stream transport and is not active in v0".into(),
     ))
 }
 
@@ -90,7 +100,7 @@ pub async fn agent_wait<R: Runtime>(
 ) -> Result<AgentWaitResponse> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_wait needs guest text waiters and is not active in Rust bridge v0",
+        "agent_wait needs guest text waiters and is not active in Rust bridge v0".into(),
     ))
 }
 
@@ -101,7 +111,7 @@ pub async fn agent_state<R: Runtime>(
 ) -> Result<serde_json::Value> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_state needs guest state probes and is not active in Rust bridge v0",
+        "agent_state needs guest state probes and is not active in Rust bridge v0".into(),
     ))
 }
 
@@ -112,7 +122,7 @@ pub async fn agent_record<R: Runtime>(
 ) -> Result<AgentRecordResponse> {
     ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
-        "agent_record needs guest action recording and is not active in Rust bridge v0",
+        "agent_record needs guest action recording and is not active in Rust bridge v0".into(),
     ))
 }
 

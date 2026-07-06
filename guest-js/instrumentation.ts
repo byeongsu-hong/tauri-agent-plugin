@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
   clickRef,
   fillRef,
@@ -6,7 +8,9 @@ import {
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
-import type { AgentEvent, LogEntry, RecordingEntry } from '../protocol/types'
+import type { AgentEvent, AgentMethod, LogEntry, RecordingEntry } from '../protocol/types'
+
+const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
 
 export interface InstrumentationOptions {
   state?: Record<string, () => unknown>
@@ -20,8 +24,16 @@ export interface InstrumentedAction {
 
 type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error'
 
+interface AgentBridgeRequest {
+  id: string
+  method: AgentMethod
+  params?: Record<string, unknown>
+}
+
 export class WebviewAgentInstrumentation {
   private installed = false
+  private bridgeInstalled = false
+  private bridgeUnlisten?: UnlistenFn
   private capturedLogs: LogEntry[] = []
   private capturedEvents: AgentEvent[] = []
   private recording = false
@@ -42,6 +54,8 @@ export class WebviewAgentInstrumentation {
         this.originalConsole.get(level)?.apply(console, args)
       }
     }
+    window.__TAURI_AGENT__ = this
+    this.installBridge()
   }
 
   dispose(): void {
@@ -49,6 +63,9 @@ export class WebviewAgentInstrumentation {
       console[level] = original
     }
     this.originalConsole.clear()
+    this.bridgeUnlisten?.()
+    this.bridgeUnlisten = undefined
+    this.bridgeInstalled = false
     this.installed = false
   }
 
@@ -132,6 +149,74 @@ export class WebviewAgentInstrumentation {
     }
   }
 
+  private installBridge(): void {
+    if (this.bridgeInstalled) {
+      return
+    }
+    this.bridgeInstalled = true
+    void listen<AgentBridgeRequest>(BRIDGE_REQUEST_EVENT, (event) => {
+      void this.handleBridgeRequest(event.payload)
+    })
+      .then((unlisten) => {
+        this.bridgeUnlisten = unlisten
+      })
+      .catch(() => {
+        this.bridgeInstalled = false
+      })
+  }
+
+  private async handleBridgeRequest(request: AgentBridgeRequest): Promise<void> {
+    try {
+      const result = await this.executeBridgeRequest(request)
+      await invoke('plugin:agent|agent_bridge_response', {
+        response: {
+          id: request.id,
+          result
+        }
+      })
+    } catch (error) {
+      await invoke('plugin:agent|agent_bridge_response', {
+        response: {
+          id: request.id,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
+    }
+  }
+
+  private async executeBridgeRequest(request: AgentBridgeRequest): Promise<unknown> {
+    const params = request.params ?? {}
+    switch (request.method) {
+      case 'tree':
+        return { text: this.snapshot({ scope: stringParam(params, 'scope'), mode: modeParam(params) }).text }
+      case 'click':
+        return this.action({ action: 'click', ref: requiredStringParam(params, 'ref') })
+      case 'fill':
+        return this.action({
+          action: 'fill',
+          ref: requiredStringParam(params, 'ref'),
+          value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
+        })
+      case 'press':
+        return this.action({ action: 'press', value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '' })
+      case 'logs':
+        return this.logs()
+      case 'events':
+        return this.events()
+      case 'wait':
+        return this.wait({
+          text: requiredStringParam(params, 'text'),
+          timeoutMs: numberParam(params, 'timeoutMs')
+        })
+      case 'state':
+        return this.state()
+      case 'record':
+        return this.record(recordActionParam(params))
+      default:
+        throw new Error(`unsupported agent bridge method: ${request.method}`)
+    }
+  }
+
   private pushLog(level: LogEntry['level'], message: string): void {
     this.capturedLogs.push({
       level,
@@ -160,6 +245,12 @@ export class WebviewAgentInstrumentation {
   }
 }
 
+declare global {
+  interface Window {
+    __TAURI_AGENT__?: WebviewAgentInstrumentation
+  }
+}
+
 function requiredRef(ref: string | undefined): string {
   if (!ref) {
     throw new Error('missing required ref')
@@ -182,4 +273,32 @@ function controlName(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
     control.id ??
     'value'
   )
+}
+
+function requiredStringParam(params: Record<string, unknown>, key: string): string {
+  const value = stringParam(params, key)
+  if (value === undefined) {
+    throw new Error(`missing required param: ${key}`)
+  }
+  return value
+}
+
+function stringParam(params: Record<string, unknown>, key: string): string | undefined {
+  const value = params[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function numberParam(params: Record<string, unknown>, key: string): number | undefined {
+  const value = params[key]
+  return typeof value === 'number' ? value : undefined
+}
+
+function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | undefined {
+  const mode = params.mode
+  return mode === 'compact' || mode === 'verbose' ? mode : undefined
+}
+
+function recordActionParam(params: Record<string, unknown>): 'start' | 'stop' | 'get' | 'clear' {
+  const action = params.action
+  return action === 'start' || action === 'stop' || action === 'clear' ? action : 'get'
 }
