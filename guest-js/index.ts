@@ -29,8 +29,10 @@ import type {
   AgentEvent,
   EvalResult,
   FindResult,
+  EventsParams,
   LocationParams,
   LocationResult,
+  LogsParams,
   LogEntry,
   NetworkEntry,
   RecordingEntry,
@@ -62,11 +64,13 @@ export {
   type AgentEvent,
   type DragOptions,
   type EvalResult,
+  type EventsParams,
   type FindResult,
   type InspectResult,
   type LocationParams,
   type LocationResult,
   type LogEntry,
+  type LogsParams,
   type NetworkEntry,
   type RecordingEntry,
   type ScreenshotOptions,
@@ -163,14 +167,12 @@ export interface AgentScreenshotRequest {
   path?: string
 }
 
-export interface AgentLogRequest {
+export interface AgentLogRequest extends LogsParams {
   window?: string
-  follow?: boolean
 }
 
-export interface AgentEventsRequest {
+export interface AgentEventsRequest extends EventsParams {
   window?: string
-  follow?: boolean
 }
 
 export interface AgentNetworkRequest {

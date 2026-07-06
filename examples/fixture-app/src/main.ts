@@ -200,8 +200,9 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
   if (notifyRef) await agentCheck({ ref: notifyRef, checked: true })
   await agentAction({ action: 'press', value: 'Escape' })
   const state = await agentState()
-  const logs = await agentLogs()
-  const events = await agentEvents()
+  console.info('command bridge log probe')
+  const logs = await agentLogs({ clear: true })
+  const events = await agentEvents({ clear: true })
   const network = await agentNetwork()
   const shot = await agentScreenshot()
   const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
@@ -234,7 +235,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
     probes.blurredForge === true &&
     probes.scrolledRoster === true &&
     probes.draggedForge === true &&
-    logs.some((entry) => entry.message.includes('tauri-agent fixture booted')) &&
+    logs.some((entry) => entry.message.includes('command bridge log probe')) &&
     events.some((event) => event.kind === 'click') &&
     events.some((event) => event.kind === 'hover') &&
     events.some((event) => event.kind === 'focus') &&

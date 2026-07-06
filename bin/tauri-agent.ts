@@ -352,6 +352,7 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
   .option('--follow', 'poll and stream new log entries as newline-delimited JSON')
+  .option('--clear', 'clear captured log entries after reading')
   .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
   .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
   .action(async (options: FollowOptions) => {
@@ -359,7 +360,7 @@ program
       await followEntries(options, 'logs')
       return
     }
-    printJson(await call(options, 'logs', { ...targetParams(options), follow: options.follow }))
+    printJson(await call(options, 'logs', { ...targetParams(options), follow: options.follow, clear: options.clear }))
   })
 
 program
@@ -371,6 +372,7 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
   .option('--follow', 'poll and stream new event entries as newline-delimited JSON')
+  .option('--clear', 'clear captured event entries after reading')
   .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
   .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
   .action(async (options: FollowOptions) => {
@@ -378,7 +380,7 @@ program
       await followEntries(options, 'events')
       return
     }
-    printJson(await call(options, 'events', { ...targetParams(options), follow: options.follow }))
+    printJson(await call(options, 'events', { ...targetParams(options), follow: options.follow, clear: options.clear }))
   })
 
 program

@@ -124,6 +124,10 @@ describe('WebviewAgentInstrumentation', () => {
     expect(instrumentation.logs()).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
     ])
+    expect(instrumentation.logs({ clear: true })).toEqual([
+      expect.objectContaining({ level: 'info', message: 'booted' })
+    ])
+    expect(instrumentation.logs()).toEqual([])
     expect(instrumentation.events()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
@@ -137,6 +141,13 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
       ])
     )
+    expect(instrumentation.events({ clear: true })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
+        expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } })
+      ])
+    )
+    expect(instrumentation.events()).toEqual([])
     expect(instrumentation.state()).toEqual({
       url: window.location.href,
       title: '',

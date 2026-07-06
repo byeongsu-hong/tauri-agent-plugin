@@ -115,6 +115,10 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toMatchObject([
       { level: 'info', message: 'booted', window: 'main' }
     ])
+    await expect(session.execute('logs', { clear: true })).resolves.toMatchObject([
+      { level: 'info', message: 'booted', window: 'main' }
+    ])
+    await expect(session.execute('logs', {})).resolves.toEqual([])
     await expect(session.execute('network', {})).resolves.toEqual([])
     await expect(
       session.execute('storage', { action: 'set', key: 'agent.token', value: 'ready' })
@@ -186,6 +190,13 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } })
       ])
     )
+    await expect(session.execute('events', { clear: true })).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'attach', window: 'main' }),
+        expect.objectContaining({ kind: 'click', detail: { ref: '@1' } })
+      ])
+    )
+    await expect(session.execute('events', {})).resolves.toEqual([])
     await expect(session.execute('record', { action: 'get' })).resolves.toEqual({
       recording: true,
       entries: [

@@ -32,7 +32,9 @@ import type {
   InspectResult,
   LocationParams,
   LocationResult,
+  LogsParams,
   LogEntry,
+  EventsParams,
   NetworkEntry,
   RecordingEntry,
   ScreenshotResult,
@@ -287,12 +289,20 @@ export class WebviewAgentInstrumentation {
     return screenshotDocument(document, options)
   }
 
-  logs(): LogEntry[] {
-    return [...this.capturedLogs]
+  logs(options: Pick<LogsParams, 'clear'> = {}): LogEntry[] {
+    const entries = [...this.capturedLogs]
+    if (options.clear) {
+      this.capturedLogs = []
+    }
+    return entries
   }
 
-  events(): AgentEvent[] {
-    return [...this.capturedEvents]
+  events(options: Pick<EventsParams, 'clear'> = {}): AgentEvent[] {
+    const entries = [...this.capturedEvents]
+    if (options.clear) {
+      this.capturedEvents = []
+    }
+    return entries
   }
 
   network(options: { clear?: boolean } = {}): NetworkEntry[] {
@@ -433,9 +443,9 @@ export class WebviewAgentInstrumentation {
       case 'shot':
         return this.screenshot({ path: stringParam(params, 'path') })
       case 'logs':
-        return this.logs()
+        return this.logs({ clear: booleanParam(params, 'clear') ?? false })
       case 'events':
-        return this.events()
+        return this.events({ clear: booleanParam(params, 'clear') ?? false })
       case 'network':
         return this.network({ clear: booleanParam(params, 'clear') ?? false })
       case 'storage':

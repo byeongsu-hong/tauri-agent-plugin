@@ -64,9 +64,9 @@ export class DebuggerSession {
       case 'shot':
         return this.app.shot(stringParam(params.path))
       case 'logs':
-        return this.app.getLogs()
+        return this.app.getLogs(booleanParam(params.clear) ?? false)
       case 'events':
-        return this.app.getEvents()
+        return this.app.getEvents(booleanParam(params.clear) ?? false)
       case 'network':
         return this.app.getNetwork(booleanParam(params.clear) ?? false)
       case 'storage':

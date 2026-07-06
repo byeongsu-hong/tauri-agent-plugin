@@ -49,6 +49,8 @@ bun bin/tauri-agent.ts wait "Registered" --from-html ./screen.html
 bun bin/tauri-agent.ts wait --role button --name Forge --from-html ./screen.html
 bun bin/tauri-agent.ts state --from-html ./screen.html
 bun bin/tauri-agent.ts network --from-html ./screen.html
+bun bin/tauri-agent.ts logs --clear --from-html ./screen.html
+bun bin/tauri-agent.ts events --clear --from-html ./screen.html
 bun bin/tauri-agent.ts storage --action set --key agent.token --value ready --from-html ./screen.html
 bun bin/tauri-agent.ts location --action push --url /agents --from-html ./screen.html
 bun bin/tauri-agent.ts record --from-html ./screen.html
@@ -88,6 +90,8 @@ tauri-agent wait "Registered worker-a" --app dev.byeongsu.tauri-agent.fixture
 tauri-agent wait --role button --name Forge --app dev.byeongsu.tauri-agent.fixture
 tauri-agent state --app dev.byeongsu.tauri-agent.fixture
 tauri-agent network --app dev.byeongsu.tauri-agent.fixture
+tauri-agent logs --clear --app dev.byeongsu.tauri-agent.fixture
+tauri-agent events --clear --app dev.byeongsu.tauri-agent.fixture
 tauri-agent storage --action set --key fixture:lastSelfTest --value main --app dev.byeongsu.tauri-agent.fixture
 tauri-agent location --action push --url '/agents?bridge=1' --app dev.byeongsu.tauri-agent.fixture
 ```
@@ -113,7 +117,9 @@ tauri-agent eval "document.title"
 tauri-agent press Enter
 tauri-agent shot /tmp/app.svg
 tauri-agent logs --follow
+tauri-agent logs --clear
 tauri-agent events --follow
+tauri-agent events --clear
 tauri-agent network --follow
 tauri-agent storage --area session --action get
 tauri-agent location --action push --url /agents
@@ -124,7 +130,7 @@ tauri-agent record --action start
 ```
 
 Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
-`tree --interactive` polls the debugger endpoint and streams changed semantic tree snapshots as newline-delimited JSON. `logs --follow`, `events --follow`, and `network --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `network --clear` to read and reset captured fetch entries. Use `--timeout-ms <ms>` for bounded polling sessions in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
+`tree --interactive` polls the debugger endpoint and streams changed semantic tree snapshots as newline-delimited JSON. `logs --follow`, `events --follow`, and `network --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `logs --clear`, `events --clear`, or `network --clear` to read and reset captured buffers. Use `--timeout-ms <ms>` for bounded polling sessions in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
 
 ## MCP
 
@@ -256,8 +262,8 @@ await agentScroll({ ref: '@11', y: 12 })
 await agentDrag({ ref: '@3', toRef: '@18' })
 await agentSelect({ ref: '@5', value: 'remote' })
 await agentCheck({ ref: '@6', checked: true })
-await agentLogs()
-await agentEvents()
+await agentLogs({ clear: true })
+await agentEvents({ clear: true })
 await agentNetwork({ clear: true })
 await agentStorage({ action: 'set', key: 'agent.token', value: 'ready' })
 await agentLocation({ action: 'push', url: '/agents' })

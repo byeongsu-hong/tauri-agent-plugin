@@ -47,10 +47,11 @@ function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {
     case 'tree':
     case 'find':
     case 'inspect':
-    case 'logs':
-    case 'events':
     case 'state':
       return true
+    case 'logs':
+    case 'events':
+      return params.clear !== true
     case 'network':
       return params.clear !== true
     case 'storage':

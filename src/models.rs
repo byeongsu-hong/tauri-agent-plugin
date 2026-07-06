@@ -210,6 +210,7 @@ pub struct AgentScreenshotRequest {
 pub struct AgentLogRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
+    pub clear: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -226,6 +227,7 @@ pub struct AgentLogEntry {
 pub struct AgentEventsRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
+    pub clear: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -647,6 +649,26 @@ mod tests {
         assert_eq!(
             serde_json::to_value(record).unwrap(),
             serde_json::json!({"window": null, "action": "start"})
+        );
+
+        let logs = AgentLogRequest {
+            window: Some("main".into()),
+            follow: Some(true),
+            clear: Some(true),
+        };
+        assert_eq!(
+            serde_json::to_value(logs).unwrap(),
+            serde_json::json!({"window": "main", "follow": true, "clear": true})
+        );
+
+        let events = AgentEventsRequest {
+            window: Some("main".into()),
+            follow: Some(true),
+            clear: Some(true),
+        };
+        assert_eq!(
+            serde_json::to_value(events).unwrap(),
+            serde_json::json!({"window": "main", "follow": true, "clear": true})
         );
 
         let network = AgentNetworkRequest {

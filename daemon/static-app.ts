@@ -243,12 +243,20 @@ export class StaticHtmlAppAdapter {
     throw new Error(`wait timed out for text: ${text}`)
   }
 
-  getLogs(): LogEntry[] {
-    return [...this.logs]
+  getLogs(clear = false): LogEntry[] {
+    const entries = [...this.logs]
+    if (clear) {
+      this.logs = []
+    }
+    return entries
   }
 
-  getEvents(): AgentEvent[] {
-    return [...this.events]
+  getEvents(clear = false): AgentEvent[] {
+    const entries = [...this.events]
+    if (clear) {
+      this.events = []
+    }
+    return entries
   }
 
   getNetwork(clear = false): NetworkEntry[] {
