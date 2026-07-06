@@ -3,9 +3,11 @@ import {
   clickRef,
   currentRefRegistry,
   fillRef,
+  inspectRef,
   pressKey,
   resolveRef,
   snapshotDocument,
+  type InspectResult,
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
@@ -17,11 +19,13 @@ export {
   clickRef,
   currentRefRegistry,
   fillRef,
+  inspectRef,
   pressKey,
   resolveRef,
   screenshotDocument,
   snapshotDocument,
   type AgentEvent,
+  type InspectResult,
   type LogEntry,
   type RecordingEntry,
   type ScreenshotOptions,
@@ -48,6 +52,11 @@ export type AgentActionRequest =
       value: string
       ref?: string
     }
+
+export interface AgentInspectRequest {
+  window?: string
+  ref: string
+}
 
 export interface AgentScreenshotRequest {
   window?: string
@@ -103,6 +112,10 @@ export async function agentSnapshot(request: AgentSnapshotRequest = {}): Promise
 
 export async function agentAction(request: AgentActionRequest): Promise<void> {
   return invoke('plugin:agent|agent_action', { request })
+}
+
+export async function agentInspect(request: AgentInspectRequest): Promise<InspectResult> {
+  return invoke('plugin:agent|agent_inspect', { request })
 }
 
 export async function agentScreenshot(request: AgentScreenshotRequest = {}): Promise<string> {

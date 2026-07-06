@@ -1,3 +1,5 @@
+import type { InspectResult } from '../protocol/types'
+
 export interface SnapshotOptions {
   scope?: string
   mode?: 'compact' | 'verbose'
@@ -7,6 +9,8 @@ export interface SnapshotResult {
   text: string
   refs: Map<string, Element>
 }
+
+export type { InspectResult }
 
 interface RenderState {
   nextRef: number
@@ -78,6 +82,22 @@ export function resolveRef(ref: string, refs: Map<string, Element> = currentRefs
 
 export function currentRefRegistry(): Map<string, Element> {
   return new Map(currentRefs)
+}
+
+export function inspectRef(ref: string, refs: Map<string, Element> = currentRefs): InspectResult {
+  const normalized = normalizeRef(ref)
+  const element = resolveRef(normalized, refs)
+  const role = semanticRole(element) ?? 'generic'
+  return {
+    ref: normalized,
+    role,
+    name: accessibleName(element, role),
+    tagName: element.tagName.toLowerCase(),
+    text: normalizeText(element.textContent ?? ''),
+    ...controlValue(element),
+    attributes: elementAttributes(element),
+    states: stateFlags(element, role)
+  }
 }
 
 export function clickRef(ref: string): void {
@@ -360,6 +380,25 @@ function stateFlags(element: Element, role: string): string[] {
   if (role === 'textbox' && isEmptyTextInput(element)) flags.push('empty')
   if (isFocused(element)) flags.push('focused')
   return flags
+}
+
+function controlValue(element: Element): { value?: string } {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    return { value: element.value }
+  }
+  return {}
+}
+
+function elementAttributes(element: Element): Record<string, string> {
+  return Object.fromEntries(
+    Array.from(element.attributes)
+      .map((attribute) => [attribute.name, attribute.value] as const)
+      .sort(([left], [right]) => left.localeCompare(right))
+  )
 }
 
 function isChecked(element: Element): boolean {

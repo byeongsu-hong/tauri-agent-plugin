@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +81,28 @@ pub struct AgentActionRequest {
     pub ref_id: Option<String>,
     pub action: AgentAction,
     pub value: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInspectRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentInspectResponse {
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub role: String,
+    pub name: String,
+    pub tag_name: String,
+    pub text: String,
+    pub value: Option<String>,
+    pub attributes: BTreeMap<String, String>,
+    pub states: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -232,6 +255,15 @@ mod tests {
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
             serde_json::json!({"window": "main", "text": "Registered", "timeoutMs": 250})
+        );
+
+        let inspect = AgentInspectRequest {
+            window: Some("main".into()),
+            ref_id: "@4".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(inspect).unwrap(),
+            serde_json::json!({"window": "main", "ref": "@4"})
         );
 
         let record = AgentRecordRequest {

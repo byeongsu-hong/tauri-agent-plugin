@@ -3,13 +3,14 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
   clickRef,
   fillRef,
+  inspectRef,
   pressKey,
   snapshotDocument,
   type SnapshotOptions,
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import type { AgentEvent, AgentMethod, LogEntry, RecordingEntry, ScreenshotResult } from '../protocol/types'
+import type { AgentEvent, AgentMethod, InspectResult, LogEntry, RecordingEntry, ScreenshotResult } from '../protocol/types'
 
 const BRIDGE_REQUEST_EVENT = 'tauri-agent://request'
 
@@ -90,6 +91,10 @@ export class WebviewAgentInstrumentation {
     this.pushEvent(action.action, serializableAction(action))
     this.recordAction(action)
     return { ok: true }
+  }
+
+  inspect(ref: string): InspectResult {
+    return inspectRef(ref)
   }
 
   async wait(options: { text: string; timeoutMs?: number }): Promise<{ matched: true; text: string }> {
@@ -202,6 +207,8 @@ export class WebviewAgentInstrumentation {
           ref: requiredStringParam(params, 'ref'),
           value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
         })
+      case 'inspect':
+        return this.inspect(requiredStringParam(params, 'ref'))
       case 'press':
         return this.action({ action: 'press', value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '' })
       case 'shot':

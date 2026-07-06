@@ -5,9 +5,9 @@ use tauri::{AppHandle, Manager, Runtime, State};
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
-    AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
-    AgentScreenshotRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
-    AgentWaitResponse, WindowInfo,
+    AgentEventsRequest, AgentInspectRequest, AgentInspectResponse, AgentLogEntry, AgentLogRequest,
+    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentSnapshotRequest,
+    AgentStateRequest, AgentWaitRequest, AgentWaitResponse, WindowInfo,
 };
 use crate::screenshot::write_data_url_to_path;
 use crate::{Error, Result};
@@ -67,6 +67,22 @@ pub async fn agent_action<R: Runtime>(
     };
     request_bridge(&bridge, &app, request.window.as_deref(), method, &request)?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_inspect<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentInspectRequest,
+) -> Result<AgentInspectResponse> {
+    let result = request_bridge(
+        &bridge,
+        &app,
+        request.window.as_deref(),
+        "inspect",
+        &request,
+    )?;
+    decode_bridge_result(result)
 }
 
 #[tauri::command]

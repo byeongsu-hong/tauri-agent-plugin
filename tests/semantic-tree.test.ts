@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { clickRef, fillRef, pressKey, resolveRef, snapshotDocument } from '../guest-js/semantic-tree'
+import {
+  clickRef,
+  fillRef,
+  inspectRef,
+  pressKey,
+  resolveRef,
+  snapshotDocument
+} from '../guest-js/semantic-tree'
 
 describe('snapshotDocument', () => {
   it('formats a compact semantic tree with snapshot-local refs and useful state', () => {
@@ -88,5 +95,47 @@ describe('snapshotDocument', () => {
 
     expect(seen).toEqual(['clicked', 'input', 'key:Enter'])
     expect((resolveRef('@2') as HTMLInputElement).value).toBe('worker-a')
+  })
+
+  it('inspects snapshot-local refs with structured element details', () => {
+    document.body.innerHTML = `
+      <main>
+        <button id="forge" data-action="forge" aria-expanded="true" disabled>
+          Forge <span>now</span>
+        </button>
+        <input aria-label="Agent name" value="worker-a" />
+      </main>
+    `
+
+    snapshotDocument(document)
+
+    expect(inspectRef('@1')).toEqual({
+      ref: '@1',
+      role: 'button',
+      name: 'Forge now',
+      tagName: 'button',
+      text: 'Forge now',
+      attributes: {
+        'aria-expanded': 'true',
+        'data-action': 'forge',
+        disabled: '',
+        id: 'forge'
+      },
+      states: ['disabled', 'expanded']
+    })
+    expect(inspectRef('@2')).toEqual({
+      ref: '@2',
+      role: 'textbox',
+      name: 'Agent name',
+      tagName: 'input',
+      text: '',
+      value: 'worker-a',
+      attributes: {
+        'aria-label': 'Agent name',
+        value: 'worker-a'
+      },
+      states: []
+    })
+    expect(() => inspectRef('@9')).toThrow('stale ref @9; run tree again')
   })
 })
