@@ -86,8 +86,8 @@ pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, lin
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
-        "tree" | "click" | "fill" | "inspect" | "press" | "logs" | "events" | "wait" | "state"
-        | "record" => {
+        "tree" | "click" | "fill" | "inspect" | "eval" | "press" | "logs" | "events" | "wait"
+        | "state" | "record" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
@@ -380,6 +380,28 @@ mod tests {
         }
     }
 
+    struct FakeEvalBackend;
+
+    impl InlineDebuggerBackend for FakeEvalBackend {
+        fn windows(&self) -> Vec<WindowInfo> {
+            Vec::new()
+        }
+
+        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
+            assert_eq!(method, "eval");
+            assert_eq!(params["code"], "document.title");
+            Ok(serde_json::json!({
+                "type": "string",
+                "value": "Fixture",
+                "text": "Fixture"
+            }))
+        }
+    }
+
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
@@ -438,6 +460,27 @@ mod tests {
                     "value": "worker-a",
                     "attributes": {"aria-label": "Agent name"},
                     "states": []
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_eval_json_rpc_to_bridge() {
+        let response = respond_to_json_rpc_line(
+            &FakeEvalBackend,
+            r#"{"jsonrpc":"2.0","id":5,"method":"eval","params":{"code":"document.title"}}"#,
+        );
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "result": {
+                    "type": "string",
+                    "value": "Fixture",
+                    "text": "Fixture"
                 }
             })
         );

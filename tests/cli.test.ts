@@ -45,6 +45,13 @@ describe('tauri-agent CLI', () => {
       states: ['empty']
     })
     expect(JSON.parse(runCli(['fill', '@2', 'worker-a', '--from-html', path]))).toEqual({ ok: true })
+    expect(
+      JSON.parse(runCli(['eval', 'document.querySelector("input")?.getAttribute("aria-label")', '--from-html', path]))
+    ).toEqual({
+      type: 'string',
+      value: 'Agent name',
+      text: 'Agent name'
+    })
     expect(JSON.parse(runCli(['state', '--from-html', path]))).toEqual({
       url: 'tauri-agent://static',
       title: 'Tauri App',

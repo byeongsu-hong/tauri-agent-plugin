@@ -65,6 +65,11 @@ describe('WebviewAgentInstrumentation', () => {
         route: '/agents'
       }
     })
+    expect(instrumentation.evaluate('document.querySelector("input")?.value')).toEqual({
+      type: 'string',
+      value: 'worker-a',
+      text: 'worker-a'
+    })
     const screenshot = instrumentation.screenshot()
     expect(screenshot.mime).toBe('image/svg+xml')
     expect(screenshot.dataUrl).toMatch(/^data:image\/svg\+xml;base64,/)

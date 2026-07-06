@@ -44,6 +44,13 @@ describe('DebuggerSession', () => {
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('fill', { ref: '@2', text: 'worker-a' })).resolves.toEqual({ ok: true })
+    await expect(
+      session.execute('eval', { code: 'document.querySelector("input")?.value' })
+    ).resolves.toEqual({
+      type: 'string',
+      value: 'worker-a',
+      text: 'worker-a'
+    })
     await expect(session.execute('press', { key: 'Enter' })).resolves.toEqual({ ok: true })
 
     await expect(session.execute('state', {})).resolves.toEqual({

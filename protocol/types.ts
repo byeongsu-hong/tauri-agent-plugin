@@ -7,6 +7,7 @@ export type AgentMethod =
   | 'click'
   | 'fill'
   | 'inspect'
+  | 'eval'
   | 'press'
   | 'shot'
   | 'logs'
@@ -64,6 +65,10 @@ export interface FillParams extends RefActionParams {
 
 export interface InspectParams extends RefActionParams {}
 
+export interface EvalParams extends WindowTarget {
+  code: string
+}
+
 export interface PressParams extends WindowTarget {
   key: string
 }
@@ -113,6 +118,12 @@ export interface InspectResult {
   value?: string
   attributes: Record<string, string>
   states: string[]
+}
+
+export interface EvalResult {
+  type: string
+  text: string
+  value?: unknown
 }
 
 export interface LogEntry {
