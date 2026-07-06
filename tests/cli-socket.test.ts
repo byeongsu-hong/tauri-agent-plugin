@@ -1,17 +1,21 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFile, execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createServer, type Server } from 'node:net'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createEndpointDescriptor, writeEndpointRegistry } from '../daemon/endpoint'
 
 let server: ChildProcessWithoutNullStreams | undefined
+let fakeRpcServer: Server | undefined
 
 afterEach(() => {
   server?.kill()
   server = undefined
+  fakeRpcServer?.close()
+  fakeRpcServer = undefined
 })
 
 function htmlFile(): string {
@@ -32,6 +36,27 @@ function runCli(args: string[], env: NodeJS.ProcessEnv = process.env): string {
   }).trim()
 }
 
+async function runCliAsync(args: string[], env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'bun',
+      ['bin/tauri-agent.ts', ...args],
+      {
+        cwd: process.cwd(),
+        env,
+        encoding: 'utf8'
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`${error.message}\n${stderr}`.trim()))
+          return
+        }
+        resolve(stdout.trim())
+      }
+    )
+  })
+}
+
 async function startServer(path: string, port: number): Promise<void> {
   server = spawn('bun', ['bin/tauri-agent.ts', 'serve', '--from-html', path, '--port', String(port)], {
     cwd: process.cwd()
@@ -49,6 +74,42 @@ async function startServer(path: string, port: number): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
+}
+
+async function startCapturingRpcServer(responses: Record<string, unknown>): Promise<{
+  port: number
+  requests: Array<{ method: string; params?: unknown }>
+}> {
+  const requests: Array<{ method: string; params?: unknown }> = []
+  fakeRpcServer = createServer((socket) => {
+    let buffer = ''
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex)
+        buffer = buffer.slice(newlineIndex + 1)
+        const request = JSON.parse(line) as { id: number; method: string; params?: unknown }
+        requests.push({ method: request.method, params: request.params })
+        socket.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: request.id,
+            result: responses[request.method] ?? { ok: true }
+          })}\n`,
+          () => socket.end()
+        )
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+  })
+
+  await new Promise<void>((resolve) => fakeRpcServer?.listen(0, '127.0.0.1', resolve))
+  const address = fakeRpcServer.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('fake RPC server did not bind to a TCP port')
+  }
+  return { port: address.port, requests }
 }
 
 describe('tauri-agent CLI socket mode', () => {
@@ -87,5 +148,33 @@ describe('tauri-agent CLI socket mode', () => {
     expect(JSON.parse(runCli(['windows', '--app', appId], env))).toEqual([
       { label: 'main', title: 'Tauri App', focused: true, visible: true }
     ])
+  })
+
+  it('forwards --window to ref command snapshot refresh and action calls', async () => {
+    const { port, requests } = await startCapturingRpcServer({
+      tree: { text: '@3 button "Forge"' },
+      click: { ok: true }
+    })
+
+    expect(
+      JSON.parse(await runCliAsync(['click', '@3', '--port', String(port), '--window', 'secondary', '--scope', 'main']))
+    ).toEqual({ ok: true })
+    expect(requests).toEqual([
+      { method: 'tree', params: { window: 'secondary', scope: 'main' } },
+      { method: 'click', params: { window: 'secondary', ref: '@3' } }
+    ])
+  })
+
+  it('forwards --window to direct protocol commands', async () => {
+    const { port, requests } = await startCapturingRpcServer({
+      state: { url: 'tauri-agent://fake', title: 'Fake', values: {} }
+    })
+
+    expect(JSON.parse(await runCliAsync(['state', '--port', String(port), '--window', 'secondary']))).toEqual({
+      url: 'tauri-agent://fake',
+      title: 'Fake',
+      values: {}
+    })
+    expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
   })
 })

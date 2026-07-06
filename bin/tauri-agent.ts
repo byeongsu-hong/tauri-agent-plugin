@@ -14,6 +14,7 @@ interface ConnectionOptions {
   app?: string
   fromHtml?: string
   scope?: string
+  window?: string
   host?: string
   port?: number
 }
@@ -49,7 +50,8 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
-  .action(async (options: ConnectionOptions) => printJson(await call(options, 'attach')))
+  .option('--window <label>', 'Tauri window label')
+  .action(async (options: ConnectionOptions) => printJson(await call(options, 'attach', targetParams(options))))
 
 program
   .command('windows')
@@ -67,10 +69,11 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot to a CSS selector')
   .option('--interactive', 'reserved for the live Tauri bridge')
   .action(async (options: ConnectionOptions & { interactive?: boolean }) => {
-    const result = (await call(options, 'tree', { scope: options.scope })) as { text: string }
+    const result = (await call(options, 'tree', treeParams(options))) as { text: string }
     process.stdout.write(`${result.text}\n`)
   })
 
@@ -82,11 +85,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot to a CSS selector')
   .action(async (ref: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('click', { ref }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('click', refActionParams(options, ref)))
   })
 
 program
@@ -97,11 +101,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('hover', { ref }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('hover', refActionParams(options, ref)))
   })
 
 program
@@ -112,11 +117,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('focus', { ref }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('focus', refActionParams(options, ref)))
   })
 
 program
@@ -127,11 +133,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('blur', { ref }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('blur', refActionParams(options, ref)))
   })
 
 program
@@ -144,11 +151,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, y: number, x: number, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('scroll', { ref, y, x }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('scroll', refActionParams(options, ref, { y, x })))
   })
 
 program
@@ -160,11 +168,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, toRef: string | undefined, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('drag', { ref, toRef }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('drag', refActionParams(options, ref, { toRef })))
   })
 
 program
@@ -176,11 +185,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot to a CSS selector')
   .action(async (ref: string, text: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('fill', { ref, text }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('fill', refActionParams(options, ref, { text })))
   })
 
 program
@@ -192,11 +202,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, value: string | undefined, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('select', { ref, value }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('select', refActionParams(options, ref, { value })))
   })
 
 program
@@ -208,11 +219,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, checked: boolean | undefined, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('check', { ref, checked }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('check', refActionParams(options, ref, { checked })))
   })
 
 program
@@ -223,11 +235,12 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
   .action(async (ref: string, options: ConnectionOptions) => {
     const client = await debuggerClient(options)
-    await client.call('tree', { scope: options.scope })
-    printJson(await client.call('inspect', { ref }))
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('inspect', refActionParams(options, ref)))
   })
 
 program
@@ -238,7 +251,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
-  .action(async (code: string, options: ConnectionOptions) => printJson(await call(options, 'eval', { code })))
+  .option('--window <label>', 'Tauri window label')
+  .action(async (code: string, options: ConnectionOptions) =>
+    printJson(await call(options, 'eval', { ...targetParams(options), code }))
+  )
 
 program
   .command('press')
@@ -248,7 +264,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
-  .action(async (key: string, options: ConnectionOptions) => printJson(await call(options, 'press', { key })))
+  .option('--window <label>', 'Tauri window label')
+  .action(async (key: string, options: ConnectionOptions) =>
+    printJson(await call(options, 'press', { ...targetParams(options), key }))
+  )
 
 program
   .command('shot')
@@ -258,8 +277,9 @@ program
   .option('--from-html <htmlPath>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .action(async (path: string | undefined, options: ConnectionOptions) =>
-    printJson(await call(options, 'shot', { path }))
+    printJson(await call(options, 'shot', { ...targetParams(options), path }))
   )
 
 program
@@ -269,9 +289,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--follow', 'reserved for live streaming')
   .action(async (options: ConnectionOptions & { follow?: boolean }) =>
-    printJson(await call(options, 'logs', { follow: options.follow }))
+    printJson(await call(options, 'logs', { ...targetParams(options), follow: options.follow }))
   )
 
 program
@@ -281,9 +302,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--follow', 'reserved for live streaming')
   .action(async (options: ConnectionOptions & { follow?: boolean }) =>
-    printJson(await call(options, 'events', { follow: options.follow }))
+    printJson(await call(options, 'events', { ...targetParams(options), follow: options.follow }))
   )
 
 program
@@ -294,9 +316,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--timeout-ms <ms>', 'timeout in milliseconds', Number)
   .action(async (text: string, options: ConnectionOptions & { timeoutMs?: number }) =>
-    printJson(await call(options, 'wait', { text, timeoutMs: options.timeoutMs }))
+    printJson(await call(options, 'wait', { ...targetParams(options), text, timeoutMs: options.timeoutMs }))
   )
 
 program
@@ -306,7 +329,8 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
-  .action(async (options: ConnectionOptions) => printJson(await call(options, 'state')))
+  .option('--window <label>', 'Tauri window label')
+  .action(async (options: ConnectionOptions) => printJson(await call(options, 'state', targetParams(options))))
 
 program
   .command('record')
@@ -315,9 +339,10 @@ program
   .option('--from-html <path>', 'prototype against a static HTML file')
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
   .option('--action <action>', 'start, stop, get, or clear')
   .action(async (options: ConnectionOptions & { action?: string }) =>
-    printJson(await call(options, 'record', { action: options.action }))
+    printJson(await call(options, 'record', { ...targetParams(options), action: options.action }))
   )
 
 await program.parseAsync()
@@ -328,6 +353,22 @@ async function call(
   params: Record<string, unknown> = {}
 ): Promise<unknown> {
   return debuggerClient(options).then((client) => client.call(method, params))
+}
+
+function targetParams(options: ConnectionOptions): Record<string, unknown> {
+  return { window: options.window }
+}
+
+function treeParams(options: ConnectionOptions): Record<string, unknown> {
+  return { ...targetParams(options), scope: options.scope }
+}
+
+function refActionParams(
+  options: ConnectionOptions,
+  ref: string,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return { ...targetParams(options), ref, ...extra }
 }
 
 async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClient> {
