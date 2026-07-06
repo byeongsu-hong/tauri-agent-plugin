@@ -4,6 +4,7 @@ import { DebuggerClient } from '../daemon/client'
 import { createDebuggerRpcHandler, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
+import { createSuccessResponse } from '../protocol/json-rpc'
 
 describe('debugger JSON-RPC transport', () => {
   it('round-trips client calls through the server handler', async () => {
@@ -41,4 +42,35 @@ describe('debugger JSON-RPC transport', () => {
       'STALE_REF: stale ref @404; run tree again'
     )
   })
+
+  it('retries transient socket resets only for read-only calls', async () => {
+    const readTransport = new FlakyResetTransport({ href: 'http://127.0.0.1:1420/' })
+    const readClient = new DebuggerClient(readTransport)
+
+    await expect(readClient.call('location')).resolves.toEqual({ href: 'http://127.0.0.1:1420/' })
+    expect(readTransport.messages.map((message) => message.method)).toEqual(['location', 'location'])
+
+    const writeTransport = new FlakyResetTransport({ ok: true })
+    const writeClient = new DebuggerClient(writeTransport)
+
+    await expect(writeClient.call('click', { ref: '@1' })).rejects.toThrow('read ECONNRESET')
+    expect(writeTransport.messages.map((message) => message.method)).toEqual(['click'])
+  })
 })
+
+class FlakyResetTransport {
+  messages: Array<{ id: number; method: string; params?: unknown }> = []
+
+  constructor(private readonly result: unknown) {}
+
+  async send(message: string): Promise<string> {
+    const request = JSON.parse(message) as { id: number; method: string; params?: unknown }
+    this.messages.push(request)
+    if (this.messages.length === 1) {
+      const error = new Error('read ECONNRESET') as NodeJS.ErrnoException
+      error.code = 'ECONNRESET'
+      throw error
+    }
+    return JSON.stringify(createSuccessResponse(request.id, this.result))
+  }
+}

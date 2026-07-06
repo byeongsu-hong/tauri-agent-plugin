@@ -11,7 +11,7 @@ export class DebuggerClient {
 
   async call<TResult = unknown>(method: AgentMethod, params?: Record<string, unknown>): Promise<TResult> {
     const request = createRequest(this.nextId++, method, params)
-    const response = JSON.parse(await this.transport.send(JSON.stringify(request)))
+    const response = JSON.parse(await this.sendWithRetry(JSON.stringify(request), method, params))
 
     if ('error' in response) {
       throw new Error(`${response.error.code}: ${response.error.message}`)
@@ -19,6 +19,53 @@ export class DebuggerClient {
 
     return response.result as TResult
   }
+
+  private async sendWithRetry(
+    message: string,
+    method: AgentMethod,
+    params?: Record<string, unknown>
+  ): Promise<string> {
+    const maxAttempts = isReadOnlyCall(method, params) ? 2 : 1
+    let lastError: unknown
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this.transport.send(message)
+      } catch (error) {
+        lastError = error
+        if (attempt >= maxAttempts || !isTransientSocketReset(error)) {
+          throw error
+        }
+      }
+    }
+    throw lastError
+  }
+}
+
+function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {}): boolean {
+  switch (method) {
+    case 'windows':
+    case 'tree':
+    case 'find':
+    case 'inspect':
+    case 'logs':
+    case 'events':
+    case 'state':
+      return true
+    case 'network':
+      return params.clear !== true
+    case 'storage':
+      return params.action === undefined || params.action === 'get'
+    case 'location':
+      return params.action === undefined || params.action === 'get'
+    case 'record':
+      return params.action === undefined || params.action === 'get'
+    default:
+      return false
+  }
+}
+
+function isTransientSocketReset(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ECONNRESET'
 }
 
 export type SocketTransportOptions =
