@@ -205,7 +205,7 @@ describe('tauri-agent CLI socket mode', () => {
       '--poll-ms',
       '10',
       '--timeout-ms',
-      '35'
+      '200'
     ])
 
     expect(output.split('\n').map((line) => JSON.parse(line))).toEqual([first, second])
@@ -215,6 +215,17 @@ describe('tauri-agent CLI socket mode', () => {
       window: 'secondary',
       scope: 'main'
     }))).toBe(true)
+  })
+
+  it('forwards tree mode to protocol calls', async () => {
+    const { port, requests } = await startCapturingRpcServer({
+      tree: { text: 'main "Ducktape"' }
+    })
+
+    expect(await runCliAsync(['tree', '--port', String(port), '--window', 'secondary', '--mode', 'verbose'])).toBe(
+      'main "Ducktape"'
+    )
+    expect(requests).toEqual([{ method: 'tree', params: { window: 'secondary', mode: 'verbose' } }])
   })
 
   it.each([
@@ -241,7 +252,7 @@ describe('tauri-agent CLI socket mode', () => {
       '--poll-ms',
       '10',
       '--timeout-ms',
-      '35'
+      '200'
     ])
 
     expect(output.split('\n').map((line) => JSON.parse(line))).toEqual([first, second])

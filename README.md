@@ -87,7 +87,7 @@ Core command surface:
 ```bash
 tauri-agent attach
 tauri-agent windows
-tauri-agent tree --window main
+tauri-agent tree --window main --mode verbose
 tauri-agent click @3
 tauri-agent hover @3
 tauri-agent focus @4
