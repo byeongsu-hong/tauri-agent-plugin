@@ -6,8 +6,10 @@ mod models;
 
 pub use error::Error;
 pub use models::{
-    AgentAction, AgentActionRequest, AgentScreenshotRequest, AgentSnapshotRequest, Config,
-    SnapshotMode, WindowInfo,
+    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
+    AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordEntry, AgentRecordRequest,
+    AgentRecordResponse, AgentScreenshotRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentWaitRequest, AgentWaitResponse, Config, RecordAction, SnapshotMode, WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -48,11 +50,16 @@ impl Builder {
                 Ok(())
             })
             .invoke_handler(tauri::generate_handler![
+                commands::agent_attach,
                 commands::agent_snapshot,
                 commands::agent_action,
                 commands::agent_screenshot,
+                commands::agent_logs,
                 commands::agent_events,
                 commands::agent_windows,
+                commands::agent_wait,
+                commands::agent_state,
+                commands::agent_record,
             ])
             .build()
     }

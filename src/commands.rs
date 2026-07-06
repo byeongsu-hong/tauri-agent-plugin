@@ -1,7 +1,24 @@
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::models::{AgentActionRequest, AgentScreenshotRequest, AgentSnapshotRequest, WindowInfo};
+use crate::models::{
+    AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentEventEntry,
+    AgentEventsRequest, AgentLogEntry, AgentLogRequest, AgentRecordRequest, AgentRecordResponse,
+    AgentScreenshotRequest, AgentSnapshotRequest, AgentStateRequest, AgentWaitRequest,
+    AgentWaitResponse, WindowInfo,
+};
 use crate::{Error, Result};
+
+#[tauri::command]
+pub async fn agent_attach<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentAttachRequest,
+) -> Result<AgentAttachResponse> {
+    ensure_window(&app, request.window.as_deref())?;
+    Ok(AgentAttachResponse {
+        attached: true,
+        windows: collect_windows(&app),
+    })
+}
 
 #[tauri::command]
 pub async fn agent_snapshot<R: Runtime>(
@@ -40,8 +57,22 @@ pub async fn agent_screenshot<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn agent_events<R: Runtime>(app: AppHandle<R>, window: Option<String>) -> Result<()> {
-    ensure_window(&app, window.as_deref())?;
+pub async fn agent_logs<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentLogRequest,
+) -> Result<Vec<AgentLogEntry>> {
+    ensure_window(&app, request.window.as_deref())?;
+    Err(Error::BridgeUnavailable(
+        "agent_logs needs guest console instrumentation and is not active in Rust bridge v0",
+    ))
+}
+
+#[tauri::command]
+pub async fn agent_events<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentEventsRequest,
+) -> Result<Vec<AgentEventEntry>> {
+    ensure_window(&app, request.window.as_deref())?;
     Err(Error::BridgeUnavailable(
         "agent_events needs a stream transport and is not active in v0",
     ))
@@ -49,6 +80,43 @@ pub async fn agent_events<R: Runtime>(app: AppHandle<R>, window: Option<String>)
 
 #[tauri::command]
 pub async fn agent_windows<R: Runtime>(app: AppHandle<R>) -> Result<Vec<WindowInfo>> {
+    Ok(collect_windows(&app))
+}
+
+#[tauri::command]
+pub async fn agent_wait<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentWaitRequest,
+) -> Result<AgentWaitResponse> {
+    ensure_window(&app, request.window.as_deref())?;
+    Err(Error::BridgeUnavailable(
+        "agent_wait needs guest text waiters and is not active in Rust bridge v0",
+    ))
+}
+
+#[tauri::command]
+pub async fn agent_state<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentStateRequest,
+) -> Result<serde_json::Value> {
+    ensure_window(&app, request.window.as_deref())?;
+    Err(Error::BridgeUnavailable(
+        "agent_state needs guest state probes and is not active in Rust bridge v0",
+    ))
+}
+
+#[tauri::command]
+pub async fn agent_record<R: Runtime>(
+    app: AppHandle<R>,
+    request: AgentRecordRequest,
+) -> Result<AgentRecordResponse> {
+    ensure_window(&app, request.window.as_deref())?;
+    Err(Error::BridgeUnavailable(
+        "agent_record needs guest action recording and is not active in Rust bridge v0",
+    ))
+}
+
+fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
     let mut windows = app
         .webview_windows()
         .into_values()
@@ -60,7 +128,7 @@ pub async fn agent_windows<R: Runtime>(app: AppHandle<R>) -> Result<Vec<WindowIn
         })
         .collect::<Vec<_>>();
     windows.sort_by(|a, b| a.label.cmp(&b.label));
-    Ok(windows)
+    windows
 }
 
 fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {

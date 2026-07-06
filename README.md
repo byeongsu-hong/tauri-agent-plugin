@@ -1,22 +1,18 @@
-# tauri-plugin-agent
+# tauri-agent
 
-Agent-facing control surface for live Tauri apps. The project follows the blueprint in this repo setup: make the compact semantic tree useful first, then harden the plugin transport.
+Headless agent debugger for Tauri apps.
 
-## Scope Honesty
+`tauri-agent` is a protocol-first control surface for agents that need to inspect, drive, and debug live Tauri applications. It is intentionally closer to an agent debugger than a tiny plugin: once screenshots, native fallback, logs, events, waiters, recording, and cross-platform transport enter scope, this is serious automation infrastructure.
 
-This is not a smaller full-parity clone of `agent-browser`. If this project grows to include general screenshots, native input fallback, event streams, session routing, stale element recovery, and cross-platform transport robustness, it will become a similarly serious automation system.
+## Architecture
 
-The v0 stays lighter only by narrowing the problem: Tauri app-owned webview context, compact semantic tree output, snapshot-local refs, and app-local actions first.
+- **Agent Debug Protocol**: JSON-RPC 2.0 command surface for `attach`, `windows`, `tree`, `click`, `fill`, `press`, `shot`, `logs`, `events`, `wait`, `state`, and `record`.
+- **Daemon/Client**: Bun/TypeScript in-process and TCP line-delimited transports for headless control.
+- **Guest JS Instrumentation**: semantic tree snapshots, snapshot-local `@ref` actions, console log capture, event capture, state probes, text waiters, and action recording.
+- **Tauri Plugin**: Rust-side command names, permissions, window discovery, and protocol-shaped bridge placeholders.
+- **CLI**: agent-facing commands backed by the same protocol path.
 
-## What v0 Contains
-
-- TypeScript guest walker that turns useful DOM/application semantics into a compact tree.
-- Snapshot-local `@ref` registry with `clickRef`, `fillRef`, and `pressKey` helpers.
-- `tauri-agent` CLI command surface with `tree`, `click`, `fill`, `press`, `shot`, and `events`.
-- Tauri v2 Rust plugin crate exposing the target command names and `agent_windows`.
-- Permission-gated command metadata for Tauri consumers.
-
-The live Rust-to-webview bridge, local socket, screenshot capture, native input fallback, and event streaming are intentionally scaffolded as explicit bridge-pending errors. The blueprint says the key product is the compact semantic tree; this repository starts there.
+The current live Tauri bridge still needs to connect Rust webview evaluation and native screenshot/input capture to the protocol. Static HTML mode exists so the protocol, CLI, and instrumentation can be tuned deterministically while that app bridge is built.
 
 ## Bun + TypeScript
 
@@ -24,33 +20,73 @@ This project uses Bun by default.
 
 ```bash
 bun install
-bun run test
-bun run typecheck
-bun run build
+bun run check
+cargo fmt -- --check
+cargo check
 ```
 
-## Formatter Prototype
+## CLI
 
-Run the CLI against static HTML while tuning output:
+Prototype against static HTML:
 
 ```bash
 bun run build
-bun dist-cli/tauri-agent.js tree --from-html ./screen.html
-bun dist-cli/tauri-agent.js tree --from-html ./screen.html --scope '[data-view="agents"]'
+bun bin/tauri-agent.ts windows --from-html ./screen.html
+bun bin/tauri-agent.ts tree --from-html ./screen.html
+bun bin/tauri-agent.ts fill @4 worker-a --from-html ./screen.html
+bun bin/tauri-agent.ts wait "Registered" --from-html ./screen.html
+bun bin/tauri-agent.ts state --from-html ./screen.html
+bun bin/tauri-agent.ts record --from-html ./screen.html
 ```
 
-Example output:
+Serve the JSON-RPC daemon:
 
-```text
-main "Ducktape"
-@1 navitem "Status" selected
-@2 navitem "Agents"
-@3 button "Forge"
-@4 textbox "Agent name" empty focused
-@5 button "Register" disabled
-@6 list "Roster" 3
-  @7 item "local-worker" selected
-    @8 button "Inspect backing"
+```bash
+bun bin/tauri-agent.ts serve --from-html ./screen.html --port 45127
+```
+
+Core command surface:
+
+```bash
+tauri-agent attach
+tauri-agent windows
+tauri-agent tree --window main
+tauri-agent click @3
+tauri-agent fill @4 worker-a
+tauri-agent press Enter
+tauri-agent shot /tmp/app.png
+tauri-agent logs --follow
+tauri-agent events --follow
+tauri-agent wait "Registered"
+tauri-agent state
+tauri-agent record --action start
+```
+
+## Package Exports
+
+```ts
+import { WebviewAgentInstrumentation, snapshotDocument } from '@byeongsu-hong/tauri-plugin-agent'
+import { DebuggerClient, SocketTransport } from '@byeongsu-hong/tauri-plugin-agent/daemon'
+import { AGENT_METHODS } from '@byeongsu-hong/tauri-plugin-agent/protocol'
+```
+
+## Guest Instrumentation
+
+```ts
+import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+
+const agent = new WebviewAgentInstrumentation({
+  state: {
+    route: () => location.pathname
+  }
+})
+
+agent.install()
+agent.snapshot()
+agent.action({ action: 'click', ref: '@3' })
+agent.logs()
+agent.events()
+agent.state()
 ```
 
 ## Rust Plugin
@@ -63,14 +99,19 @@ tauri::Builder::default()
   .run(tauri::generate_context!())?;
 ```
 
-Commands:
+Rust command names:
 
-- `agent_snapshot({ window, scope, mode }) -> compact text`
-- `agent_action({ window, ref, action, value }) -> ok/error`
-- `agent_screenshot({ window, path? }) -> image/path`
-- `agent_events({ window }) -> stream placeholder`
-- `agent_windows() -> known windows`
+- `agent_attach`
+- `agent_snapshot`
+- `agent_action`
+- `agent_screenshot`
+- `agent_logs`
+- `agent_events`
+- `agent_windows`
+- `agent_wait`
+- `agent_state`
+- `agent_record`
 
 ## Security Direction
 
-The bridge is dev-only first. Keep transport local, use explicit Tauri permissions, and do not enable a release-build socket unless a consumer deliberately opts into it. Webview actions should target the app webview; native input remains a separate fallback path.
+Default posture is dev-only and local-only. The live bridge must use explicit Tauri permissions, bind local sockets only, and keep webview actions scoped to the app. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
