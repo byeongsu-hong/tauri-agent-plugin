@@ -109,7 +109,7 @@ tauri-agent record --action start
 ```
 
 Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
-`logs --follow` and `events --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `--timeout-ms <ms>` for a bounded follow session in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
+`tree --interactive` polls the debugger endpoint and streams changed semantic tree snapshots as newline-delimited JSON. `logs --follow` and `events --follow` poll the debugger endpoint and stream new entries as newline-delimited JSON. Use `--timeout-ms <ms>` for bounded polling sessions in scripts or tests. `shot` results include `width` and `height` metadata alongside the SVG data URL or output path.
 
 ## MCP
 

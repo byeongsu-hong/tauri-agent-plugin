@@ -25,6 +25,12 @@ interface FollowOptions extends ConnectionOptions {
   timeoutMs?: number
 }
 
+interface TreeOptions extends ConnectionOptions {
+  interactive?: boolean
+  pollMs?: number
+  timeoutMs?: number
+}
+
 const program = new Command()
 
 program
@@ -77,8 +83,14 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
   .option('--scope <selector>', 'limit the snapshot to a CSS selector')
-  .option('--interactive', 'reserved for the live Tauri bridge')
-  .action(async (options: ConnectionOptions & { interactive?: boolean }) => {
+  .option('--interactive', 'poll and stream changed semantic tree snapshots as newline-delimited JSON')
+  .option('--poll-ms <ms>', 'interactive polling interval in milliseconds', parseNumber, 250)
+  .option('--timeout-ms <ms>', 'stop interactive polling after this many milliseconds', parseNumber)
+  .action(async (options: TreeOptions) => {
+    if (options.interactive) {
+      await watchTree(options)
+      return
+    }
     const result = (await call(options, 'tree', treeParams(options))) as { text: string }
     process.stdout.write(`${result.text}\n`)
   })
@@ -398,6 +410,30 @@ async function followEntries(options: FollowOptions, method: 'logs' | 'events'):
   }
 }
 
+async function watchTree(options: TreeOptions): Promise<void> {
+  const client = await debuggerClient(options)
+  const pollMs = Math.max(1, options.pollMs ?? 250)
+  const startedAt = Date.now()
+  let previousText: string | undefined
+
+  while (true) {
+    const result = await client.call('tree', treeParams(options))
+    if (!isTreeResult(result)) {
+      throw new Error('tree interactive expected a { text } result')
+    }
+
+    if (result.text !== previousText) {
+      process.stdout.write(`${JSON.stringify(result)}\n`)
+      previousText = result.text
+    }
+
+    if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
+      return
+    }
+    await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
+  }
+}
+
 function targetParams(options: ConnectionOptions): Record<string, unknown> {
   return { window: options.window }
 }
@@ -467,6 +503,10 @@ function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number | un
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTreeResult(value: unknown): value is { text: string } {
+  return typeof value === 'object' && value !== null && 'text' in value && typeof value.text === 'string'
 }
 
 function exitBridgePending(): never {
