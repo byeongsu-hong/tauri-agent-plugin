@@ -27,6 +27,9 @@ crate-type = ["lib"]
 [build-dependencies]
 tauri-plugin = { version = "2", features = ["build"] }
 
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
 [dependencies]
 base64 = "0.22"
 getrandom = "0.3"

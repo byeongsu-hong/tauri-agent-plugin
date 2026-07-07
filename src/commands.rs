@@ -603,4 +603,73 @@ mod tests {
             "live bridge unavailable: malformed bridge result"
         );
     }
+
+    mod runtime {
+        use super::*;
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+        use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+        fn app_with_windows(labels: &[&str]) -> tauri::App<tauri::test::MockRuntime> {
+            let app = mock_builder()
+                .build(mock_context(noop_assets()))
+                .expect("mock app builds");
+            for label in labels {
+                WebviewWindowBuilder::new(&app, *label, WebviewUrl::default())
+                    .build()
+                    .expect("window builds");
+            }
+            app
+        }
+
+        #[test]
+        fn target_prefers_the_main_window() {
+            let app = app_with_windows(&["about", "main", "zeta"]);
+            let target = target_webview_window(app.handle(), None).unwrap();
+            assert_eq!(target.label(), "main");
+        }
+
+        #[test]
+        fn target_without_main_falls_back_to_first_label() {
+            let app = app_with_windows(&["zeta", "about"]);
+            let target = target_webview_window(app.handle(), None).unwrap();
+            assert_eq!(target.label(), "about");
+        }
+
+        #[test]
+        fn target_reports_missing_labels() {
+            let app = app_with_windows(&["main"]);
+            assert!(matches!(
+                target_webview_window(app.handle(), Some("nope")),
+                Err(Error::WindowNotFound(_))
+            ));
+        }
+
+        #[test]
+        fn collect_windows_returns_sorted_labels() {
+            let app = app_with_windows(&["main", "about"]);
+            let labels: Vec<_> = collect_windows(app.handle())
+                .into_iter()
+                .map(|window| window.label)
+                .collect();
+            assert_eq!(labels, vec!["about", "main"]);
+        }
+
+        #[test]
+        fn control_window_rejects_setsize_without_dimensions() {
+            let app = app_with_windows(&["main"]);
+            let error = control_window(
+                app.handle(),
+                AgentWindowRequest {
+                    window: Some("main".into()),
+                    action: Some(WindowAction::SetSize),
+                    width: None,
+                    height: None,
+                    x: None,
+                    y: None,
+                },
+            )
+            .unwrap_err();
+            assert!(matches!(error, Error::InvalidParams(_)));
+        }
+    }
 }
