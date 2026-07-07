@@ -120,6 +120,21 @@ program
   .action(async (options: ConnectionOptions) => printJson(await call(options, 'attach', targetParams(options))))
 
 program
+  .command('vnc')
+  .description('Show the advertised VNC/noVNC visual surface for an app.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .action(async (options: { app?: string }) => {
+    if (!options.app) {
+      throw new Error('vnc requires --app <appId> to discover the endpoint registry')
+    }
+    const endpoint = await readEndpointRegistry(options.app)
+    if (!endpoint.vnc) {
+      throw new Error(`app ${options.app} does not advertise a VNC surface`)
+    }
+    printJson(endpoint.vnc)
+  })
+
+program
   .command('windows')
   .description('List known Tauri windows.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')

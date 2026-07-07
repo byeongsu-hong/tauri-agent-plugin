@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tauri_plugin_agent::{
     endpoint_registry_path, endpoint_runtime_dir, read_endpoint_registry, remove_endpoint_registry,
-    write_endpoint_registry, AgentEndpointDescriptor,
+    write_endpoint_registry, AgentEndpointDescriptor, VncEndpoint,
 };
 
 #[test]
@@ -30,6 +30,40 @@ fn rust_endpoint_descriptors_are_app_scoped() {
             "transport": "unix",
             "path": "/run/user/501/tauri-agent/dev.byeongsu.fixture/4242.sock"
         })
+    );
+}
+
+#[test]
+fn rust_endpoint_descriptor_advertises_optional_vnc_surface() {
+    let plain = AgentEndpointDescriptor::tcp("dev.byeongsu.fixture", 4242, "127.0.0.1", 45127);
+    assert!(plain.vnc().is_none());
+    // Absent VNC must not appear in the serialized registry.
+    assert_eq!(
+        serde_json::to_value(&plain).unwrap(),
+        serde_json::json!({
+            "appId": "dev.byeongsu.fixture",
+            "pid": 4242,
+            "transport": "tcp",
+            "host": "127.0.0.1",
+            "port": 45127
+        })
+    );
+
+    let advertised = plain.with_vnc(Some(VncEndpoint {
+        host: "127.0.0.1".into(),
+        port: 5901,
+        novnc_url: Some("http://127.0.0.1:6080/vnc.html".into()),
+    }));
+    assert_eq!(advertised.vnc().unwrap().port, 5901);
+    let value = serde_json::to_value(&advertised).unwrap();
+    assert_eq!(value["vnc"]["host"], "127.0.0.1");
+    assert_eq!(value["vnc"]["port"], 5901);
+    assert_eq!(value["vnc"]["novncUrl"], "http://127.0.0.1:6080/vnc.html");
+
+    // Round-trips back through deserialization unchanged.
+    assert_eq!(
+        serde_json::from_value::<AgentEndpointDescriptor>(value).unwrap(),
+        advertised
     );
 }
 

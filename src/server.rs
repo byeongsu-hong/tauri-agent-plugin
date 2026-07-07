@@ -134,6 +134,7 @@ pub(crate) fn start_line_json_rpc_server<B>(
     backend: B,
     app_id: String,
     config: &InlineServerConfig,
+    vnc: Option<crate::endpoint::VncEndpoint>,
 ) -> Result<InlineDebuggerServer, InlineServerError>
 where
     B: InlineDebuggerBackend + Send + Sync + 'static,
@@ -146,7 +147,8 @@ where
         std::process::id(),
         config.host.clone(),
         port,
-    );
+    )
+    .with_vnc(vnc);
     if config.publish_endpoint {
         write_endpoint_registry(&descriptor, None)?;
     }
@@ -170,8 +172,9 @@ pub(crate) fn start_inline_debugger_server<R: Runtime>(
     app: AppHandle<R>,
     app_id: String,
     config: &InlineServerConfig,
+    vnc: Option<crate::endpoint::VncEndpoint>,
 ) -> Result<InlineDebuggerServer, InlineServerError> {
-    start_line_json_rpc_server(TauriBackend { app }, app_id, config)
+    start_line_json_rpc_server(TauriBackend { app }, app_id, config, vnc)
 }
 
 struct TauriBackend<R: Runtime> {
@@ -1149,7 +1152,7 @@ mod tests {
             publish_endpoint: false,
         };
         let server =
-            start_line_json_rpc_server(FakeBackend, "dev.byeongsu.fixture".into(), &config)
+            start_line_json_rpc_server(FakeBackend, "dev.byeongsu.fixture".into(), &config, None)
                 .unwrap();
         let descriptor = server.descriptor();
         let (host, port) = match descriptor {

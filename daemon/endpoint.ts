@@ -7,12 +7,24 @@ export interface EndpointPathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'XDG_RUNTIME_DIR' | 'TMPDIR' | 'TEMP' | 'TMP'>>
 }
 
+/**
+ * Discovery record for the human-facing VNC/noVNC visual surface. The plugin
+ * only advertises where the stream lives; the surrounding harness runs the
+ * actual VNC server.
+ */
+export interface VncEndpoint {
+  host: string
+  port: number
+  novncUrl?: string
+}
+
 export interface EndpointDescriptorOptions extends EndpointPathOptions {
   pid: number
   tcp?: {
     host: string
     port: number
   }
+  vnc?: VncEndpoint
 }
 
 export type EndpointDescriptor =
@@ -21,6 +33,7 @@ export type EndpointDescriptor =
       pid: number
       transport: 'unix'
       path: string
+      vnc?: VncEndpoint
     }
   | {
       appId: string
@@ -28,6 +41,7 @@ export type EndpointDescriptor =
       transport: 'tcp'
       host: string
       port: number
+      vnc?: VncEndpoint
     }
 
 export function endpointRuntimeDir(options: EndpointPathOptions): string {
@@ -40,13 +54,15 @@ export function endpointRegistryPath(options: EndpointPathOptions): string {
 }
 
 export function createEndpointDescriptor(options: EndpointDescriptorOptions): EndpointDescriptor {
+  const vnc = options.vnc ? { vnc: options.vnc } : {}
   if (options.tcp) {
     return {
       appId: options.appId,
       pid: options.pid,
       transport: 'tcp',
       host: options.tcp.host,
-      port: options.tcp.port
+      port: options.tcp.port,
+      ...vnc
     }
   }
 
@@ -54,7 +70,8 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
     appId: options.appId,
     pid: options.pid,
     transport: 'unix',
-    path: join(endpointRuntimeDir(options), `${options.pid}.sock`)
+    path: join(endpointRuntimeDir(options), `${options.pid}.sock`),
+    ...vnc
   }
 }
 
@@ -64,6 +81,8 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
     throw new Error('invalid endpoint descriptor')
   }
 
+  const vnc = parseVnc(parsed.vnc)
+
   if (
     parsed.transport === 'unix' &&
     typeof parsed.path === 'string'
@@ -72,7 +91,8 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       appId: parsed.appId,
       pid: parsed.pid,
       transport: 'unix',
-      path: parsed.path
+      path: parsed.path,
+      ...vnc
     }
   }
 
@@ -86,11 +106,26 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       pid: parsed.pid,
       transport: 'tcp',
       host: parsed.host,
-      port: parsed.port
+      port: parsed.port,
+      ...vnc
     }
   }
 
   throw new Error('invalid endpoint descriptor')
+}
+
+function parseVnc(value: unknown): { vnc?: VncEndpoint } {
+  if (value === undefined || value === null) {
+    return {}
+  }
+  if (!isObject(value) || typeof value.host !== 'string' || typeof value.port !== 'number') {
+    throw new Error('invalid endpoint descriptor')
+  }
+  const vnc: VncEndpoint = { host: value.host, port: value.port }
+  if (typeof value.novncUrl === 'string') {
+    vnc.novncUrl = value.novncUrl
+  }
+  return { vnc }
 }
 
 export async function writeEndpointRegistry(

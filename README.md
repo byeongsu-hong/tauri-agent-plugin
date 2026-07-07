@@ -324,6 +324,62 @@ Enable the inline server in `tauri.conf.json`:
 }
 ```
 
+## Surfaces
+
+`tauri-agent` exposes two surfaces for the same running app:
+
+- **Agent surface (DOM/semantic):** the committed-DOM semantic tree with `@ref`
+  based actions (`click @2`, `type @1 "..."`). This is the primary surface for
+  agents and is served over the inline debugger endpoint. A live push stream of
+  semantic-tree diffs is available (see `stream`, below).
+- **Human surface (VNC/noVNC):** a visual view of the app for QA — "how does the
+  screen actually look right now". The plugin does not run a VNC server itself;
+  it only **advertises** where the stream lives so a viewer can discover it. The
+  surrounding harness runs the VNC server (for example `x11vnc` + `websockify`
+  against the app's virtual display).
+
+Advertise the VNC surface by adding a `vnc` block to the plugin config. It is
+published into the app's `endpoint.json` registry alongside the debugger
+transport, so a fleet viewer can discover both surfaces by app id:
+
+```json
+{
+  "plugins": {
+    "agent": {
+      "inlineServer": { "enabled": true, "host": "127.0.0.1", "port": 0 },
+      "vnc": {
+        "host": "127.0.0.1",
+        "port": 5901,
+        "novncUrl": "http://127.0.0.1:6080/vnc.html"
+      }
+    }
+  }
+}
+```
+
+Resulting `endpoint.json`:
+
+```json
+{
+  "appId": "dev.byeongsu.tauri-agent.fixture",
+  "pid": 4242,
+  "transport": "tcp",
+  "host": "127.0.0.1",
+  "port": 45127,
+  "vnc": { "host": "127.0.0.1", "port": 5901, "novncUrl": "http://127.0.0.1:6080/vnc.html" }
+}
+```
+
+Discover it from the CLI:
+
+```bash
+tauri-agent vnc --app dev.byeongsu.tauri-agent.fixture
+```
+
+The `vnc` block requires the inline server (the endpoint registry is only
+published when the inline server runs). Advertising is discovery-only: the
+plugin never binds the VNC port.
+
 Rust command names:
 
 - `agent_bridge_response`

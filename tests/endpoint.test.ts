@@ -64,6 +64,31 @@ describe('debugger endpoint discovery', () => {
     )
   })
 
+  it('advertises an optional VNC surface alongside the transport', () => {
+    const descriptor = createEndpointDescriptor({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      tcp: { host: '127.0.0.1', port: 45127 },
+      vnc: { host: '127.0.0.1', port: 5901, novncUrl: 'http://127.0.0.1:6080/vnc.html' }
+    })
+
+    expect(descriptor).toEqual({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      transport: 'tcp',
+      host: '127.0.0.1',
+      port: 45127,
+      vnc: { host: '127.0.0.1', port: 5901, novncUrl: 'http://127.0.0.1:6080/vnc.html' }
+    })
+    expect(parseEndpointDescriptor(JSON.stringify(descriptor))).toEqual(descriptor)
+
+    // A registry written by an older/plain app has no vnc field.
+    const plain = parseEndpointDescriptor(
+      '{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1}'
+    )
+    expect('vnc' in plain).toBe(false)
+  })
+
   it('writes, reads, and removes app-specific endpoint registry files', async () => {
     const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-endpoint-'))
     const env = { XDG_RUNTIME_DIR: runtimeDir }

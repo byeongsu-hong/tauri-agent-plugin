@@ -2,6 +2,19 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Discovery record for the human-facing VNC/noVNC visual surface. The plugin
+/// only advertises where the stream lives; the VNC server itself (for example
+/// `x11vnc`/`websockify` against the app's virtual display) is run by the
+/// surrounding harness.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VncEndpoint {
+    pub host: String,
+    pub port: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub novnc_url: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "transport", rename_all = "camelCase")]
 pub enum AgentEndpointDescriptor {
@@ -11,6 +24,8 @@ pub enum AgentEndpointDescriptor {
         app_id: String,
         pid: u32,
         path: PathBuf,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        vnc: Option<VncEndpoint>,
     },
     #[serde(rename = "tcp")]
     #[serde(rename_all = "camelCase")]
@@ -19,6 +34,8 @@ pub enum AgentEndpointDescriptor {
         pid: u32,
         host: String,
         port: u16,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        vnc: Option<VncEndpoint>,
     },
 }
 
@@ -28,6 +45,7 @@ impl AgentEndpointDescriptor {
             app_id: app_id.into(),
             pid,
             path,
+            vnc: None,
         }
     }
 
@@ -37,6 +55,7 @@ impl AgentEndpointDescriptor {
             pid,
             host: host.into(),
             port,
+            vnc: None,
         }
     }
 
@@ -44,6 +63,21 @@ impl AgentEndpointDescriptor {
         match self {
             Self::Unix { app_id, .. } | Self::Tcp { app_id, .. } => app_id,
         }
+    }
+
+    /// The advertised VNC surface, if this app publishes one.
+    pub fn vnc(&self) -> Option<&VncEndpoint> {
+        match self {
+            Self::Unix { vnc, .. } | Self::Tcp { vnc, .. } => vnc.as_ref(),
+        }
+    }
+
+    /// Attach (or clear) the advertised VNC surface, consuming self.
+    pub fn with_vnc(mut self, endpoint: Option<VncEndpoint>) -> Self {
+        match &mut self {
+            Self::Unix { vnc, .. } | Self::Tcp { vnc, .. } => *vnc = endpoint,
+        }
+        self
     }
 }
 

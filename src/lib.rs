@@ -10,7 +10,7 @@ mod server;
 
 pub use endpoint::{
     endpoint_registry_path, endpoint_runtime_dir, read_endpoint_registry, remove_endpoint_registry,
-    write_endpoint_registry, AgentEndpointDescriptor, EndpointRegistryError,
+    write_endpoint_registry, AgentEndpointDescriptor, EndpointRegistryError, VncEndpoint,
 };
 pub use error::Error;
 pub use models::{
@@ -88,6 +88,7 @@ impl Builder {
                         app.clone(),
                         app.config().identifier.clone(),
                         &config.inline_server,
+                        config.vnc.clone(),
                     )?;
                     let descriptor = server.descriptor().clone();
                     app.manage(server);
@@ -166,6 +167,7 @@ mod tests {
                 enabled: true,
                 ..Default::default()
             },
+            ..Default::default()
         }
     }
 

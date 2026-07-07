@@ -9,6 +9,12 @@ pub struct Config {
     pub allow_release_socket: bool,
     #[serde(default)]
     pub inline_server: InlineServerConfig,
+    /// Advertise a human-facing VNC/noVNC visual surface in the endpoint
+    /// registry. The plugin only publishes the location; the surrounding
+    /// harness runs the actual VNC server. Requires the inline server so the
+    /// endpoint registry is published.
+    #[serde(default)]
+    pub vnc: Option<crate::endpoint::VncEndpoint>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
