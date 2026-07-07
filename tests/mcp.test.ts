@@ -41,7 +41,8 @@ describe('tauri-agent MCP server', () => {
           name: 'tauri-agent',
           title: 'Tauri Agent',
           version: '0.1.0'
-        }
+        },
+        instructions: expect.stringContaining('tauri_tree')
       }
     })
 

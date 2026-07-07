@@ -275,7 +275,9 @@ function initializeResult(params: unknown): Record<string, unknown> {
       name: 'tauri-agent',
       title: 'Tauri Agent',
       version: '0.1.0'
-    }
+    },
+    instructions:
+      'Call tauri_tree or tauri_find first to obtain @-refs (e.g. @3); a ref is only valid until the next tree/find snapshot. Use tauri_type for realistic per-key input, tauri_ipc to trace the app’s Tauri command invokes, and tauri_stream for a live semantic-tree diff stream.'
   }
 }
 
