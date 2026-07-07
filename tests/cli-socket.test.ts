@@ -346,6 +346,43 @@ describe('tauri-agent CLI socket mode', () => {
     }))).toBe(true)
   })
 
+  it('streams mutation-driven semantic diffs as newline-delimited JSON', async () => {
+    const base = { frames: [], cursor: 0, snapshot: 'main "Ducktape"\n@1 button "One"', dropped: false }
+    const change = {
+      frames: [{ seq: 1, added: ['@2 button "Two"'], removed: [] }],
+      cursor: 1,
+      snapshot: 'main "Ducktape"\n@1 button "One"\n@2 button "Two"',
+      dropped: false
+    }
+    const idle = { frames: [], cursor: 1, snapshot: change.snapshot, dropped: false }
+    const { port, requests } = await startCapturingRpcServer({
+      stream: (callIndex: number) => (callIndex === 0 ? base : callIndex === 1 ? change : idle)
+    })
+
+    const output = await runCliAsync([
+      'stream',
+      '--port',
+      String(port),
+      '--wait-ms',
+      '10',
+      '--timeout-ms',
+      '80'
+    ])
+
+    const lines = output
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+    // First line is the baseline snapshot; the mutation frame follows.
+    expect(lines[0]).toEqual({ snapshot: base.snapshot, cursor: 0 })
+    expect(lines).toContainEqual({ seq: 1, added: ['@2 button "Two"'], removed: [] })
+
+    const streamRequests = requests.filter((request) => request.method === 'stream')
+    expect(streamRequests.length).toBeGreaterThanOrEqual(2)
+    // The cursor advances: the first follow call resumes from the baseline cursor.
+    expect(streamRequests[1].params).toMatchObject({ since: 0 })
+  }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
+
   it('forwards tree mode to protocol calls', async () => {
     const { port, requests } = await startCapturingRpcServer({
       tree: { text: 'main "Ducktape"' }

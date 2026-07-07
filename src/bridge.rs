@@ -112,7 +112,9 @@ impl AgentBridge {
 }
 
 fn bridge_response_timeout(method: &str, params: &serde_json::Value) -> Duration {
-    if method != "wait" {
+    // `wait` and `stream` both long-poll in the guest for up to a caller-
+    // supplied `timeoutMs`, so the bridge must outlast that budget.
+    if method != "wait" && method != "stream" {
         return DEFAULT_BRIDGE_RESPONSE_TIMEOUT;
     }
 

@@ -164,6 +164,8 @@ async function executeTool(
       return client.call('state', pick(args, ['window', 'key']))
     case 'tauri_record':
       return client.call('record', pick(args, ['window', 'action']))
+    case 'tauri_stream':
+      return client.call('stream', pick(args, ['window', 'since', 'timeoutMs']))
     default:
       throw new Error(`unknown tool: ${name}`)
   }
@@ -289,7 +291,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
   url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
   timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
-  action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
+  action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] },
+  since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -319,7 +322,13 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
-  tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
+  tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
+  tool(
+    'tauri_stream',
+    'Stream',
+    'Drain mutation-driven semantic-tree diff frames since a cursor, long-polling up to timeoutMs for the next change.',
+    schema(['window', 'since', 'timeoutMs'])
+  )
 ]
 
 const TOOL_NAMES = new Set(TOOL_DEFINITIONS.map((toolDefinition) => toolDefinition.name))

@@ -23,6 +23,7 @@ import {
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
 import { evalResult } from '../guest-js/evaluate'
+import { SemanticStream } from '../guest-js/semantic-stream'
 import type {
   AgentEvent,
   AgentWindow,
@@ -41,6 +42,8 @@ import type {
   ScreenshotResult,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WaitParams,
   WaitResult,
   WindowParams
@@ -62,6 +65,8 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private semanticStream: SemanticStream
+  private streamObserver?: MutationObserver
   private windowState: AgentWindow
   private storageAreas = {
     local: createMemoryStorage(),
@@ -80,6 +85,29 @@ export class StaticHtmlAppAdapter {
     this.windowState = this.createInitialWindowState()
     this.bindGlobals()
     this.installRuntimeLogCapture()
+    this.semanticStream = new SemanticStream({
+      capture: () => snapshotDocument(this.dom.window.document).text
+    })
+    this.semanticStream.prime()
+    this.installSemanticStream()
+  }
+
+  async stream(params: StreamParams = {}): Promise<StreamResult> {
+    return this.semanticStream.wait(params.since ?? 0, params.timeoutMs ?? 0)
+  }
+
+  private installSemanticStream(): void {
+    const observerCtor = this.dom.window.MutationObserver
+    if (!observerCtor) {
+      return
+    }
+    this.streamObserver = new observerCtor(() => this.semanticStream.tick())
+    this.streamObserver.observe(this.dom.window.document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    })
   }
 
   async attach(): Promise<{ attached: true; windows: AgentWindow[] }> {

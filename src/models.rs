@@ -455,6 +455,31 @@ pub struct AgentRecordRequest {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentStreamRequest {
+    pub window: Option<String>,
+    pub since: Option<u64>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStreamFrame {
+    pub seq: u64,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStreamResponse {
+    pub frames: Vec<AgentStreamFrame>,
+    pub cursor: u64,
+    pub snapshot: String,
+    pub dropped: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum RecordAction {
     Start,
     Stop,

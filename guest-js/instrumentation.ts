@@ -23,6 +23,7 @@ import {
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
+import { SemanticStream } from './semantic-stream'
 import type {
   AgentEvent,
   AgentMethod,
@@ -43,6 +44,8 @@ import type {
   ScreenshotResult,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WaitParams,
   WaitResult
 } from '../protocol/types'
@@ -85,6 +88,8 @@ export class WebviewAgentInstrumentation {
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
   private originalFetch?: typeof window.fetch
   private networkEntryId = 0
+  private semanticStream?: SemanticStream
+  private streamObserver?: MutationObserver
   private readonly handleRuntimeError = (event: ErrorEvent): void => {
     this.pushLog('error', `Uncaught error: ${runtimeErrorMessage(event)}`)
   }
@@ -107,6 +112,7 @@ export class WebviewAgentInstrumentation {
       }
     }
     this.installNetworkCapture()
+    this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
     window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     window.__TAURI_AGENT__ = this
@@ -124,6 +130,9 @@ export class WebviewAgentInstrumentation {
     }
     window.removeEventListener('error', this.handleRuntimeError, { capture: true })
     window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
+    this.streamObserver?.disconnect()
+    this.streamObserver = undefined
+    this.semanticStream = undefined
     this.bridgeUnlisten?.()
     this.bridgeUnlisten = undefined
     this.bridgeInstalled = false
@@ -132,6 +141,40 @@ export class WebviewAgentInstrumentation {
 
   snapshot(options: SnapshotOptions = {}): SnapshotResult {
     return snapshotDocument(document, options)
+  }
+
+  /**
+   * Drain the mutation-driven semantic-tree diff stream. Frames after
+   * `params.since` are returned; when none are buffered the call long-polls up
+   * to `params.timeoutMs` for the next DOM mutation. Capture is driven by a
+   * `MutationObserver`, so there is no polling at the source.
+   */
+  stream(params: StreamParams = {}): Promise<StreamResult> {
+    return this.ensureSemanticStream().wait(params.since ?? 0, params.timeoutMs ?? 0)
+  }
+
+  private ensureSemanticStream(): SemanticStream {
+    if (!this.semanticStream) {
+      this.semanticStream = new SemanticStream({ capture: () => this.snapshot().text })
+      this.semanticStream.prime()
+    }
+    return this.semanticStream
+  }
+
+  private installSemanticStream(): void {
+    const stream = this.ensureSemanticStream()
+    if (typeof MutationObserver === 'undefined') {
+      return
+    }
+    // MutationObserver already coalesces a burst of mutations into one callback
+    // per microtask checkpoint, so tick() runs at most once per batch.
+    this.streamObserver = new MutationObserver(() => stream.tick())
+    this.streamObserver.observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    })
   }
 
   find(options: FindParams = {}): FindResult {
@@ -506,6 +549,11 @@ export class WebviewAgentInstrumentation {
         return this.state(stringParam(params, 'key'))
       case 'record':
         return this.record(recordActionParam(params))
+      case 'stream':
+        return this.stream({
+          since: numberParam(params, 'since'),
+          timeoutMs: numberParam(params, 'timeoutMs')
+        })
       default:
         throw new Error(`unsupported agent bridge method: ${request.method}`)
     }

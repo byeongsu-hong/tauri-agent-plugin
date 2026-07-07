@@ -88,7 +88,8 @@ describe('tauri-agent MCP server', () => {
       'tauri_location',
       'tauri_wait',
       'tauri_state',
-      'tauri_record'
+      'tauri_record',
+      'tauri_stream'
     ])
     expect(list.result.tools[0].inputSchema).toEqual(
       expect.objectContaining({ type: 'object', properties: expect.any(Object) })

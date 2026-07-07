@@ -8,7 +8,7 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod, KeyModifier, ScreenshotBackend, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -30,6 +30,12 @@ interface FollowOptions extends ConnectionOptions {
 interface TreeOptions extends ConnectionOptions {
   interactive?: boolean
   pollMs?: number
+  timeoutMs?: number
+}
+
+interface StreamOptions extends ConnectionOptions {
+  since?: number
+  waitMs?: number
   timeoutMs?: number
 }
 
@@ -178,6 +184,21 @@ program
     }
     const result = (await call(options, 'tree', treeParams(options))) as { text: string }
     process.stdout.write(`${result.text}\n`)
+  })
+
+program
+  .command('stream')
+  .description('Stream mutation-driven semantic-tree diffs as newline-delimited JSON.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--since <seq>', 'resume from a previous cursor', parseNumber, 0)
+  .option('--wait-ms <ms>', 'long-poll budget per request in milliseconds', parseNumber, 1000)
+  .option('--timeout-ms <ms>', 'stop streaming after this many milliseconds', parseNumber)
+  .action(async (options: StreamOptions) => {
+    await streamDiffs(options)
   })
 
 program
@@ -611,6 +632,57 @@ async function watchTree(options: TreeOptions): Promise<void> {
     }
     await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
   }
+}
+
+async function streamDiffs(options: StreamOptions): Promise<void> {
+  const client = await debuggerClient(options)
+  const startedAt = Date.now()
+  const waitMs = Math.max(1, options.waitMs ?? 1000)
+  let cursor = options.since ?? 0
+
+  // Emit the current full snapshot first so a consumer has a baseline to which
+  // subsequent diff frames apply.
+  const base = asStreamResult(await client.call('stream', { ...targetParams(options), since: cursor }))
+  process.stdout.write(`${JSON.stringify({ snapshot: base.snapshot, cursor: base.cursor })}\n`)
+  for (const frame of base.frames) {
+    process.stdout.write(`${JSON.stringify(frame)}\n`)
+  }
+  cursor = base.cursor
+
+  while (true) {
+    if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
+      return
+    }
+    const budget =
+      options.timeoutMs === undefined
+        ? waitMs
+        : Math.max(1, Math.min(waitMs, options.timeoutMs - (Date.now() - startedAt)))
+    const result = asStreamResult(
+      await client.call('stream', { ...targetParams(options), since: cursor, timeoutMs: budget })
+    )
+    if (result.dropped) {
+      process.stdout.write(
+        `${JSON.stringify({ resync: true, snapshot: result.snapshot, cursor: result.cursor })}\n`
+      )
+    } else {
+      for (const frame of result.frames) {
+        process.stdout.write(`${JSON.stringify(frame)}\n`)
+      }
+    }
+    cursor = result.cursor
+  }
+}
+
+function asStreamResult(value: unknown): StreamResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Array.isArray((value as StreamResult).frames) ||
+    typeof (value as StreamResult).cursor !== 'number'
+  ) {
+    throw new Error('stream expected a { frames, cursor, snapshot, dropped } result')
+  }
+  return value as StreamResult
 }
 
 function targetParams(options: ConnectionOptions): Record<string, unknown> {

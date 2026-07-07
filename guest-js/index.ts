@@ -43,6 +43,8 @@ import type {
   RecordingEntry,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WindowAction,
   WindowBounds,
   WaitParams,
@@ -91,6 +93,8 @@ export {
   type SnapshotResult,
   type StorageParams,
   type StorageResult,
+  type StreamParams,
+  type StreamResult,
   type WindowAction,
   type WindowBounds,
   type WaitParams,
@@ -223,6 +227,10 @@ export interface AgentRecordRequest {
   action?: 'start' | 'stop' | 'get' | 'clear'
 }
 
+export interface AgentStreamRequest extends StreamParams {
+  window?: string
+}
+
 export interface AgentWindowRequest {
   window?: string
   action?: WindowAction
@@ -342,6 +350,10 @@ export async function agentState(request: AgentStateRequest = {}): Promise<unkno
 
 export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
   return invokeAgentCommand('plugin:agent|agent_record', { request: withCurrentWindow(request) })
+}
+
+export async function agentStream(request: AgentStreamRequest = {}): Promise<StreamResult> {
+  return invokeAgentCommand('plugin:agent|agent_stream', { request: withCurrentWindow(request) })
 }
 
 export async function agentWindow(request: AgentWindowRequest = {}): Promise<AgentWindow> {

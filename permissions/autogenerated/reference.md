@@ -30,6 +30,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-wait`
 - `allow-agent-state`
 - `allow-agent-record`
+- `allow-agent-stream`
 
 ## Permission Table
 
@@ -634,6 +635,32 @@ Enables the agent_storage command without any pre-configured scope.
 <td>
 
 Denies the agent_storage command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-stream`
+
+</td>
+<td>
+
+Enables the agent_stream command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-stream`
+
+</td>
+<td>
+
+Denies the agent_stream command without any pre-configured scope.
 
 </td>
 </tr>

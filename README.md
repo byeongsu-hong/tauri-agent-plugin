@@ -138,6 +138,7 @@ tauri-agent wait --role button --name Forge
 tauri-agent state
 tauri-agent state --key values
 tauri-agent record --action start
+tauri-agent stream --timeout-ms 5000
 ```
 
 Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
@@ -180,6 +181,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_wait`
 - `tauri_state`
 - `tauri_record`
+- `tauri_stream`
 
 Each tool accepts the same connection inputs as the CLI: `app` for endpoint discovery, `port`/`host` for a known debugger daemon, or `html`/`fromHtml` for deterministic static prototyping. MCP never assumes a singleton `/tmp/tauri-mcp.sock`; live calls should use the app-scoped endpoint registry.
 
@@ -225,6 +227,7 @@ import {
   agentSelect,
   agentState,
   agentStorage,
+  agentStream,
   agentWait,
   agentWindow,
   agentWindows,
@@ -331,7 +334,17 @@ Enable the inline server in `tauri.conf.json`:
 - **Agent surface (DOM/semantic):** the committed-DOM semantic tree with `@ref`
   based actions (`click @2`, `type @1 "..."`). This is the primary surface for
   agents and is served over the inline debugger endpoint. A live push stream of
-  semantic-tree diffs is available (see `stream`, below).
+  semantic-tree diffs is available via `stream` — a `MutationObserver` in the
+  guest drives diff frames (no polling loop), and consumers drain them against a
+  monotonic cursor, long-polling for the next change:
+
+  ```bash
+  tauri-agent stream --app dev.byeongsu.tauri-agent.fixture
+  ```
+
+  The first line is the full compact tree (`{ snapshot, cursor }`); each
+  subsequent line is a change frame (`{ seq, added, removed }`). Pass
+  `--since <cursor>` to resume and `--wait-ms`/`--timeout-ms` to bound polling.
 - **Human surface (VNC/noVNC):** a visual view of the app for QA — "how does the
   screen actually look right now". The plugin does not run a VNC server itself;
   it only **advertises** where the stream lives so a viewer can discover it. The
@@ -408,6 +421,7 @@ Rust command names:
 - `agent_wait`
 - `agent_state`
 - `agent_record`
+- `agent_stream`
 
 ## Security Direction
 

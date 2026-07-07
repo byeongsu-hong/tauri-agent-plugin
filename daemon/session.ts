@@ -114,6 +114,11 @@ export class DebuggerSession {
         return this.app.state(stringParam(params.key))
       case 'record':
         return this.handleRecord(params)
+      case 'stream':
+        return this.app.stream({
+          since: numberParam(params.since),
+          timeoutMs: numberParam(params.timeoutMs)
+        })
     }
   }
 

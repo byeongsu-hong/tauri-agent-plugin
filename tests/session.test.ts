@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
+import type { StreamResult } from '../protocol/types'
 
 const html = `
   <main aria-label="Ducktape">
@@ -352,6 +353,31 @@ describe('DebuggerSession', () => {
     ])
     await expect(session.execute('logs', { clear: true })).resolves.toHaveLength(3)
     await expect(session.execute('logs', {})).resolves.toEqual([])
+  })
+
+  it('streams mutation-driven semantic-tree diffs against a cursor', async () => {
+    const session = new DebuggerSession(
+      new StaticHtmlAppAdapter({ html: '<main aria-label="Scene"><button>One</button></main>' })
+    )
+
+    const base = (await session.execute('stream', {})) as StreamResult
+    expect(base.frames).toEqual([])
+    expect(base.snapshot).toContain('button "One"')
+
+    // Mutate the DOM; the MutationObserver drives a diff frame, which the
+    // long-poll resolves without any polling interval.
+    await session.execute('eval', {
+      code: "document.querySelector('main').appendChild(Object.assign(document.createElement('button'), { textContent: 'Two' }))"
+    })
+    const next = (await session.execute('stream', {
+      since: base.cursor,
+      timeoutMs: 1000
+    })) as StreamResult
+
+    expect(next.cursor).toBeGreaterThan(base.cursor)
+    expect(next.dropped).toBe(false)
+    expect(next.frames.flatMap((frame) => frame.added).join('\n')).toContain('button "Two"')
+    expect(next.snapshot).toContain('button "Two"')
   })
 })
 

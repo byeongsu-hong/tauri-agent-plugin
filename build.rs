@@ -25,6 +25,7 @@ const COMMANDS: &[&str] = &[
     "agent_wait",
     "agent_state",
     "agent_record",
+    "agent_stream",
 ];
 
 fn main() {
