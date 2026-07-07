@@ -7,6 +7,9 @@ use tauri::{Runtime, WebviewWindow};
 
 use crate::{Error, Result};
 
+// Only referenced by the macOS native-capture path; the test module also
+// exercises the PNG helpers cross-platform, so keep them compiled everywhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const NATIVE_SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) fn write_data_url_to_path(data_url: &str, path: &str) -> Result<()> {
@@ -68,6 +71,7 @@ fn capture_native_screenshot_impl<R: Runtime>(
     ))
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn native_screenshot_result_from_png_bytes(
     bytes: Vec<u8>,
     path: Option<&str>,
@@ -171,6 +175,7 @@ fn create_screenshot_parent_dir(path: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return None;

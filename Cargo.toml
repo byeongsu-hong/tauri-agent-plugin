@@ -4,9 +4,22 @@ version = "0.1.0"
 description = "Agent-facing control surface for live Tauri apps using compact semantic trees."
 edition = "2021"
 rust-version = "1.77.2"
+authors = ["Byeongsu Hong"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/byeongsu-hong/tauri-agent-plugin"
+readme = "README.md"
+keywords = ["tauri", "agent", "debugger", "automation", "webview"]
+categories = ["development-tools::debugging", "gui", "development-tools::testing"]
 links = "tauri-plugin-agent"
+include = [
+    "src/**/*.rs",
+    "permissions/**",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+]
 
 [lib]
 crate-type = ["lib"]
