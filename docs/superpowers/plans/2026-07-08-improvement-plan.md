@@ -1,8 +1,41 @@
 # tauri-agent Improvement Plan
 
 **Date:** 2026-07-08
-**Status:** Proposed
+**Status:** Largely implemented on `improve/phase-1-hardening`
 **Supersedes:** `2026-07-06-headless-agent-debugger.md` (fully implemented; archive it)
+
+## Implementation Status (2026-07-08)
+
+Delivered on `improve/phase-1-hardening` (all commits verified: `bun run check`
+green, `cargo fmt`/`clippy -D warnings`/`test` green):
+
+- **WS1 Security — DONE.** Token auth + `0600` registry, loopback enforcement,
+  `eval` split out of `agent:default` (+ `agent:readonly`), unforgeable bridge
+  ids, dot-only app-id neutralization.
+- **WS2 Robustness — DONE.** Rust: bridge timeout cap + pending-leak fix, bounded
+  TCP surface, registry lifecycle (Exit-only, atomic, publish-gated), error
+  taxonomy, unified window selection. TS: `console.log` capture, detached-ref
+  liveness, socket error/timeout handling, MCP stdio concurrency, bounded
+  buffers.
+- **WS3 Release — DONE** (except jsdom demotion, deferred): dual licenses, CI
+  workflow (at `docs/ci-workflow.yml`, pending `workflow` token scope),
+  packaging metadata, `check:rust`, CHANGELOG.
+- **WS5 Docs — DONE** (except full multi-file split): adopter Quickstart with the
+  capabilities step, security section, `AGENTS.md`, exports fix.
+- **WS6 Testing — PARTIAL:** Rust `tauri::test` runtime integration tests added;
+  regression tests for each WS1/WS2 fix. Deferred: fixture `--self-test` e2e.
+- **WS7 Capabilities — DONE (high-value slice):** VNC advertise-only, DOM push
+  stream, `type`, Tauri IPC tracing, navigation (reload/back/forward), MCP image
+  content + instructions.
+- **WS4 Structure — PARTIAL:** single-sourced the bridge method list. **Deferred**
+  (large refactors, best as focused PRs to protect the green suite): shared
+  `dom-actions.ts` extraction, CLI `withConnectionOptions`/`refCommand` factoring,
+  `text`/`value`/`key` param canonicalization, Rust test-backend dedup, screenshot
+  dispatch unification.
+
+Also deferred from WS7: ref epochs (breaking ref-format change), dialogs,
+`tauri_expect`, wait-for-disappear/function, element-scoped screenshots, async
+`eval`, implement-or-delete `mode: verbose`, platform screenshot matrix.
 
 ## Current State
 
