@@ -1,11 +1,28 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+
+/// Reject a single request line longer than this to bound per-connection memory.
+const MAX_REQUEST_LINE_BYTES: usize = 4 * 1024 * 1024;
+/// Drop an idle connection after this long so a stalled client cannot hold a
+/// worker thread forever.
+const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Cap concurrent connections so the server cannot be exhausted by open sockets.
+const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+
+/// Methods routed straight to the instrumented webview via `bridge_call`. Single
+/// source for the inline server; `attach`/`windows`/`window`/`shot` are handled
+/// natively and are intentionally not listed here.
+pub(crate) const BRIDGE_METHODS: &[&str] = &[
+    "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
+    "check", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage", "cookies",
+    "location", "wait", "state", "record", "stream",
+];
 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -96,25 +113,39 @@ struct JsonRpcRequest {
     id: Value,
     method: String,
     params: Option<Value>,
+    #[serde(default)]
+    token: Option<String>,
 }
 
-pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, line: &str) -> String {
+pub(crate) fn respond_to_json_rpc_line(
+    backend: &impl InlineDebuggerBackend,
+    expected_token: Option<&str>,
+    line: &str,
+) -> String {
     let request = match parse_request(line) {
         Ok(request) => request,
         Err(message) => return error_response(json!(0), "INVALID_REQUEST", &message),
     };
     let id = request.id.clone();
 
+    if let Some(expected) = expected_token {
+        if request.token.as_deref() != Some(expected) {
+            return error_response(
+                id,
+                "UNAUTHORIZED",
+                "missing or invalid debugger token; read it from the app endpoint registry",
+            );
+        }
+    }
+
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
         "window" => handle_window(backend, request.params),
-        "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
-        | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events" | "network"
-        | "storage" | "cookies" | "location" | "wait" | "state" | "record" => {
-            backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
-        }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
+        method if BRIDGE_METHODS.contains(&method) => {
+            backend.bridge_call(method, request.params.unwrap_or_else(|| json!({})))
+        }
         method => {
             return error_response(
                 id,
@@ -134,6 +165,7 @@ pub(crate) fn start_line_json_rpc_server<B>(
     backend: B,
     app_id: String,
     config: &InlineServerConfig,
+    vnc: Option<crate::endpoint::VncEndpoint>,
 ) -> Result<InlineDebuggerServer, InlineServerError>
 where
     B: InlineDebuggerBackend + Send + Sync + 'static,
@@ -141,12 +173,18 @@ where
     let listener = TcpListener::bind((config.host.as_str(), config.port))?;
     listener.set_nonblocking(true)?;
     let port = listener.local_addr()?.port();
+    // Per-session token: any local process can reach the loopback socket, so
+    // the token (published into the 0600 endpoint registry) is what actually
+    // authenticates a client.
+    let token = crate::random::random_hex(32);
     let descriptor = AgentEndpointDescriptor::tcp(
         app_id.clone(),
         std::process::id(),
         config.host.clone(),
         port,
-    );
+    )
+    .with_token(Some(token.clone()))
+    .with_vnc(vnc);
     if config.publish_endpoint {
         write_endpoint_registry(&descriptor, None)?;
     }
@@ -154,8 +192,9 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_shutdown = Arc::clone(&shutdown);
     let backend = Arc::new(backend);
+    let token: Arc<str> = Arc::from(token);
     let worker = thread::spawn(move || {
-        accept_loop(listener, backend, worker_shutdown);
+        accept_loop(listener, backend, Some(token), worker_shutdown);
     });
 
     Ok(InlineDebuggerServer {
@@ -170,8 +209,9 @@ pub(crate) fn start_inline_debugger_server<R: Runtime>(
     app: AppHandle<R>,
     app_id: String,
     config: &InlineServerConfig,
+    vnc: Option<crate::endpoint::VncEndpoint>,
 ) -> Result<InlineDebuggerServer, InlineServerError> {
-    start_line_json_rpc_server(TauriBackend { app }, app_id, config)
+    start_line_json_rpc_server(TauriBackend { app }, app_id, config, vnc)
 }
 
 struct TauriBackend<R: Runtime> {
@@ -205,15 +245,31 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
     }
 }
 
-fn accept_loop<B>(listener: TcpListener, backend: Arc<B>, shutdown: Arc<AtomicBool>)
-where
+fn accept_loop<B>(
+    listener: TcpListener,
+    backend: Arc<B>,
+    token: Option<Arc<str>>,
+    shutdown: Arc<AtomicBool>,
+) where
     B: InlineDebuggerBackend + Send + Sync + 'static,
 {
+    let active = Arc::new(AtomicUsize::new(0));
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
+                if active.load(Ordering::SeqCst) >= MAX_CONCURRENT_CONNECTIONS {
+                    // Refuse by dropping the stream, which closes the socket.
+                    continue;
+                }
+                active.fetch_add(1, Ordering::SeqCst);
                 let backend = Arc::clone(&backend);
-                thread::spawn(move || handle_stream(stream, backend.as_ref()));
+                let token = token.clone();
+                let shutdown = Arc::clone(&shutdown);
+                let active = Arc::clone(&active);
+                thread::spawn(move || {
+                    handle_stream(stream, backend.as_ref(), token.as_deref(), &shutdown);
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(10));
@@ -223,22 +279,98 @@ where
     }
 }
 
-fn handle_stream(stream: TcpStream, backend: &impl InlineDebuggerBackend) {
+enum LineRead {
+    Line,
+    Eof,
+    TooLong,
+    Timeout,
+}
+
+/// Read one `\n`-terminated line into `buf`, capped at `max` bytes so a client
+/// that never sends a newline cannot grow the buffer without bound.
+fn read_capped_line<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>, max: usize) -> LineRead {
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(available) => available,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                return LineRead::Timeout;
+            }
+            Err(_) => {
+                return if buf.is_empty() {
+                    LineRead::Eof
+                } else {
+                    LineRead::Line
+                }
+            }
+        };
+        if available.is_empty() {
+            return if buf.is_empty() {
+                LineRead::Eof
+            } else {
+                LineRead::Line
+            };
+        }
+        if let Some(pos) = available.iter().position(|&byte| byte == b'\n') {
+            buf.extend_from_slice(&available[..=pos]);
+            let consumed = pos + 1;
+            reader.consume(consumed);
+            return if buf.len() > max {
+                LineRead::TooLong
+            } else {
+                LineRead::Line
+            };
+        }
+        buf.extend_from_slice(available);
+        let consumed = available.len();
+        reader.consume(consumed);
+        if buf.len() > max {
+            return LineRead::TooLong;
+        }
+    }
+}
+
+fn handle_stream(
+    stream: TcpStream,
+    backend: &impl InlineDebuggerBackend,
+    token: Option<&str>,
+    shutdown: &AtomicBool,
+) {
+    let _ = stream.set_read_timeout(Some(CONNECTION_READ_TIMEOUT));
     let writer = match stream.try_clone() {
         Ok(writer) => writer,
         Err(_) => return,
     };
     let mut writer = std::io::BufWriter::new(writer);
-    let reader = BufReader::new(stream);
+    let mut reader = BufReader::new(stream);
+    let mut line: Vec<u8> = Vec::new();
 
-    for line in reader.lines() {
-        let Ok(line) = line else {
-            break;
-        };
-        if line.trim().is_empty() {
+    while !shutdown.load(Ordering::SeqCst) {
+        line.clear();
+        match read_capped_line(&mut reader, &mut line, MAX_REQUEST_LINE_BYTES) {
+            LineRead::Eof | LineRead::Timeout => break,
+            LineRead::TooLong => {
+                let response = error_response(
+                    json!(0),
+                    "INVALID_REQUEST",
+                    "request line exceeds the maximum length",
+                );
+                let _ = writeln!(writer, "{response}").and_then(|_| writer.flush());
+                break;
+            }
+            LineRead::Line => {}
+        }
+
+        let text = String::from_utf8_lossy(&line);
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        let response = respond_to_json_rpc_line(backend, &line);
+        let response = respond_to_json_rpc_line(backend, token, trimmed);
         if writeln!(writer, "{response}")
             .and_then(|_| writer.flush())
             .is_err()
@@ -320,9 +452,8 @@ fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> cr
 }
 
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
-    serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|_| {
-        Error::BridgeUnavailable("invalid JSON-RPC params for inline Rust server method".into())
-    })
+    serde_json::from_value(params.unwrap_or_else(|| json!({})))
+        .map_err(|error| Error::InvalidParams(error.to_string()))
 }
 
 fn success_response(id: Value, result: Value) -> String {
@@ -351,6 +482,10 @@ fn error_code(error: &Error) -> &'static str {
         Error::StaleRef(_) => "STALE_REF",
         Error::BridgeUnavailable(_) => "BRIDGE_UNAVAILABLE",
         Error::WindowNotFound(_) => "WINDOW_NOT_FOUND",
+        Error::InvalidParams(_) => "INVALID_PARAMS",
+        Error::Timeout(_) => "TIMEOUT",
+        Error::Io(_) => "IO_ERROR",
+        Error::UnsupportedPlatform(_) => "UNSUPPORTED_PLATFORM",
         Error::Tauri(_) => "AGENT_ERROR",
     }
 }
@@ -366,6 +501,43 @@ mod tests {
     use std::net::TcpStream;
 
     use crate::{Error, WindowBounds, WindowInfo};
+
+    /// Dispatch without token enforcement, for tests that exercise routing.
+    fn respond(backend: &impl InlineDebuggerBackend, line: &str) -> String {
+        respond_to_json_rpc_line(backend, None, line)
+    }
+
+    #[test]
+    fn read_capped_line_splits_and_bounds_input() {
+        use std::io::Cursor;
+
+        let mut reader = BufReader::new(Cursor::new(b"hello\nworld\n".to_vec()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Line
+        ));
+        assert_eq!(buf, b"hello\n");
+        buf.clear();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Line
+        ));
+        assert_eq!(buf, b"world\n");
+        buf.clear();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Eof
+        ));
+
+        // A line longer than the cap is rejected instead of buffered unbounded.
+        let mut long = BufReader::new(Cursor::new(vec![b'a'; 100]));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            read_capped_line(&mut long, &mut buf, 10),
+            LineRead::TooLong
+        ));
+    }
 
     struct FakeBackend;
 
@@ -790,8 +962,7 @@ mod tests {
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
 
-        let windows =
-            respond_to_json_rpc_line(&backend, r#"{"jsonrpc":"2.0","id":1,"method":"windows"}"#);
+        let windows = respond(&backend, r#"{"jsonrpc":"2.0","id":1,"method":"windows"}"#);
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&windows).unwrap(),
             serde_json::json!({
@@ -811,7 +982,7 @@ mod tests {
             })
         );
 
-        let window = respond_to_json_rpc_line(
+        let window = respond(
             &backend,
             r#"{"jsonrpc":"2.0","id":3,"method":"window","params":{"window":"main","action":"setSize","width":640,"height":480}}"#,
         );
@@ -834,7 +1005,7 @@ mod tests {
             })
         );
 
-        let attach = respond_to_json_rpc_line(
+        let attach = respond(
             &backend,
             r#"{"jsonrpc":"2.0","id":2,"method":"attach","params":{"window":"missing"}}"#,
         );
@@ -853,7 +1024,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_inspect_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeInspectBackend,
             r#"{"jsonrpc":"2.0","id":4,"method":"inspect","params":{"ref":"@4"}}"#,
         );
@@ -879,7 +1050,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_find_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeFindBackend,
             r#"{"jsonrpc":"2.0","id":13,"method":"find","params":{"role":"button","name":"Forge","limit":1}}"#,
         );
@@ -906,7 +1077,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_network_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeNetworkBackend,
             r#"{"jsonrpc":"2.0","id":14,"method":"network","params":{"window":"main","clear":true}}"#,
         );
@@ -933,7 +1104,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_storage_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeStorageBackend,
             r#"{"jsonrpc":"2.0","id":15,"method":"storage","params":{"area":"session","action":"set","key":"agent.route","value":"/agents"}}"#,
         );
@@ -957,7 +1128,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_cookies_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeCookiesBackend,
             r#"{"jsonrpc":"2.0","id":16,"method":"cookies","params":{"window":"main","action":"set","name":"agent.cookie","value":"ready"}}"#,
         );
@@ -979,7 +1150,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_location_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeLocationBackend,
             r#"{"jsonrpc":"2.0","id":17,"method":"location","params":{"window":"main","action":"push","url":"/agents?view=debug#roster"}}"#,
         );
@@ -1002,7 +1173,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_eval_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeEvalBackend,
             r#"{"jsonrpc":"2.0","id":5,"method":"eval","params":{"code":"document.title"}}"#,
         );
@@ -1023,7 +1194,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_select_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeSelectBackend,
             r#"{"jsonrpc":"2.0","id":6,"method":"select","params":{"ref":"@4","value":"remote"}}"#,
         );
@@ -1040,7 +1211,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_check_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeCheckBackend,
             r#"{"jsonrpc":"2.0","id":7,"method":"check","params":{"ref":"@6","checked":true}}"#,
         );
@@ -1057,7 +1228,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_hover_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeHoverBackend,
             r#"{"jsonrpc":"2.0","id":8,"method":"hover","params":{"ref":"@3"}}"#,
         );
@@ -1074,7 +1245,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_focus_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeFocusBackend,
             r#"{"jsonrpc":"2.0","id":9,"method":"focus","params":{"ref":"@4"}}"#,
         );
@@ -1091,7 +1262,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_blur_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeBlurBackend,
             r#"{"jsonrpc":"2.0","id":10,"method":"blur","params":{"ref":"@4"}}"#,
         );
@@ -1108,7 +1279,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_scroll_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeScrollBackend,
             r#"{"jsonrpc":"2.0","id":11,"method":"scroll","params":{"ref":"@7","x":3.0,"y":12.0}}"#,
         );
@@ -1125,7 +1296,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_drag_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeDragBackend,
             r#"{"jsonrpc":"2.0","id":12,"method":"drag","params":{"ref":"@1","toRef":"@8"}}"#,
         );
@@ -1149,19 +1320,37 @@ mod tests {
             publish_endpoint: false,
         };
         let server =
-            start_line_json_rpc_server(FakeBackend, "dev.byeongsu.fixture".into(), &config)
+            start_line_json_rpc_server(FakeBackend, "dev.byeongsu.fixture".into(), &config, None)
                 .unwrap();
         let descriptor = server.descriptor();
+        let token = descriptor
+            .token()
+            .expect("server issues a token")
+            .to_string();
         let (host, port) = match descriptor {
             crate::AgentEndpointDescriptor::Tcp { host, port, .. } => (host.clone(), *port),
             _ => panic!("expected tcp descriptor"),
         };
         assert!(port > 0);
 
+        // An unauthenticated request is rejected.
+        let mut anon = TcpStream::connect((host.as_str(), port)).unwrap();
+        writeln!(
+            anon,
+            r#"{{"jsonrpc":"2.0","id":"anon","method":"windows"}}"#
+        )
+        .unwrap();
+        let mut anon_response = String::new();
+        BufReader::new(anon).read_line(&mut anon_response).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&anon_response).unwrap()["error"]["code"],
+            "UNAUTHORIZED"
+        );
+
         let mut stream = TcpStream::connect((host.as_str(), port)).unwrap();
         writeln!(
             stream,
-            r#"{{"jsonrpc":"2.0","id":"live-1","method":"windows"}}"#
+            r#"{{"jsonrpc":"2.0","id":"live-1","method":"windows","token":"{token}"}}"#
         )
         .unwrap();
 
@@ -1200,7 +1389,7 @@ mod tests {
         })
         .to_string();
 
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeScreenshotBackend {
                 expected_path: path_string.clone(),
             },

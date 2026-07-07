@@ -34,7 +34,7 @@ type JsonSchema = {
 }
 
 type ToolCallArgs = Record<string, unknown>
-type FollowMethod = 'logs' | 'events' | 'network'
+type FollowMethod = 'logs' | 'events' | 'network' | 'ipc'
 
 export function createMcpRequestHandler(): McpRequestHandler {
   return async (message: string) => {
@@ -85,10 +85,27 @@ async function callTool(params: unknown): Promise<Record<string, unknown>> {
   const client = await debuggerClient(args)
   const result = await executeTool(client, name, args)
   return {
-    content: [{ type: 'text', text: toolText(result) }],
+    content: toolContent(name, result),
     structuredContent: structuredContent(result),
     isError: false
   }
+}
+
+/**
+ * Screenshots return an MCP image content block so clients can render them,
+ * instead of burning tokens on a base64 data URL embedded in JSON text.
+ */
+function toolContent(name: string, result: unknown): Array<Record<string, unknown>> {
+  if (name === 'tauri_shot' && typeof result === 'object' && result !== null) {
+    const dataUrl = (result as { dataUrl?: unknown }).dataUrl
+    if (typeof dataUrl === 'string') {
+      const match = /^data:([^;,]+)(?:;base64)?,(.*)$/s.exec(dataUrl)
+      if (match) {
+        return [{ type: 'image', data: match[2], mimeType: match[1] }]
+      }
+    }
+  }
+  return [{ type: 'text', text: toolText(result) }]
 }
 
 async function executeTool(
@@ -128,6 +145,9 @@ async function executeTool(
     case 'tauri_fill':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('fill', pick(args, ['window', 'ref', 'text']))
+    case 'tauri_type':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('type', pick(args, ['window', 'ref', 'text']))
     case 'tauri_select':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('select', pick(args, ['window', 'ref', 'value']))
@@ -152,6 +172,8 @@ async function executeTool(
       return callFollowableEntries(client, 'events', args)
     case 'tauri_network':
       return callFollowableEntries(client, 'network', args)
+    case 'tauri_ipc':
+      return callFollowableEntries(client, 'ipc', args)
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
     case 'tauri_cookies':
@@ -164,6 +186,8 @@ async function executeTool(
       return client.call('state', pick(args, ['window', 'key']))
     case 'tauri_record':
       return client.call('record', pick(args, ['window', 'action']))
+    case 'tauri_stream':
+      return client.call('stream', pick(args, ['window', 'since', 'timeoutMs']))
     default:
       throw new Error(`unknown tool: ${name}`)
   }
@@ -220,7 +244,8 @@ async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
         endpoint.transport === 'tcp'
           ? { port: endpoint.port, host: endpoint.host }
           : { path: endpoint.path }
-      )
+      ),
+      endpoint.token
     )
   }
 
@@ -250,7 +275,9 @@ function initializeResult(params: unknown): Record<string, unknown> {
       name: 'tauri-agent',
       title: 'Tauri Agent',
       version: '0.1.0'
-    }
+    },
+    instructions:
+      'Call tauri_tree or tauri_find first to obtain @-refs (e.g. @3); a ref is only valid until the next tree/find snapshot. Use tauri_type for realistic per-key input, tauri_ipc to trace the app’s Tauri command invokes, and tauri_stream for a live semantic-tree diff stream.'
   }
 }
 
@@ -289,7 +316,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
   url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
   timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
-  action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] }
+  action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] },
+  since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -305,6 +333,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_scroll', 'Scroll', 'Scroll a snapshot-local ref.', schema(['window', 'scope', 'ref', 'y', 'x'], ['ref'])),
   tool('tauri_drag', 'Drag', 'Drag a snapshot-local ref to another ref.', schema(['window', 'scope', 'ref', 'toRef'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
+  tool('tauri_type', 'Type', 'Type text into a snapshot-local ref with realistic per-key events.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
@@ -314,12 +343,19 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
+  tool('tauri_ipc', 'IPC', 'Return captured Tauri IPC invoke traces (command, timing, ok/error).', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
-  tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action']))
+  tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
+  tool(
+    'tauri_stream',
+    'Stream',
+    'Drain mutation-driven semantic-tree diff frames since a cursor, long-polling up to timeoutMs for the next change.',
+    schema(['window', 'since', 'timeoutMs'])
+  )
 ]
 
 const TOOL_NAMES = new Set(TOOL_DEFINITIONS.map((toolDefinition) => toolDefinition.name))
@@ -370,7 +406,10 @@ function cookieSchema(): JsonSchema {
 
 function locationSchema(): JsonSchema {
   const inputSchema = schema(['window', 'url'])
-  inputSchema.properties.action = { type: 'string', enum: ['get', 'push', 'replace'] }
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['get', 'push', 'replace', 'reload', 'back', 'forward']
+  }
   return inputSchema
 }
 

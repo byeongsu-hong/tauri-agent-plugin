@@ -7,12 +7,25 @@ export interface EndpointPathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'XDG_RUNTIME_DIR' | 'TMPDIR' | 'TEMP' | 'TMP'>>
 }
 
+/**
+ * Discovery record for the human-facing VNC/noVNC visual surface. The plugin
+ * only advertises where the stream lives; the surrounding harness runs the
+ * actual VNC server.
+ */
+export interface VncEndpoint {
+  host: string
+  port: number
+  novncUrl?: string
+}
+
 export interface EndpointDescriptorOptions extends EndpointPathOptions {
   pid: number
   tcp?: {
     host: string
     port: number
   }
+  token?: string
+  vnc?: VncEndpoint
 }
 
 export type EndpointDescriptor =
@@ -21,6 +34,8 @@ export type EndpointDescriptor =
       pid: number
       transport: 'unix'
       path: string
+      token?: string
+      vnc?: VncEndpoint
     }
   | {
       appId: string
@@ -28,6 +43,8 @@ export type EndpointDescriptor =
       transport: 'tcp'
       host: string
       port: number
+      token?: string
+      vnc?: VncEndpoint
     }
 
 export function endpointRuntimeDir(options: EndpointPathOptions): string {
@@ -40,13 +57,18 @@ export function endpointRegistryPath(options: EndpointPathOptions): string {
 }
 
 export function createEndpointDescriptor(options: EndpointDescriptorOptions): EndpointDescriptor {
+  const extra = {
+    ...(options.token ? { token: options.token } : {}),
+    ...(options.vnc ? { vnc: options.vnc } : {})
+  }
   if (options.tcp) {
     return {
       appId: options.appId,
       pid: options.pid,
       transport: 'tcp',
       host: options.tcp.host,
-      port: options.tcp.port
+      port: options.tcp.port,
+      ...extra
     }
   }
 
@@ -54,7 +76,8 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
     appId: options.appId,
     pid: options.pid,
     transport: 'unix',
-    path: join(endpointRuntimeDir(options), `${options.pid}.sock`)
+    path: join(endpointRuntimeDir(options), `${options.pid}.sock`),
+    ...extra
   }
 }
 
@@ -64,6 +87,9 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
     throw new Error('invalid endpoint descriptor')
   }
 
+  const vnc = parseVnc(parsed.vnc)
+  const token = typeof parsed.token === 'string' ? { token: parsed.token } : {}
+
   if (
     parsed.transport === 'unix' &&
     typeof parsed.path === 'string'
@@ -72,7 +98,9 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       appId: parsed.appId,
       pid: parsed.pid,
       transport: 'unix',
-      path: parsed.path
+      path: parsed.path,
+      ...token,
+      ...vnc
     }
   }
 
@@ -86,11 +114,27 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       pid: parsed.pid,
       transport: 'tcp',
       host: parsed.host,
-      port: parsed.port
+      port: parsed.port,
+      ...token,
+      ...vnc
     }
   }
 
   throw new Error('invalid endpoint descriptor')
+}
+
+function parseVnc(value: unknown): { vnc?: VncEndpoint } {
+  if (value === undefined || value === null) {
+    return {}
+  }
+  if (!isObject(value) || typeof value.host !== 'string' || typeof value.port !== 'number') {
+    throw new Error('invalid endpoint descriptor')
+  }
+  const vnc: VncEndpoint = { host: value.host, port: value.port }
+  if (typeof value.novncUrl === 'string') {
+    vnc.novncUrl = value.novncUrl
+  }
+  return { vnc }
 }
 
 export async function writeEndpointRegistry(
@@ -133,7 +177,16 @@ function runtimeBaseDir(env: EndpointPathOptions['env']): string {
 }
 
 function safeAppId(appId: string): string {
-  return appId.replace(/[^A-Za-z0-9._-]/g, '_')
+  const sanitized = appId.replace(/[^A-Za-z0-9._-]/g, '_')
+  // An empty or dot-only segment ("", ".", "..") would escape the runtime
+  // directory when joined as a path component; neutralize it.
+  if (sanitized.length === 0) {
+    return '_'
+  }
+  if (/^\.+$/.test(sanitized)) {
+    return sanitized.replace(/\./g, '_')
+  }
+  return sanitized
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

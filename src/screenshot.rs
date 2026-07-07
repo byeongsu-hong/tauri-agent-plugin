@@ -7,13 +7,16 @@ use tauri::{Runtime, WebviewWindow};
 
 use crate::{Error, Result};
 
+// Only referenced by the macOS native-capture path; the test module also
+// exercises the PNG helpers cross-platform, so keep them compiled everywhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const NATIVE_SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) fn write_data_url_to_path(data_url: &str, path: &str) -> Result<()> {
     let bytes = decode_base64_data_url(data_url)?;
     create_screenshot_parent_dir(path)?;
     std::fs::write(path, bytes)
-        .map_err(|error| Error::BridgeUnavailable(format!("failed to write screenshot: {error}")))
+        .map_err(|error| Error::Io(format!("failed to write screenshot: {error}")))
 }
 
 pub(crate) fn capture_native_screenshot<R: Runtime>(
@@ -51,9 +54,8 @@ fn capture_native_screenshot_impl<R: Runtime>(
     let result = native_screenshot_result_from_png_bytes(bytes.clone(), path)?;
     if let Some(path) = path {
         create_screenshot_parent_dir(path)?;
-        std::fs::write(path, &bytes).map_err(|error| {
-            Error::BridgeUnavailable(format!("failed to write native screenshot: {error}"))
-        })?;
+        std::fs::write(path, &bytes)
+            .map_err(|error| Error::Io(format!("failed to write native screenshot: {error}")))?;
     }
     Ok(result)
 }
@@ -63,11 +65,12 @@ fn capture_native_screenshot_impl<R: Runtime>(
     _window: &WebviewWindow<R>,
     _path: Option<&str>,
 ) -> Result<Value> {
-    Err(Error::BridgeUnavailable(
-        "native screenshot backend is not implemented on this platform".into(),
+    Err(Error::UnsupportedPlatform(
+        "native screenshot backend is only implemented on macOS".into(),
     ))
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn native_screenshot_result_from_png_bytes(
     bytes: Vec<u8>,
     path: Option<&str>,
@@ -165,12 +168,13 @@ fn create_screenshot_parent_dir(path: &str) -> Result<()> {
         .filter(|parent| !parent.as_os_str().is_empty())
     {
         std::fs::create_dir_all(parent).map_err(|error| {
-            Error::BridgeUnavailable(format!("failed to create screenshot directory: {error}"))
+            Error::Io(format!("failed to create screenshot directory: {error}"))
         })?;
     }
     Ok(())
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         return None;

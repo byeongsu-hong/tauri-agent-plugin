@@ -17,12 +17,14 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  typeRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
 import { evalResult } from '../guest-js/evaluate'
+import { SemanticStream } from '../guest-js/semantic-stream'
 import type {
   AgentEvent,
   AgentWindow,
@@ -32,6 +34,7 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  IpcEntry,
   LocationParams,
   LocationResult,
   LogEntry,
@@ -41,6 +44,8 @@ import type {
   ScreenshotResult,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WaitParams,
   WaitResult,
   WindowParams
@@ -62,6 +67,8 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private semanticStream: SemanticStream
+  private streamObserver?: MutationObserver
   private windowState: AgentWindow
   private storageAreas = {
     local: createMemoryStorage(),
@@ -80,6 +87,29 @@ export class StaticHtmlAppAdapter {
     this.windowState = this.createInitialWindowState()
     this.bindGlobals()
     this.installRuntimeLogCapture()
+    this.semanticStream = new SemanticStream({
+      capture: () => snapshotDocument(this.dom.window.document).text
+    })
+    this.semanticStream.prime()
+    this.installSemanticStream()
+  }
+
+  async stream(params: StreamParams = {}): Promise<StreamResult> {
+    return this.semanticStream.wait(params.since ?? 0, params.timeoutMs ?? 0)
+  }
+
+  private installSemanticStream(): void {
+    const observerCtor = this.dom.window.MutationObserver
+    if (!observerCtor) {
+      return
+    }
+    this.streamObserver = new observerCtor(() => this.semanticStream.tick())
+    this.streamObserver.observe(this.dom.window.document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    })
   }
 
   async attach(): Promise<{ attached: true; windows: AgentWindow[] }> {
@@ -256,6 +286,13 @@ export class StaticHtmlAppAdapter {
     return { ok: true }
   }
 
+  async type(ref: string, text: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    typeRef(ref, text)
+    this.pushEvent('type', { ref, text })
+    return { ok: true }
+  }
+
   async select(ref: string, value?: string): Promise<{ ok: true }> {
     this.bindGlobals()
     selectRef(ref, value)
@@ -380,6 +417,12 @@ export class StaticHtmlAppAdapter {
     return entries
   }
 
+  // The static jsdom adapter has no Tauri IPC channel, so it captures nothing;
+  // the method exists for surface parity with the live guest instrumentation.
+  async ipc(_clear = false): Promise<IpcEntry[]> {
+    return []
+  }
+
   storage(options: StorageParams = {}): StorageResult {
     const area = storageArea(options.area)
     const store = this.storageAreas[area]
@@ -435,6 +478,7 @@ export class StaticHtmlAppAdapter {
     globalThis.HTMLSelectElement = this.dom.window.HTMLSelectElement
     globalThis.HTMLTextAreaElement = this.dom.window.HTMLTextAreaElement
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent
+    globalThis.InputEvent = this.dom.window.InputEvent
     globalThis.MouseEvent = this.dom.window.MouseEvent
     globalThis.Node = this.dom.window.Node
     this.bindStorageGlobals()
@@ -732,7 +776,12 @@ function safeDecode(value: string): string {
 function applyLocationAction(dom: JSDOM, options: LocationParams): void {
   const action = options.action ?? 'get'
   switch (action) {
+    // reload/back/forward have no observable effect in the static jsdom adapter
+    // (no real history/navigation); they exist for surface parity.
     case 'get':
+    case 'reload':
+    case 'back':
+    case 'forward':
       return
     case 'push':
     case 'replace': {

@@ -256,6 +256,69 @@ describe('WebviewAgentInstrumentation', () => {
     sessionStorage.clear()
   })
 
+  it('captures console.log and serializes non-string arguments', () => {
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      console.log('hello', { a: 1 }, 42)
+      console.debug('dbg')
+      expect(instrumentation.logs()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ level: 'info', message: 'hello {"a":1} 42' }),
+          expect.objectContaining({ level: 'debug', message: 'dbg' })
+        ])
+      )
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('rejects actions on a ref whose element was detached since the snapshot', () => {
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      document.body.innerHTML = '<main aria-label="x"><button>Go</button></main>'
+      instrumentation.snapshot()
+      document.body.innerHTML = '' // detach the button that @1 points at
+      expect(() => instrumentation.action({ action: 'click', ref: '@1' })).toThrow(/detached/)
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('traces Tauri IPC invokes and skips its own bridge traffic', async () => {
+    type Internals = { invoke: (command: string, args?: unknown) => Promise<unknown> }
+    const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }
+    withInternals.__TAURI_INTERNALS__ = {
+      invoke: async (command: string) => {
+        if (command === 'boom') {
+          throw new Error('nope')
+        }
+        return 'ok'
+      }
+    }
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      await withInternals.__TAURI_INTERNALS__!.invoke('greet', { name: 'x' })
+      await expect(withInternals.__TAURI_INTERNALS__!.invoke('boom')).rejects.toThrow('nope')
+      // The agent's own bridge traffic must not appear in the trace.
+      await withInternals.__TAURI_INTERNALS__!.invoke('plugin:agent|agent_snapshot')
+      await Promise.resolve()
+
+      const traces = instrumentation.ipc()
+      expect(traces.map((entry) => entry.command)).toEqual(['greet', 'boom'])
+      expect(traces[0].ok).toBe(true)
+      expect(traces[1].ok).toBe(false)
+      expect(traces[1].error).toContain('nope')
+      expect(instrumentation.ipc({ clear: true })).toHaveLength(2)
+      expect(instrumentation.ipc()).toEqual([])
+    } finally {
+      instrumentation.dispose()
+      delete withInternals.__TAURI_INTERNALS__
+    }
+  })
+
   it('captures runtime errors and unhandled rejections as logs', () => {
     const instrumentation = new WebviewAgentInstrumentation()
     instrumentation.install()

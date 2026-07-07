@@ -64,6 +64,65 @@ describe('debugger endpoint discovery', () => {
     )
   })
 
+  it('neutralizes dot-only app ids that would escape the runtime directory', () => {
+    for (const appId of ['..', '.', '...']) {
+      const dir = endpointRuntimeDir({ appId, env: { XDG_RUNTIME_DIR: '/run/user/501' } })
+      expect(dir.startsWith('/run/user/501/tauri-agent/')).toBe(true)
+      expect(dir.includes('..')).toBe(false)
+    }
+    expect(endpointRuntimeDir({ appId: '..', env: { XDG_RUNTIME_DIR: '/run' } })).toBe(
+      '/run/tauri-agent/__'
+    )
+  })
+
+  it('carries an optional per-session auth token through parse round-trips', () => {
+    const descriptor = createEndpointDescriptor({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      tcp: { host: '127.0.0.1', port: 45127 },
+      token: 'deadbeef'
+    })
+    expect(descriptor).toEqual({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      transport: 'tcp',
+      host: '127.0.0.1',
+      port: 45127,
+      token: 'deadbeef'
+    })
+    expect(parseEndpointDescriptor(JSON.stringify(descriptor))).toEqual(descriptor)
+
+    const plain = parseEndpointDescriptor(
+      '{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1}'
+    )
+    expect('token' in plain).toBe(false)
+  })
+
+  it('advertises an optional VNC surface alongside the transport', () => {
+    const descriptor = createEndpointDescriptor({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      tcp: { host: '127.0.0.1', port: 45127 },
+      vnc: { host: '127.0.0.1', port: 5901, novncUrl: 'http://127.0.0.1:6080/vnc.html' }
+    })
+
+    expect(descriptor).toEqual({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      transport: 'tcp',
+      host: '127.0.0.1',
+      port: 45127,
+      vnc: { host: '127.0.0.1', port: 5901, novncUrl: 'http://127.0.0.1:6080/vnc.html' }
+    })
+    expect(parseEndpointDescriptor(JSON.stringify(descriptor))).toEqual(descriptor)
+
+    // A registry written by an older/plain app has no vnc field.
+    const plain = parseEndpointDescriptor(
+      '{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1}'
+    )
+    expect('vnc' in plain).toBe(false)
+  })
+
   it('writes, reads, and removes app-specific endpoint registry files', async () => {
     const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-endpoint-'))
     const env = { XDG_RUNTIME_DIR: runtimeDir }

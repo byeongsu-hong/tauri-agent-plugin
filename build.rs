@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "agent_action",
     "agent_inspect",
     "agent_eval",
+    "agent_type",
     "agent_select",
     "agent_check",
     "agent_hover",
@@ -17,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "agent_logs",
     "agent_events",
     "agent_network",
+    "agent_ipc",
     "agent_storage",
     "agent_cookies",
     "agent_location",
@@ -25,6 +27,7 @@ const COMMANDS: &[&str] = &[
     "agent_wait",
     "agent_state",
     "agent_record",
+    "agent_stream",
 ];
 
 fn main() {

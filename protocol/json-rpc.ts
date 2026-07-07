@@ -18,16 +18,19 @@ export const AGENT_METHODS = [
   'inspect',
   'eval',
   'press',
+  'type',
   'shot',
   'logs',
   'events',
   'network',
+  'ipc',
   'storage',
   'cookies',
   'location',
   'wait',
   'state',
-  'record'
+  'record',
+  'stream'
 ] as const satisfies readonly AgentMethod[]
 
 const AGENT_METHOD_SET = new Set<string>(AGENT_METHODS)

@@ -15,6 +15,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  typeRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions,
@@ -23,6 +24,7 @@ import {
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
+import { SemanticStream } from './semantic-stream'
 import type {
   AgentEvent,
   AgentMethod,
@@ -32,6 +34,8 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  IpcEntry,
+  IpcParams,
   LocationParams,
   LocationResult,
   LogsParams,
@@ -43,6 +47,8 @@ import type {
   ScreenshotResult,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WaitParams,
   WaitResult
 } from '../protocol/types'
@@ -65,7 +71,45 @@ export interface InstrumentedAction {
   y?: number
 }
 
-type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error'
+type ConsoleMethod = 'log' | 'debug' | 'info' | 'warn' | 'error'
+
+// `console.log` — the most common call — maps to info level. Ordered so the
+// captured level is meaningful.
+const CONSOLE_LEVELS: ReadonlyArray<[ConsoleMethod, LogEntry['level']]> = [
+  ['log', 'info'],
+  ['debug', 'debug'],
+  ['info', 'info'],
+  ['warn', 'warn'],
+  ['error', 'error']
+]
+
+/** Maximum entries retained per capture buffer before old entries drop. */
+const MAX_CAPTURE_ENTRIES = 1000
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args.map(formatConsoleArg).join(' ')
+}
+
+function formatConsoleArg(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value instanceof Error) {
+    return value.stack ?? value.message
+  }
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function pushCapped<T>(buffer: T[], entry: T, max = MAX_CAPTURE_ENTRIES): void {
+  buffer.push(entry)
+  if (buffer.length > max) {
+    buffer.shift()
+  }
+}
 
 interface AgentBridgeRequest {
   id: string
@@ -80,11 +124,17 @@ export class WebviewAgentInstrumentation {
   private capturedLogs: LogEntry[] = []
   private capturedEvents: AgentEvent[] = []
   private capturedNetwork: NetworkEntry[] = []
+  private capturedIpc: IpcEntry[] = []
+  private ipcEntryId = 0
+  private ipcTarget?: TauriInternals
+  private originalInvoke?: TauriInternals['invoke']
   private recording = false
   private recordingEntries: RecordingEntry[] = []
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
   private originalFetch?: typeof window.fetch
   private networkEntryId = 0
+  private semanticStream?: SemanticStream
+  private streamObserver?: MutationObserver
   private readonly handleRuntimeError = (event: ErrorEvent): void => {
     this.pushLog('error', `Uncaught error: ${runtimeErrorMessage(event)}`)
   }
@@ -99,14 +149,16 @@ export class WebviewAgentInstrumentation {
       return
     }
     this.installed = true
-    for (const level of ['debug', 'info', 'warn', 'error'] as const) {
-      this.originalConsole.set(level, console[level])
-      console[level] = (...args: unknown[]) => {
-        this.pushLog(level, args.map(String).join(' '))
-        this.originalConsole.get(level)?.apply(console, args)
+    for (const [method, level] of CONSOLE_LEVELS) {
+      this.originalConsole.set(method, console[method])
+      console[method] = (...args: unknown[]) => {
+        this.pushLog(level, formatConsoleArgs(args))
+        this.originalConsole.get(method)?.apply(console, args)
       }
     }
     this.installNetworkCapture()
+    this.installIpcCapture()
+    this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
     window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     window.__TAURI_AGENT__ = this
@@ -122,8 +174,16 @@ export class WebviewAgentInstrumentation {
       window.fetch = this.originalFetch
       this.originalFetch = undefined
     }
+    if (this.ipcTarget && this.originalInvoke) {
+      this.ipcTarget.invoke = this.originalInvoke
+      this.ipcTarget = undefined
+      this.originalInvoke = undefined
+    }
     window.removeEventListener('error', this.handleRuntimeError, { capture: true })
     window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
+    this.streamObserver?.disconnect()
+    this.streamObserver = undefined
+    this.semanticStream = undefined
     this.bridgeUnlisten?.()
     this.bridgeUnlisten = undefined
     this.bridgeInstalled = false
@@ -132,6 +192,40 @@ export class WebviewAgentInstrumentation {
 
   snapshot(options: SnapshotOptions = {}): SnapshotResult {
     return snapshotDocument(document, options)
+  }
+
+  /**
+   * Drain the mutation-driven semantic-tree diff stream. Frames after
+   * `params.since` are returned; when none are buffered the call long-polls up
+   * to `params.timeoutMs` for the next DOM mutation. Capture is driven by a
+   * `MutationObserver`, so there is no polling at the source.
+   */
+  stream(params: StreamParams = {}): Promise<StreamResult> {
+    return this.ensureSemanticStream().wait(params.since ?? 0, params.timeoutMs ?? 0)
+  }
+
+  private ensureSemanticStream(): SemanticStream {
+    if (!this.semanticStream) {
+      this.semanticStream = new SemanticStream({ capture: () => this.snapshot().text })
+      this.semanticStream.prime()
+    }
+    return this.semanticStream
+  }
+
+  private installSemanticStream(): void {
+    const stream = this.ensureSemanticStream()
+    if (typeof MutationObserver === 'undefined') {
+      return
+    }
+    // MutationObserver already coalesces a burst of mutations into one callback
+    // per microtask checkpoint, so tick() runs at most once per batch.
+    this.streamObserver = new MutationObserver(() => stream.tick())
+    this.streamObserver.observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    })
   }
 
   find(options: FindParams = {}): FindResult {
@@ -241,6 +335,12 @@ export class WebviewAgentInstrumentation {
     return { ok: true }
   }
 
+  type(ref: string, text: string): { ok: true } {
+    typeRef(ref, text)
+    this.pushEvent('type', { ref, text })
+    return { ok: true }
+  }
+
   evaluate(code: string): EvalResult {
     return evalResult(window.eval(code))
   }
@@ -327,6 +427,14 @@ export class WebviewAgentInstrumentation {
     const entries = this.capturedNetwork.map((entry) => ({ ...entry }))
     if (options.clear) {
       this.capturedNetwork = []
+    }
+    return entries
+  }
+
+  ipc(options: { clear?: boolean } = {}): IpcEntry[] {
+    const entries = this.capturedIpc.map((entry) => ({ ...entry }))
+    if (options.clear) {
+      this.capturedIpc = []
     }
     return entries
   }
@@ -453,6 +561,11 @@ export class WebviewAgentInstrumentation {
           ref: requiredStringParam(params, 'ref'),
           value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
         })
+      case 'type':
+        return this.type(
+          requiredStringParam(params, 'ref'),
+          stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
+        )
       case 'select':
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
       case 'check':
@@ -476,6 +589,8 @@ export class WebviewAgentInstrumentation {
         return this.events({ clear: booleanParam(params, 'clear') ?? false })
       case 'network':
         return this.network({ clear: booleanParam(params, 'clear') ?? false })
+      case 'ipc':
+        return this.ipc({ clear: booleanParam(params, 'clear') ?? false })
       case 'storage':
         return this.storage({
           area: storageAreaParam(params, 'area'),
@@ -506,13 +621,18 @@ export class WebviewAgentInstrumentation {
         return this.state(stringParam(params, 'key'))
       case 'record':
         return this.record(recordActionParam(params))
+      case 'stream':
+        return this.stream({
+          since: numberParam(params, 'since'),
+          timeoutMs: numberParam(params, 'timeoutMs')
+        })
       default:
         throw new Error(`unsupported agent bridge method: ${request.method}`)
     }
   }
 
   private pushLog(level: LogEntry['level'], message: string): void {
-    this.capturedLogs.push({
+    pushCapped(this.capturedLogs, {
       level,
       message,
       timestamp: new Date().toISOString()
@@ -520,7 +640,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private pushEvent(kind: string, detail?: unknown): void {
-    this.capturedEvents.push({
+    pushCapped(this.capturedEvents, {
       kind,
       detail,
       timestamp: new Date().toISOString()
@@ -551,7 +671,7 @@ export class WebviewAgentInstrumentation {
       if (requestBodySize !== undefined) {
         entry.requestBodySize = requestBodySize
       }
-      this.capturedNetwork.push(entry)
+      pushCapped(this.capturedNetwork, entry)
 
       try {
         const response = await originalFetch.call(window, input, init)
@@ -571,11 +691,42 @@ export class WebviewAgentInstrumentation {
     }
   }
 
+  private installIpcCapture(): void {
+    const internals = window.__TAURI_INTERNALS__
+    if (!internals || typeof internals.invoke !== 'function' || this.originalInvoke) {
+      return
+    }
+    const original = internals.invoke.bind(internals)
+    this.ipcTarget = internals
+    this.originalInvoke = internals.invoke
+    internals.invoke = (command: string, args?: unknown, options?: unknown): Promise<unknown> => {
+      const promise = original(command, args, options)
+      // Skip the agent's own bridge traffic so tracing stays signal, not noise.
+      if (typeof command === 'string' && !command.startsWith('plugin:agent|')) {
+        const startedAtMs = Date.now()
+        const entry: IpcEntry = {
+          id: `ipc-${++this.ipcEntryId}`,
+          command,
+          startedAt: new Date(startedAtMs).toISOString()
+        }
+        pushCapped(this.capturedIpc, entry)
+        Promise.resolve(promise).then(
+          () => finishIpcEntry(entry, startedAtMs, true),
+          (error: unknown) => {
+            entry.error = error instanceof Error ? error.message : String(error)
+            finishIpcEntry(entry, startedAtMs, false)
+          }
+        )
+      }
+      return promise
+    }
+  }
+
   private recordAction(action: InstrumentedAction): void {
     if (!this.recording) {
       return
     }
-    this.recordingEntries.push({
+    pushCapped(this.recordingEntries, {
       method: action.action,
       params: serializableAction(action),
       timestamp: new Date().toISOString()
@@ -583,9 +734,14 @@ export class WebviewAgentInstrumentation {
   }
 }
 
+interface TauriInternals {
+  invoke: (command: string, args?: unknown, options?: unknown) => Promise<unknown>
+}
+
 declare global {
   interface Window {
     __TAURI_AGENT__?: WebviewAgentInstrumentation
+    __TAURI_INTERNALS__?: TauriInternals
   }
 }
 
@@ -733,6 +889,13 @@ function finishNetworkEntry(entry: NetworkEntry, startedAtMs: number): void {
   const endedAtMs = Date.now()
   entry.endedAt = new Date(endedAtMs).toISOString()
   entry.durationMs = Math.max(0, endedAtMs - startedAtMs)
+}
+
+function finishIpcEntry(entry: IpcEntry, startedAtMs: number, ok: boolean): void {
+  const endedAtMs = Date.now()
+  entry.endedAt = new Date(endedAtMs).toISOString()
+  entry.durationMs = Math.max(0, endedAtMs - startedAtMs)
+  entry.ok = ok
 }
 
 function isRequest(value: RequestInfo | URL): value is Request {
@@ -933,9 +1096,19 @@ function requiredStorageValue(value: string | undefined): string {
   return value
 }
 
-function locationActionParam(params: Record<string, unknown>, key: string): 'get' | 'push' | 'replace' | undefined {
+function locationActionParam(
+  params: Record<string, unknown>,
+  key: string
+): LocationParams['action'] {
   const value = params[key]
-  return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
+  return value === 'get' ||
+    value === 'push' ||
+    value === 'replace' ||
+    value === 'reload' ||
+    value === 'back' ||
+    value === 'forward'
+    ? value
+    : undefined
 }
 
 function applyLocationAction(options: LocationParams): void {
@@ -950,6 +1123,15 @@ function applyLocationAction(options: LocationParams): void {
     case 'replace':
       window.history.replaceState(null, '', requiredLocationUrl(options.url))
       window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    case 'reload':
+      window.location.reload()
+      return
+    case 'back':
+      window.history.back()
+      return
+    case 'forward':
+      window.history.forward()
       return
   }
 }

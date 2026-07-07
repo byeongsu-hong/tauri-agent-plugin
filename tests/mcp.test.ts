@@ -41,7 +41,8 @@ describe('tauri-agent MCP server', () => {
           name: 'tauri-agent',
           title: 'Tauri Agent',
           version: '0.1.0'
-        }
+        },
+        instructions: expect.stringContaining('tauri_tree')
       }
     })
 
@@ -74,6 +75,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_scroll',
       'tauri_drag',
       'tauri_fill',
+      'tauri_type',
       'tauri_select',
       'tauri_check',
       'tauri_inspect',
@@ -83,12 +85,14 @@ describe('tauri-agent MCP server', () => {
       'tauri_logs',
       'tauri_events',
       'tauri_network',
+      'tauri_ipc',
       'tauri_storage',
       'tauri_cookies',
       'tauri_location',
       'tauri_wait',
       'tauri_state',
-      'tauri_record'
+      'tauri_record',
+      'tauri_stream'
     ])
     expect(list.result.tools[0].inputSchema).toEqual(
       expect.objectContaining({ type: 'object', properties: expect.any(Object) })
@@ -263,6 +267,38 @@ describe('tauri-agent MCP server', () => {
       })
       expect(fakeServer.requests).toEqual([
         { method: 'shot', params: { path: '/tmp/app.png', backend: 'native' } }
+      ])
+    } finally {
+      fakeServer.close()
+    }
+  })
+
+  it('returns screenshots as MCP image content blocks', async () => {
+    const fakeServer = await startFakeRpcServer({
+      shot: {
+        dataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+        mime: 'image/svg+xml',
+        width: 10,
+        height: 10
+      }
+    })
+
+    try {
+      const response = JSON.parse(
+        await requiredResponse(
+          createMcpRequestHandler()(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 26,
+              method: 'tools/call',
+              params: { name: 'tauri_shot', arguments: { port: fakeServer.port } }
+            })
+          )
+        )
+      )
+
+      expect(response.result.content).toEqual([
+        { type: 'image', data: 'PHN2Zz48L3N2Zz4=', mimeType: 'image/svg+xml' }
       ])
     } finally {
       fakeServer.close()

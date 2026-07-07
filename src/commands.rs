@@ -7,12 +7,13 @@ use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
     AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
     AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFindRequest, AgentFindResponse,
-    AgentFocusRequest, AgentHoverRequest, AgentInspectRequest, AgentInspectResponse,
-    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
-    AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
-    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
-    AgentStorageRequest, AgentStorageResponse, AgentWaitRequest, AgentWaitResponse,
-    AgentWindowRequest, ScreenshotBackend, WindowAction, WindowInfo,
+    AgentFocusRequest, AgentHoverRequest, AgentInspectRequest, AgentInspectResponse, AgentIpcEntry,
+    AgentIpcRequest, AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest,
+    AgentNetworkEntry, AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse,
+    AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest,
+    AgentStateRequest, AgentStorageRequest, AgentStorageResponse, AgentStreamRequest,
+    AgentStreamResponse, AgentTypeRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
+    ScreenshotBackend, WindowAction, WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -116,6 +117,16 @@ pub async fn agent_select<R: Runtime>(
     request: AgentSelectRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "select", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_type<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentTypeRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "type", &request)?;
     Ok(())
 }
 
@@ -237,6 +248,16 @@ pub async fn agent_network<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn agent_ipc<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentIpcRequest,
+) -> Result<Vec<AgentIpcEntry>> {
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "ipc", &request)?;
+    decode_bridge_result(result)
+}
+
+#[tauri::command]
 pub async fn agent_storage<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
@@ -331,6 +352,16 @@ pub async fn agent_record<R: Runtime>(
     decode_bridge_result(result)
 }
 
+#[tauri::command]
+pub async fn agent_stream<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentStreamRequest,
+) -> Result<AgentStreamResponse> {
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "stream", &request)?;
+    decode_bridge_result(result)
+}
+
 fn request_bridge<R: Runtime, T: Serialize>(
     bridge: &AgentBridge,
     app: &AppHandle<R>,
@@ -418,7 +449,11 @@ pub(crate) fn control_window<R: Runtime>(
     Ok(window_info(&window))
 }
 
-fn target_webview_window<R: Runtime>(
+/// Resolve the target webview window. With an explicit label, that window or an
+/// error. Without one, prefer a window labelled `main`, then the focused window,
+/// then the lexicographically-first label for determinism. Shared by the direct
+/// commands and the guest bridge so both surfaces agree on the default.
+pub(crate) fn target_webview_window<R: Runtime>(
     app: &AppHandle<R>,
     label: Option<&str>,
 ) -> Result<WebviewWindow<R>> {
@@ -428,32 +463,44 @@ fn target_webview_window<R: Runtime>(
             .ok_or_else(|| Error::WindowNotFound(label.to_string()));
     }
 
-    let mut windows = app.webview_windows().into_values().collect::<Vec<_>>();
-    windows.sort_by(|a, b| a.label().cmp(b.label()));
-    windows
+    let windows = app.webview_windows();
+    if let Some(main) = windows.get("main") {
+        return Ok(main.clone());
+    }
+
+    let mut sorted = windows.into_values().collect::<Vec<_>>();
+    sorted.sort_by(|a, b| a.label().cmp(b.label()));
+    if let Some(focused) = sorted
+        .iter()
+        .find(|window| window.is_focused().unwrap_or(false))
+    {
+        return Ok(focused.clone());
+    }
+    sorted
         .into_iter()
         .next()
-        .ok_or_else(|| Error::WindowNotFound("default".into()))
+        .ok_or_else(|| Error::WindowNotFound("main".into()))
 }
 
 fn required_window_size(request: &AgentWindowRequest) -> Result<PhysicalSize<u32>> {
     let width = request
         .width
         .filter(|width| *width > 0)
-        .ok_or_else(|| Error::BridgeUnavailable("window setSize requires positive width".into()))?;
-    let height = request.height.filter(|height| *height > 0).ok_or_else(|| {
-        Error::BridgeUnavailable("window setSize requires positive height".into())
-    })?;
+        .ok_or_else(|| Error::InvalidParams("window setSize requires positive width".into()))?;
+    let height = request
+        .height
+        .filter(|height| *height > 0)
+        .ok_or_else(|| Error::InvalidParams("window setSize requires positive height".into()))?;
     Ok(PhysicalSize { width, height })
 }
 
 fn required_window_position(request: &AgentWindowRequest) -> Result<PhysicalPosition<i32>> {
     let x = request
         .x
-        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires x".into()))?;
+        .ok_or_else(|| Error::InvalidParams("window setPosition requires x".into()))?;
     let y = request
         .y
-        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires y".into()))?;
+        .ok_or_else(|| Error::InvalidParams("window setPosition requires y".into()))?;
     Ok(PhysicalPosition { x, y })
 }
 
@@ -575,5 +622,74 @@ mod tests {
                 .to_string(),
             "live bridge unavailable: malformed bridge result"
         );
+    }
+
+    mod runtime {
+        use super::*;
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+        use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+        fn app_with_windows(labels: &[&str]) -> tauri::App<tauri::test::MockRuntime> {
+            let app = mock_builder()
+                .build(mock_context(noop_assets()))
+                .expect("mock app builds");
+            for label in labels {
+                WebviewWindowBuilder::new(&app, *label, WebviewUrl::default())
+                    .build()
+                    .expect("window builds");
+            }
+            app
+        }
+
+        #[test]
+        fn target_prefers_the_main_window() {
+            let app = app_with_windows(&["about", "main", "zeta"]);
+            let target = target_webview_window(app.handle(), None).unwrap();
+            assert_eq!(target.label(), "main");
+        }
+
+        #[test]
+        fn target_without_main_falls_back_to_first_label() {
+            let app = app_with_windows(&["zeta", "about"]);
+            let target = target_webview_window(app.handle(), None).unwrap();
+            assert_eq!(target.label(), "about");
+        }
+
+        #[test]
+        fn target_reports_missing_labels() {
+            let app = app_with_windows(&["main"]);
+            assert!(matches!(
+                target_webview_window(app.handle(), Some("nope")),
+                Err(Error::WindowNotFound(_))
+            ));
+        }
+
+        #[test]
+        fn collect_windows_returns_sorted_labels() {
+            let app = app_with_windows(&["main", "about"]);
+            let labels: Vec<_> = collect_windows(app.handle())
+                .into_iter()
+                .map(|window| window.label)
+                .collect();
+            assert_eq!(labels, vec!["about", "main"]);
+        }
+
+        #[test]
+        fn control_window_rejects_setsize_without_dimensions() {
+            let app = app_with_windows(&["main"]);
+            let error = control_window(
+                app.handle(),
+                AgentWindowRequest {
+                    window: Some("main".into()),
+                    action: Some(WindowAction::SetSize),
+                    width: None,
+                    height: None,
+                    x: None,
+                    y: None,
+                },
+            )
+            .unwrap_err();
+            assert!(matches!(error, Error::InvalidParams(_)));
+        }
     }
 }

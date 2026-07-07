@@ -39,10 +39,13 @@ import type {
   LogsParams,
   LogEntry,
   KeyModifier,
+  IpcEntry,
   NetworkEntry,
   RecordingEntry,
   StorageParams,
   StorageResult,
+  StreamParams,
+  StreamResult,
   WindowAction,
   WindowBounds,
   WaitParams,
@@ -82,6 +85,7 @@ export {
   type LogEntry,
   type LogsParams,
   type KeyModifier,
+  type IpcEntry,
   type NetworkEntry,
   type PressOptions,
   type RecordingEntry,
@@ -91,6 +95,8 @@ export {
   type SnapshotResult,
   type StorageParams,
   type StorageResult,
+  type StreamParams,
+  type StreamResult,
   type WindowAction,
   type WindowBounds,
   type WaitParams,
@@ -141,6 +147,12 @@ export interface AgentSelectRequest {
   window?: string
   ref: string
   value?: string
+}
+
+export interface AgentTypeRequest {
+  window?: string
+  ref: string
+  text: string
 }
 
 export interface AgentCheckRequest {
@@ -197,6 +209,12 @@ export interface AgentNetworkRequest {
   clear?: boolean
 }
 
+export interface AgentIpcRequest {
+  window?: string
+  follow?: boolean
+  clear?: boolean
+}
+
 export interface AgentStorageRequest extends StorageParams {
   window?: string
 }
@@ -221,6 +239,10 @@ export interface AgentStateRequest {
 export interface AgentRecordRequest {
   window?: string
   action?: 'start' | 'stop' | 'get' | 'clear'
+}
+
+export interface AgentStreamRequest extends StreamParams {
+  window?: string
 }
 
 export interface AgentWindowRequest {
@@ -275,6 +297,10 @@ export async function agentSelect(request: AgentSelectRequest): Promise<void> {
   return invokeAgentCommand('plugin:agent|agent_select', { request: withCurrentWindow(request) })
 }
 
+export async function agentType(request: AgentTypeRequest): Promise<void> {
+  return invokeAgentCommand('plugin:agent|agent_type', { request: withCurrentWindow(request) })
+}
+
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {
   return invokeAgentCommand('plugin:agent|agent_check', { request: withCurrentWindow(request) })
 }
@@ -317,6 +343,10 @@ export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<N
   return invokeAgentCommand('plugin:agent|agent_network', { request: withCurrentWindow(request) })
 }
 
+export async function agentIpc(request: AgentIpcRequest = {}): Promise<IpcEntry[]> {
+  return invokeAgentCommand('plugin:agent|agent_ipc', { request: withCurrentWindow(request) })
+}
+
 export async function agentStorage(request: AgentStorageRequest = {}): Promise<StorageResult> {
   return invokeAgentCommand('plugin:agent|agent_storage', { request: withCurrentWindow(request) })
 }
@@ -342,6 +372,10 @@ export async function agentState(request: AgentStateRequest = {}): Promise<unkno
 
 export async function agentRecord(request: AgentRecordRequest = {}): Promise<AgentRecordResponse> {
   return invokeAgentCommand('plugin:agent|agent_record', { request: withCurrentWindow(request) })
+}
+
+export async function agentStream(request: AgentStreamRequest = {}): Promise<StreamResult> {
+  return invokeAgentCommand('plugin:agent|agent_stream', { request: withCurrentWindow(request) })
 }
 
 export async function agentWindow(request: AgentWindowRequest = {}): Promise<AgentWindow> {

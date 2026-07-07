@@ -29,16 +29,19 @@ describe('agent debug protocol', () => {
       'inspect',
       'eval',
       'press',
+      'type',
       'shot',
       'logs',
       'events',
       'network',
+      'ipc',
       'storage',
       'cookies',
       'location',
       'wait',
       'state',
-      'record'
+      'record',
+      'stream'
     ])
     expect(isAgentMethod('find')).toBe(true)
     expect(isAgentMethod('network')).toBe(true)

@@ -58,6 +58,8 @@ export class DebuggerSession {
         return this.app.drag(requiredString(params.ref, 'ref'), {
           toRef: stringParam(params.toRef)
         })
+      case 'type':
+        return this.app.type(requiredString(params.ref, 'ref'), stringParam(params.text) ?? '')
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':
@@ -84,6 +86,8 @@ export class DebuggerSession {
         return this.app.getEvents(booleanParam(params.clear) ?? false)
       case 'network':
         return this.app.getNetwork(booleanParam(params.clear) ?? false)
+      case 'ipc':
+        return this.app.ipc(booleanParam(params.clear) ?? false)
       case 'storage':
         return this.app.storage({
           area: storageAreaParam(params.area),
@@ -114,6 +118,11 @@ export class DebuggerSession {
         return this.app.state(stringParam(params.key))
       case 'record':
         return this.handleRecord(params)
+      case 'stream':
+        return this.app.stream({
+          since: numberParam(params.since),
+          timeoutMs: numberParam(params.timeoutMs)
+        })
     }
   }
 

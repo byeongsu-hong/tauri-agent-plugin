@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, JavaScript eval, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage and cookie access, location control, and window discovery/control.
+Allows the dev-only Tauri Agent bridge commands for compact semantic trees, semantic ref finding, ref inspection, ref actions, hover, focus, blur, scroll, and drag events, select controls, checked controls, screenshots, event and network streams, storage and cookie access, location control, and window discovery/control. Excludes eval, which must be granted explicitly.
 
 #### This default permission set includes the following:
 
@@ -10,7 +10,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-find`
 - `allow-agent-action`
 - `allow-agent-inspect`
-- `allow-agent-eval`
+- `allow-agent-type`
 - `allow-agent-select`
 - `allow-agent-check`
 - `allow-agent-hover`
@@ -22,6 +22,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-logs`
 - `allow-agent-events`
 - `allow-agent-network`
+- `allow-agent-ipc`
 - `allow-agent-storage`
 - `allow-agent-cookies`
 - `allow-agent-location`
@@ -30,6 +31,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-wait`
 - `allow-agent-state`
 - `allow-agent-record`
+- `allow-agent-stream`
 
 ## Permission Table
 
@@ -381,6 +383,32 @@ Denies the agent_inspect command without any pre-configured scope.
 <tr>
 <td>
 
+`agent:allow-agent-ipc`
+
+</td>
+<td>
+
+Enables the agent_ipc command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-ipc`
+
+</td>
+<td>
+
+Denies the agent_ipc command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `agent:allow-agent-location`
 
 </td>
@@ -641,6 +669,58 @@ Denies the agent_storage command without any pre-configured scope.
 <tr>
 <td>
 
+`agent:allow-agent-stream`
+
+</td>
+<td>
+
+Enables the agent_stream command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-stream`
+
+</td>
+<td>
+
+Denies the agent_stream command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-type`
+
+</td>
+<td>
+
+Enables the agent_type command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-type`
+
+</td>
+<td>
+
+Denies the agent_type command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `agent:allow-agent-wait`
 
 </td>
@@ -712,6 +792,19 @@ Enables the agent_windows command without any pre-configured scope.
 <td>
 
 Denies the agent_windows command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:readonly`
+
+</td>
+<td>
+
+Non-mutating Tauri Agent bridge commands: attach, window discovery, semantic trees and finding, inspection, screenshots, logs/events/network streams, state probes, waiters, and the semantic diff stream. Excludes eval, ref actions, storage/cookie/location mutation, and window control.
 
 </td>
 </tr>

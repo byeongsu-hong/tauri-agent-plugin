@@ -7,8 +7,19 @@ pub struct Config {
     /// Allows the inline debugger server to bind a local socket in release builds.
     #[serde(default)]
     pub allow_release_socket: bool,
+    /// Allows the inline debugger server to bind a non-loopback host. Off by
+    /// default: the debugger is unauthenticated code-exec surface and must stay
+    /// local unless explicitly opted in.
+    #[serde(default)]
+    pub allow_non_loopback: bool,
     #[serde(default)]
     pub inline_server: InlineServerConfig,
+    /// Advertise a human-facing VNC/noVNC visual surface in the endpoint
+    /// registry. The plugin only publishes the location; the surrounding
+    /// harness runs the actual VNC server. Requires the inline server so the
+    /// endpoint registry is published.
+    #[serde(default)]
+    pub vnc: Option<crate::endpoint::VncEndpoint>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -167,6 +178,15 @@ pub struct AgentSelectRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentTypeRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentCheckRequest {
     pub window: Option<String>,
     #[serde(rename = "ref")]
@@ -304,6 +324,27 @@ pub struct AgentNetworkEntry {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentIpcRequest {
+    pub window: Option<String>,
+    pub follow: Option<bool>,
+    pub clear: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentIpcEntry {
+    pub id: String,
+    pub command: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_ms: Option<f64>,
+    pub ok: Option<bool>,
+    pub error: Option<String>,
+    pub window: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStorageRequest {
     pub window: Option<String>,
     pub area: Option<StorageArea>,
@@ -392,6 +433,9 @@ pub enum LocationAction {
     Get,
     Push,
     Replace,
+    Reload,
+    Back,
+    Forward,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -445,6 +489,31 @@ pub struct AgentStateRequest {
 pub struct AgentRecordRequest {
     pub window: Option<String>,
     pub action: Option<RecordAction>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStreamRequest {
+    pub window: Option<String>,
+    pub since: Option<u64>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStreamFrame {
+    pub seq: u64,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStreamResponse {
+    pub frames: Vec<AgentStreamFrame>,
+    pub cursor: u64,
+    pub snapshot: String,
+    pub dropped: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

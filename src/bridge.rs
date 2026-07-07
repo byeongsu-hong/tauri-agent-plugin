@@ -5,13 +5,16 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, EventTarget, Manager, Runtime};
+use tauri::{AppHandle, Emitter, EventTarget, Runtime};
 
 use crate::{commands, Error};
 
 pub(crate) const BRIDGE_REQUEST_EVENT: &str = "tauri-agent://request";
 const DEFAULT_BRIDGE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
 const WAIT_BRIDGE_RESPONSE_MARGIN: Duration = Duration::from_millis(500);
+/// Hard ceiling on a client-requested long-poll budget so a hostile or buggy
+/// caller cannot park a worker thread indefinitely.
+const MAX_BRIDGE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,13 +49,21 @@ impl AgentBridge {
         params: serde_json::Value,
     ) -> crate::Result<serde_json::Value> {
         commands::ensure_window(app, window)?;
-        let target = target_window(app, window)?;
+        let target = commands::target_webview_window(app, window)?;
         let target_label = target.label().to_string();
-        let id = format!("bridge-{}", self.next_id.fetch_add(1, Ordering::SeqCst));
+        // The sequence keeps ids readable/ordered; the random suffix makes them
+        // unforgeable so one webview cannot spoof another's bridge response.
+        let id = format!(
+            "bridge-{}-{}",
+            self.next_id.fetch_add(1, Ordering::SeqCst),
+            crate::random::random_hex(16)
+        );
         let pending = self.insert_pending(id.clone());
         let response_timeout = bridge_response_timeout(method, &params);
 
-        app.emit_to(
+        // Remove the pending entry if the emit fails, otherwise the sender leaks
+        // for the lifetime of the process.
+        if let Err(error) = app.emit_to(
             EventTarget::window(target_label),
             BRIDGE_REQUEST_EVENT,
             AgentBridgeRequest {
@@ -60,15 +71,18 @@ impl AgentBridge {
                 method: method.into(),
                 params,
             },
-        )?;
+        ) {
+            self.remove_pending(&id);
+            return Err(error.into());
+        }
 
         match pending.recv_timeout(response_timeout) {
             Ok(Ok(result)) => Ok(result),
             Ok(Err(error)) => Err(Error::BridgeUnavailable(error)),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 self.remove_pending(&id);
-                Err(Error::BridgeUnavailable(
-                    "guest bridge timed out waiting for webview response".into(),
+                Err(Error::Timeout(
+                    "guest bridge waiting for webview response".into(),
                 ))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(Error::BridgeUnavailable(
@@ -112,7 +126,9 @@ impl AgentBridge {
 }
 
 fn bridge_response_timeout(method: &str, params: &serde_json::Value) -> Duration {
-    if method != "wait" {
+    // `wait` and `stream` both long-poll in the guest for up to a caller-
+    // supplied `timeoutMs`, so the bridge must outlast that budget.
+    if method != "wait" && method != "stream" {
         return DEFAULT_BRIDGE_RESPONSE_TIMEOUT;
     }
 
@@ -121,30 +137,11 @@ fn bridge_response_timeout(method: &str, params: &serde_json::Value) -> Duration
         .and_then(serde_json::Value::as_u64)
         .map(Duration::from_millis)
         .unwrap_or_default()
-        + WAIT_BRIDGE_RESPONSE_MARGIN;
+        .saturating_add(WAIT_BRIDGE_RESPONSE_MARGIN);
 
-    requested.max(DEFAULT_BRIDGE_RESPONSE_TIMEOUT)
-}
-
-fn target_window<R: Runtime>(
-    app: &AppHandle<R>,
-    label: Option<&str>,
-) -> crate::Result<tauri::WebviewWindow<R>> {
-    let mut windows = app.webview_windows().into_iter().collect::<Vec<_>>();
-    windows.sort_by(|a, b| a.1.label().cmp(b.1.label()));
-    if let Some(label) = label {
-        return windows
-            .into_iter()
-            .find(|(_, window)| window.label() == label)
-            .map(|(_, window)| window)
-            .ok_or_else(|| Error::WindowNotFound(label.to_string()));
-    }
-
-    windows
-        .into_iter()
-        .next()
-        .map(|(_, window)| window)
-        .ok_or_else(|| Error::WindowNotFound("main".into()))
+    requested
+        .max(DEFAULT_BRIDGE_RESPONSE_TIMEOUT)
+        .min(MAX_BRIDGE_RESPONSE_TIMEOUT)
 }
 
 #[cfg(test)]
@@ -181,6 +178,18 @@ mod tests {
         assert_eq!(
             bridge_response_timeout("eval", &serde_json::json!({"timeoutMs": 4_500})),
             Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn bridge_response_timeout_is_capped_for_hostile_budgets() {
+        assert_eq!(
+            bridge_response_timeout("wait", &serde_json::json!({"timeoutMs": u64::MAX})),
+            MAX_BRIDGE_RESPONSE_TIMEOUT
+        );
+        assert_eq!(
+            bridge_response_timeout("stream", &serde_json::json!({"timeoutMs": 600_000})),
+            MAX_BRIDGE_RESPONSE_TIMEOUT
         );
     }
 }

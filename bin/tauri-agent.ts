@@ -8,7 +8,7 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod, KeyModifier, ScreenshotBackend, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -33,6 +33,12 @@ interface TreeOptions extends ConnectionOptions {
   timeoutMs?: number
 }
 
+interface StreamOptions extends ConnectionOptions {
+  since?: number
+  waitMs?: number
+  timeoutMs?: number
+}
+
 interface FindOptions extends ConnectionOptions {
   role?: string
   name?: string
@@ -54,7 +60,7 @@ interface CookieOptions extends ConnectionOptions {
 }
 
 interface LocationOptions extends ConnectionOptions {
-  action?: 'get' | 'push' | 'replace'
+  action?: 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward'
   url?: string
 }
 
@@ -120,6 +126,21 @@ program
   .action(async (options: ConnectionOptions) => printJson(await call(options, 'attach', targetParams(options))))
 
 program
+  .command('vnc')
+  .description('Show the advertised VNC/noVNC visual surface for an app.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .action(async (options: { app?: string }) => {
+    if (!options.app) {
+      throw new Error('vnc requires --app <appId> to discover the endpoint registry')
+    }
+    const endpoint = await readEndpointRegistry(options.app)
+    if (!endpoint.vnc) {
+      throw new Error(`app ${options.app} does not advertise a VNC surface`)
+    }
+    printJson(endpoint.vnc)
+  })
+
+program
   .command('windows')
   .description('List known Tauri windows.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
@@ -163,6 +184,21 @@ program
     }
     const result = (await call(options, 'tree', treeParams(options))) as { text: string }
     process.stdout.write(`${result.text}\n`)
+  })
+
+program
+  .command('stream')
+  .description('Stream mutation-driven semantic-tree diffs as newline-delimited JSON.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--since <seq>', 'resume from a previous cursor', parseNumber, 0)
+  .option('--wait-ms <ms>', 'long-poll budget per request in milliseconds', parseNumber, 1000)
+  .option('--timeout-ms <ms>', 'stop streaming after this many milliseconds', parseNumber)
+  .action(async (options: StreamOptions) => {
+    await streamDiffs(options)
   })
 
 program
@@ -294,6 +330,23 @@ program
     const client = await debuggerClient(options)
     await client.call('tree', treeParams(options))
     printJson(await client.call('fill', refActionParams(options, ref, { text })))
+  })
+
+program
+  .command('type')
+  .description('Type text into a snapshot-local ref with realistic per-key events.')
+  .argument('<ref>', 'snapshot-local ref, for example @4')
+  .argument('<text>', 'text to type')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+  .action(async (ref: string, text: string, options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('type', refActionParams(options, ref, { text })))
   })
 
 program
@@ -454,6 +507,26 @@ program
   })
 
 program
+  .command('ipc')
+  .description('Print captured Tauri IPC invoke traces.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--follow', 'poll and stream new IPC entries as newline-delimited JSON')
+  .option('--clear', 'clear captured IPC entries after reading')
+  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
+  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+  .action(async (options: FollowOptions) => {
+    if (options.follow) {
+      await followEntries(options, 'ipc')
+      return
+    }
+    printJson(await call(options, 'ipc', { ...targetParams(options), follow: options.follow, clear: options.clear }))
+  })
+
+program
   .command('storage')
   .description('Inspect or mutate webview localStorage/sessionStorage.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
@@ -492,7 +565,7 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .option('--action <action>', 'location action: get, push, or replace', parseLocationAction, 'get')
+  .option('--action <action>', 'location action: get, push, replace, reload, back, or forward', parseLocationAction, 'get')
   .option('--url <url>', 'URL or path for push/replace actions')
   .action(async (options: LocationOptions) => {
     printJson(await call(options, 'location', locationParams(options)))
@@ -549,7 +622,10 @@ async function call(
   return debuggerClient(options).then((client) => client.call(method, params))
 }
 
-async function followEntries(options: FollowOptions, method: 'logs' | 'events' | 'network'): Promise<void> {
+async function followEntries(
+  options: FollowOptions,
+  method: 'logs' | 'events' | 'network' | 'ipc'
+): Promise<void> {
   const client = await debuggerClient(options)
   const pollMs = Math.max(1, options.pollMs ?? 250)
   const startedAt = Date.now()
@@ -596,6 +672,57 @@ async function watchTree(options: TreeOptions): Promise<void> {
     }
     await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
   }
+}
+
+async function streamDiffs(options: StreamOptions): Promise<void> {
+  const client = await debuggerClient(options)
+  const startedAt = Date.now()
+  const waitMs = Math.max(1, options.waitMs ?? 1000)
+  let cursor = options.since ?? 0
+
+  // Emit the current full snapshot first so a consumer has a baseline to which
+  // subsequent diff frames apply.
+  const base = asStreamResult(await client.call('stream', { ...targetParams(options), since: cursor }))
+  process.stdout.write(`${JSON.stringify({ snapshot: base.snapshot, cursor: base.cursor })}\n`)
+  for (const frame of base.frames) {
+    process.stdout.write(`${JSON.stringify(frame)}\n`)
+  }
+  cursor = base.cursor
+
+  while (true) {
+    if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
+      return
+    }
+    const budget =
+      options.timeoutMs === undefined
+        ? waitMs
+        : Math.max(1, Math.min(waitMs, options.timeoutMs - (Date.now() - startedAt)))
+    const result = asStreamResult(
+      await client.call('stream', { ...targetParams(options), since: cursor, timeoutMs: budget })
+    )
+    if (result.dropped) {
+      process.stdout.write(
+        `${JSON.stringify({ resync: true, snapshot: result.snapshot, cursor: result.cursor })}\n`
+      )
+    } else {
+      for (const frame of result.frames) {
+        process.stdout.write(`${JSON.stringify(frame)}\n`)
+      }
+    }
+    cursor = result.cursor
+  }
+}
+
+function asStreamResult(value: unknown): StreamResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Array.isArray((value as StreamResult).frames) ||
+    typeof (value as StreamResult).cursor !== 'number'
+  ) {
+    throw new Error('stream expected a { frames, cursor, snapshot, dropped } result')
+  }
+  return value as StreamResult
 }
 
 function targetParams(options: ConnectionOptions): Record<string, unknown> {
@@ -704,7 +831,8 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
         endpoint.transport === 'tcp'
           ? { port: endpoint.port, host: endpoint.host }
           : { path: endpoint.path }
-      )
+      ),
+      endpoint.token
     )
   }
   if (!options.fromHtml) {
@@ -769,11 +897,20 @@ function parseCookieAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
   throw new Error(`expected get, set, remove, or clear, got ${value}`)
 }
 
-function parseLocationAction(value: string): 'get' | 'push' | 'replace' {
-  if (value === 'get' || value === 'push' || value === 'replace') {
+function parseLocationAction(
+  value: string
+): 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward' {
+  if (
+    value === 'get' ||
+    value === 'push' ||
+    value === 'replace' ||
+    value === 'reload' ||
+    value === 'back' ||
+    value === 'forward'
+  ) {
     return value
   }
-  throw new Error(`expected get, push, or replace, got ${value}`)
+  throw new Error(`expected get, push, replace, reload, back, or forward, got ${value}`)
 }
 
 function parseWindowAction(value: string): WindowAction {

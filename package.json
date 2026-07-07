@@ -5,6 +5,23 @@
   "type": "module",
   "packageManager": "bun@1.3.14",
   "license": "MIT OR Apache-2.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "tauri",
+    "agent",
+    "debugger",
+    "automation",
+    "mcp",
+    "webview",
+    "accessibility",
+    "semantic-tree"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/byeongsu-hong/tauri-agent-plugin.git"
@@ -46,13 +63,16 @@
     "Cargo.toml",
     "build.rs",
     "README.md",
-    "LICENSE"
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
   ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun run test && bun run build"
+    "check": "bun run typecheck && bun run test && bun run build",
+    "check:rust": "cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test",
+    "prepublishOnly": "bun run check"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

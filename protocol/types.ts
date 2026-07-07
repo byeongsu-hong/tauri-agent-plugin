@@ -18,16 +18,19 @@ export type AgentMethod =
   | 'inspect'
   | 'eval'
   | 'press'
+  | 'type'
   | 'shot'
   | 'logs'
   | 'events'
   | 'network'
+  | 'ipc'
   | 'storage'
   | 'cookies'
   | 'location'
   | 'wait'
   | 'state'
   | 'record'
+  | 'stream'
 
 export interface JsonRpcRequest<TParams = unknown> {
   jsonrpc: '2.0'
@@ -104,6 +107,10 @@ export interface FillParams extends RefActionParams {
   text: string
 }
 
+export interface TypeParams extends RefActionParams {
+  text: string
+}
+
 export interface SelectParams extends RefActionParams {
   value?: string
 }
@@ -160,6 +167,11 @@ export interface NetworkParams extends WindowTarget {
   clear?: boolean
 }
 
+export interface IpcParams extends WindowTarget {
+  follow?: boolean
+  clear?: boolean
+}
+
 export interface StorageParams extends WindowTarget {
   area?: 'local' | 'session'
   action?: 'get' | 'set' | 'remove' | 'clear'
@@ -174,7 +186,7 @@ export interface CookieParams extends WindowTarget {
 }
 
 export interface LocationParams extends WindowTarget {
-  action?: 'get' | 'push' | 'replace'
+  action?: 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward'
   url?: string
 }
 
@@ -192,6 +204,17 @@ export interface StateParams extends WindowTarget {
 
 export interface RecordParams extends WindowTarget {
   action?: 'start' | 'stop' | 'get' | 'clear'
+}
+
+export interface StreamParams extends WindowTarget {
+  /** Cursor from a previous result. Frames with a higher seq are returned. */
+  since?: number
+  /**
+   * Long-poll budget. When no frames are buffered after `since`, the call waits
+   * up to this many milliseconds for the next mutation-driven frame before
+   * returning empty. Omitted or <= 0 returns immediately (a snapshot poll).
+   */
+  timeoutMs?: number
 }
 
 export interface AgentWindow {
@@ -268,6 +291,17 @@ export interface NetworkEntry {
   window?: string
 }
 
+export interface IpcEntry {
+  id: string
+  command: string
+  startedAt: string
+  endedAt?: string
+  durationMs?: number
+  ok?: boolean
+  error?: string
+  window?: string
+}
+
 export interface StorageEntry {
   area: 'local' | 'session'
   key: string
@@ -314,4 +348,28 @@ export interface RecordingEntry {
   method: AgentMethod
   params?: unknown
   timestamp: string
+}
+
+/**
+ * A single mutation-driven change to the semantic tree, expressed as the set of
+ * compact-tree lines added and removed since the previous frame.
+ */
+export interface StreamFrame {
+  seq: number
+  added: string[]
+  removed: string[]
+}
+
+export interface StreamResult {
+  /** Change frames with seq greater than the requested cursor. */
+  frames: StreamFrame[]
+  /** Latest seq; pass back as `since` to continue the stream. */
+  cursor: number
+  /** The full current compact tree, for initial sync or after `dropped`. */
+  snapshot: string
+  /**
+   * True when frames between the requested cursor and the buffer were evicted;
+   * the consumer should resync from `snapshot` rather than applying frames.
+   */
+  dropped: boolean
 }

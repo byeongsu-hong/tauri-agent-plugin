@@ -6,7 +6,6 @@ export function serveMcpStdio(
   output: NodeJS.WritableStream = process.stdout
 ): void {
   let buffer = ''
-  let queue = Promise.resolve()
   input.setEncoding('utf8')
   input.on('data', (chunk) => {
     buffer += chunk.toString()
@@ -16,7 +15,10 @@ export function serveMcpStdio(
       if (!line.trim()) {
         continue
       }
-      queue = queue.then(() => respond(line, handler, output))
+      // Handle each request independently: a long-poll tool (wait/stream) must
+      // not block every subsequent request behind it. Responses carry their
+      // JSON-RPC id, so out-of-order completion is fine.
+      void respond(line, handler, output)
     }
   })
 }
@@ -26,8 +28,13 @@ async function respond(
   handler: McpRequestHandler,
   output: NodeJS.WritableStream
 ): Promise<void> {
-  const response = await handler(line)
-  if (response !== undefined) {
-    output.write(`${response}\n`)
+  try {
+    const response = await handler(line)
+    if (response !== undefined) {
+      output.write(`${response}\n`)
+    }
+  } catch {
+    // The handler already encodes protocol errors into responses; swallow any
+    // unexpected throw rather than crashing the stdio server.
   }
 }

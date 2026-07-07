@@ -15,6 +15,41 @@ Headless agent debugger for Tauri apps.
 
 The live bridge supports `windows`, `window`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `cookies`, `location`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `windows` returns labels, titles, focus/visibility state, minimized/maximized state, scale factor, and inner/outer bounds when the host platform reports them. `window` reads or controls one native Tauri window with `get`, `focus`, `show`, `hide`, `minimize`, `unminimize`, `maximize`, `unmaximize`, `setSize`, and `setPosition`, then returns the updated window metadata. `find` refreshes the semantic snapshot and returns inspect-shaped matches by role, accessible-name substring, visible-text substring, and optional limit so agents can obtain refs without parsing tree text. `wait` can poll for plain text or for the first semantic match by scope, role, accessible-name substring, and visible-text substring; semantic waits return the matched inspect-shaped entry under `match`. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `press` dispatches a keyboard key to the active element, or focuses a snapshot-local `ref` first, with optional `Alt`, `Control`, `Meta`, and `Shift` modifiers. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `logs` returns captured console messages plus uncaught browser `error` and `unhandledrejection` entries as error-level logs. `network` captures non-Tauri-IPC fetch metadata only: method, URL, status, timing, error text, and request/response byte sizes when measurable without consuming the returned response. `storage` reads or mutates `localStorage`/`sessionStorage` with `get`, `set`, `remove`, and `clear`, returning the resulting key/value entries. `cookies` reads or mutates webview-visible `document.cookie` entries with `get`, `set`, `remove`, and `clear`, returning parsed `{ name, value }` entries; native and HttpOnly cookie-store access is outside this webview bridge path. `location` returns `{ href, origin, pathname, search, hash }` and can `push` or `replace` SPA routes without reloading the webview. `shot` defaults to the DOM-rendered SVG bridge path for deterministic output and can opt into `backend: "native"` for macOS window pixel capture or `backend: "auto"` to try native capture before falling back to DOM.
 
+## Quickstart (add to your Tauri app)
+
+1. **Add the crate** to `src-tauri/Cargo.toml` and register the plugin:
+
+   ```rust
+   tauri::Builder::default()
+     .plugin(tauri_plugin_agent::init())
+     .run(tauri::generate_context!())?;
+   ```
+
+2. **Grant the permission** in `src-tauri/capabilities/*.json`. Without this,
+   every `plugin:agent|*` invoke fails with a permissions error:
+
+   ```json
+   { "permissions": ["core:default", "agent:default"] }
+   ```
+
+   Use `agent:readonly` for a non-mutating subset, and add
+   `agent:allow-agent-eval` only if you need `eval`.
+
+3. **Install the guest instrumentation** in your frontend. Bridge commands
+   (`tree`, `click`, …) hang until the webview calls `install()`:
+
+   ```ts
+   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+   new WebviewAgentInstrumentation({ windowLabel: 'main' }).install()
+   ```
+
+4. **Enable the inline server** (below) if you want out-of-process control via the
+   CLI/MCP, then **verify the wiring**:
+
+   ```bash
+   tauri-agent attach --app <your.app.identifier>
+   ```
+
 ## Bun + TypeScript
 
 This project uses Bun by default.
@@ -116,6 +151,7 @@ tauri-agent blur @4
 tauri-agent scroll @11 12
 tauri-agent drag @3 @18
 tauri-agent fill @4 worker-a
+tauri-agent type @4 worker-a
 tauri-agent select @5 remote
 tauri-agent check @6 true
 tauri-agent inspect @4
@@ -130,6 +166,7 @@ tauri-agent logs --clear
 tauri-agent events --follow
 tauri-agent events --clear
 tauri-agent network --follow
+tauri-agent ipc --follow
 tauri-agent storage --area session --action get
 tauri-agent cookies --action get
 tauri-agent location --action push --url /agents
@@ -138,6 +175,7 @@ tauri-agent wait --role button --name Forge
 tauri-agent state
 tauri-agent state --key values
 tauri-agent record --action start
+tauri-agent stream --timeout-ms 5000
 ```
 
 Commands that operate on a specific webview also accept `--window <label>` to target a Tauri window by label.
@@ -165,6 +203,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_scroll`
 - `tauri_drag`
 - `tauri_fill`
+- `tauri_type`
 - `tauri_select`
 - `tauri_check`
 - `tauri_inspect`
@@ -174,12 +213,14 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_logs`
 - `tauri_events`
 - `tauri_network`
+- `tauri_ipc`
 - `tauri_storage`
 - `tauri_cookies`
 - `tauri_location`
 - `tauri_wait`
 - `tauri_state`
 - `tauri_record`
+- `tauri_stream`
 
 Each tool accepts the same connection inputs as the CLI: `app` for endpoint discovery, `port`/`host` for a known debugger daemon, or `html`/`fromHtml` for deterministic static prototyping. MCP never assumes a singleton `/tmp/tauri-mcp.sock`; live calls should use the app-scoped endpoint registry.
 
@@ -206,6 +247,7 @@ Use it as the first real target for live bridge work. Its plugin config enables 
 ```ts
 import {
   WebviewAgentInstrumentation,
+  agentAction,
   agentBlur,
   agentCheck,
   agentCookies,
@@ -218,13 +260,16 @@ import {
   agentLogs,
   agentLocation,
   agentInspect,
+  agentIpc,
   agentNetwork,
   agentRecord,
+  agentScreenshot,
   agentScroll,
   agentSnapshot,
   agentSelect,
   agentState,
   agentStorage,
+  agentStream,
   agentWait,
   agentWindow,
   agentWindows,
@@ -324,6 +369,80 @@ Enable the inline server in `tauri.conf.json`:
 }
 ```
 
+## Surfaces
+
+`tauri-agent` exposes two surfaces for the same running app:
+
+- **Agent surface (DOM/semantic):** the committed-DOM semantic tree with `@ref`
+  based actions (`click @2`, `type @1 "..."`). This is the primary surface for
+  agents and is served over the inline debugger endpoint. A live push stream of
+  semantic-tree diffs is available via `stream` — a `MutationObserver` in the
+  guest drives diff frames (no polling loop), and consumers drain them against a
+  monotonic cursor, long-polling for the next change:
+
+  ```bash
+  tauri-agent stream --app dev.byeongsu.tauri-agent.fixture
+  ```
+
+  The first line is the full compact tree (`{ snapshot, cursor }`); each
+  subsequent line is a change frame (`{ seq, added, removed }`). Pass
+  `--since <cursor>` to resume and `--wait-ms`/`--timeout-ms` to bound polling.
+- **Human surface (VNC/noVNC):** a visual view of the app for QA — "how does the
+  screen actually look right now". The plugin does not run a VNC server itself;
+  it only **advertises** where the stream lives so a viewer can discover it. The
+  surrounding harness runs the VNC server (for example `x11vnc` + `websockify`
+  against the app's virtual display).
+
+Advertise the VNC surface by adding a `vnc` block to the plugin config. It is
+published into the app's `endpoint.json` registry alongside the debugger
+transport, so a fleet viewer can discover both surfaces by app id:
+
+```json
+{
+  "plugins": {
+    "agent": {
+      "inlineServer": { "enabled": true, "host": "127.0.0.1", "port": 0 },
+      "vnc": {
+        "host": "127.0.0.1",
+        "port": 5901,
+        "novncUrl": "http://127.0.0.1:6080/vnc.html"
+      }
+    }
+  }
+}
+```
+
+Resulting `endpoint.json`:
+
+```json
+{
+  "appId": "dev.byeongsu.tauri-agent.fixture",
+  "pid": 4242,
+  "transport": "tcp",
+  "host": "127.0.0.1",
+  "port": 45127,
+  "token": "a1b2c3…",
+  "vnc": { "host": "127.0.0.1", "port": 5901, "novncUrl": "http://127.0.0.1:6080/vnc.html" }
+}
+```
+
+The inline server binds a loopback socket that any local process can reach, so
+it authenticates every request with a per-session `token`. The plugin generates
+the token, publishes it in the app's `endpoint.json` (written `0600` on Unix),
+and requires it on each request. The CLI and MCP wrappers read it during
+endpoint discovery automatically; a client dialing a known `--port`/`--host`
+daemon directly sends no token.
+
+Discover it from the CLI:
+
+```bash
+tauri-agent vnc --app dev.byeongsu.tauri-agent.fixture
+```
+
+The `vnc` block requires the inline server (the endpoint registry is only
+published when the inline server runs). Advertising is discovery-only: the
+plugin never binds the VNC port.
+
 Rust command names:
 
 - `agent_bridge_response`
@@ -333,6 +452,7 @@ Rust command names:
 - `agent_action`
 - `agent_inspect`
 - `agent_eval`
+- `agent_type`
 - `agent_select`
 - `agent_check`
 - `agent_hover`
@@ -344,6 +464,7 @@ Rust command names:
 - `agent_logs`
 - `agent_events`
 - `agent_network`
+- `agent_ipc`
 - `agent_storage`
 - `agent_cookies`
 - `agent_location`
@@ -352,7 +473,14 @@ Rust command names:
 - `agent_wait`
 - `agent_state`
 - `agent_record`
+- `agent_stream`
 
 ## Security Direction
 
-Default posture is dev-only and local-only. The live bridge must use explicit Tauri permissions, bind local sockets only, and keep webview actions scoped to the app. The inline server can run in debug builds when enabled, but release builds require the explicit `allowReleaseSocket` plugin config opt-in before binding a debugger socket. `eval` is permission-gated with the other bridge commands and should remain a local debugging primitive, not a production remote-code execution surface. Native screenshots are explicit through `backend: "native"` or `backend: "auto"` and remain app-window scoped. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
+Default posture is dev-only and local-only. The live bridge uses explicit Tauri permissions, binds loopback sockets only, and keeps webview actions scoped to the app.
+
+- **Loopback only.** The inline server binds a loopback host by default; a non-loopback host (e.g. `0.0.0.0`) is rejected unless the explicit `allowNonLoopback` plugin config opt-in is set.
+- **Release gating.** The inline server runs in debug builds when enabled, but release builds require the explicit `allowReleaseSocket` opt-in before binding a debugger socket.
+- **`eval` is not in `agent:default`.** `eval` is arbitrary in-webview code execution, so it is excluded from the `agent:default` permission set and must be granted explicitly with `agent:allow-agent-eval`. A non-mutating `agent:readonly` set is provided for cautious adopters.
+- **Unforgeable bridge ids.** Bridge request ids carry a random suffix so one webview cannot spoof another window's bridge response.
+- **App-scoped native surfaces.** Native screenshots are explicit through `backend: "native"` or `backend: "auto"` and remain app-window scoped. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
