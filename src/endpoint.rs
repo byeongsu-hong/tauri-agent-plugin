@@ -147,11 +147,26 @@ pub fn write_endpoint_registry(
             path: path.clone(),
             source,
         })?;
-    std::fs::write(&path, format!("{contents}\n")).map_err(|source| EndpointRegistryError::Io {
-        path: path.clone(),
-        source,
-    })?;
-    restrict_registry_permissions(&path)
+
+    // Write to a pid-scoped temp file, tighten permissions, then atomically
+    // rename into place so a concurrent reader never observes partial JSON.
+    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    let write_result = std::fs::write(&tmp, format!("{contents}\n"))
+        .map_err(|source| EndpointRegistryError::Io {
+            path: tmp.clone(),
+            source,
+        })
+        .and_then(|()| restrict_registry_permissions(&tmp))
+        .and_then(|()| {
+            std::fs::rename(&tmp, &path).map_err(|source| EndpointRegistryError::Io {
+                path: path.clone(),
+                source,
+            })
+        });
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    write_result
 }
 
 /// Restrict the registry file to owner-only read/write so the embedded auth

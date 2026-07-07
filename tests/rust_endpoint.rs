@@ -118,3 +118,36 @@ fn rust_endpoint_registry_round_trips_app_scoped_files() {
 
     let _ = std::fs::remove_dir_all(runtime_base);
 }
+
+#[cfg(unix)]
+#[test]
+fn rust_endpoint_registry_is_owner_only_readable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let runtime_base = std::env::temp_dir().join(format!(
+        "tauri-agent-rust-endpoint-perms-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&runtime_base);
+
+    let descriptor = AgentEndpointDescriptor::tcp("dev.byeongsu.perms", 4242, "127.0.0.1", 45127)
+        .with_token(Some("secret-token".into()));
+    write_endpoint_registry(&descriptor, Some(runtime_base.clone())).unwrap();
+
+    let path = endpoint_registry_path("dev.byeongsu.perms", Some(runtime_base.clone()));
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "registry with a token must not be world-readable"
+    );
+
+    // The token round-trips so a discovering client can authenticate.
+    assert_eq!(
+        read_endpoint_registry("dev.byeongsu.perms", Some(runtime_base.clone()))
+            .unwrap()
+            .token(),
+        Some("secret-token")
+    );
+
+    let _ = std::fs::remove_dir_all(runtime_base);
+}

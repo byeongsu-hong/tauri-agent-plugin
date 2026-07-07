@@ -8,6 +8,14 @@ pub enum Error {
     BridgeUnavailable(String),
     #[error("window not found: {0}")]
     WindowNotFound(String),
+    #[error("invalid params: {0}")]
+    InvalidParams(String),
+    #[error("timed out: {0}")]
+    Timeout(String),
+    #[error("io error: {0}")]
+    Io(String),
+    #[error("unsupported on this platform: {0}")]
+    UnsupportedPlatform(String),
     #[error("{0}")]
     Tauri(#[from] tauri::Error),
 }

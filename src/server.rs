@@ -1,11 +1,19 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+
+/// Reject a single request line longer than this to bound per-connection memory.
+const MAX_REQUEST_LINE_BYTES: usize = 4 * 1024 * 1024;
+/// Drop an idle connection after this long so a stalled client cannot hold a
+/// worker thread forever.
+const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Cap concurrent connections so the server cannot be exhausted by open sockets.
+const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -238,12 +246,23 @@ fn accept_loop<B>(
 ) where
     B: InlineDebuggerBackend + Send + Sync + 'static,
 {
+    let active = Arc::new(AtomicUsize::new(0));
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
+                if active.load(Ordering::SeqCst) >= MAX_CONCURRENT_CONNECTIONS {
+                    // Refuse by dropping the stream, which closes the socket.
+                    continue;
+                }
+                active.fetch_add(1, Ordering::SeqCst);
                 let backend = Arc::clone(&backend);
                 let token = token.clone();
-                thread::spawn(move || handle_stream(stream, backend.as_ref(), token.as_deref()));
+                let shutdown = Arc::clone(&shutdown);
+                let active = Arc::clone(&active);
+                thread::spawn(move || {
+                    handle_stream(stream, backend.as_ref(), token.as_deref(), &shutdown);
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(10));
@@ -253,22 +272,98 @@ fn accept_loop<B>(
     }
 }
 
-fn handle_stream(stream: TcpStream, backend: &impl InlineDebuggerBackend, token: Option<&str>) {
+enum LineRead {
+    Line,
+    Eof,
+    TooLong,
+    Timeout,
+}
+
+/// Read one `\n`-terminated line into `buf`, capped at `max` bytes so a client
+/// that never sends a newline cannot grow the buffer without bound.
+fn read_capped_line<R: BufRead>(reader: &mut R, buf: &mut Vec<u8>, max: usize) -> LineRead {
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(available) => available,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                return LineRead::Timeout;
+            }
+            Err(_) => {
+                return if buf.is_empty() {
+                    LineRead::Eof
+                } else {
+                    LineRead::Line
+                }
+            }
+        };
+        if available.is_empty() {
+            return if buf.is_empty() {
+                LineRead::Eof
+            } else {
+                LineRead::Line
+            };
+        }
+        if let Some(pos) = available.iter().position(|&byte| byte == b'\n') {
+            buf.extend_from_slice(&available[..=pos]);
+            let consumed = pos + 1;
+            reader.consume(consumed);
+            return if buf.len() > max {
+                LineRead::TooLong
+            } else {
+                LineRead::Line
+            };
+        }
+        buf.extend_from_slice(available);
+        let consumed = available.len();
+        reader.consume(consumed);
+        if buf.len() > max {
+            return LineRead::TooLong;
+        }
+    }
+}
+
+fn handle_stream(
+    stream: TcpStream,
+    backend: &impl InlineDebuggerBackend,
+    token: Option<&str>,
+    shutdown: &AtomicBool,
+) {
+    let _ = stream.set_read_timeout(Some(CONNECTION_READ_TIMEOUT));
     let writer = match stream.try_clone() {
         Ok(writer) => writer,
         Err(_) => return,
     };
     let mut writer = std::io::BufWriter::new(writer);
-    let reader = BufReader::new(stream);
+    let mut reader = BufReader::new(stream);
+    let mut line: Vec<u8> = Vec::new();
 
-    for line in reader.lines() {
-        let Ok(line) = line else {
-            break;
-        };
-        if line.trim().is_empty() {
+    while !shutdown.load(Ordering::SeqCst) {
+        line.clear();
+        match read_capped_line(&mut reader, &mut line, MAX_REQUEST_LINE_BYTES) {
+            LineRead::Eof | LineRead::Timeout => break,
+            LineRead::TooLong => {
+                let response = error_response(
+                    json!(0),
+                    "INVALID_REQUEST",
+                    "request line exceeds the maximum length",
+                );
+                let _ = writeln!(writer, "{response}").and_then(|_| writer.flush());
+                break;
+            }
+            LineRead::Line => {}
+        }
+
+        let text = String::from_utf8_lossy(&line);
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        let response = respond_to_json_rpc_line(backend, token, &line);
+        let response = respond_to_json_rpc_line(backend, token, trimmed);
         if writeln!(writer, "{response}")
             .and_then(|_| writer.flush())
             .is_err()
@@ -350,9 +445,8 @@ fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> cr
 }
 
 fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
-    serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|_| {
-        Error::BridgeUnavailable("invalid JSON-RPC params for inline Rust server method".into())
-    })
+    serde_json::from_value(params.unwrap_or_else(|| json!({})))
+        .map_err(|error| Error::InvalidParams(error.to_string()))
 }
 
 fn success_response(id: Value, result: Value) -> String {
@@ -381,6 +475,10 @@ fn error_code(error: &Error) -> &'static str {
         Error::StaleRef(_) => "STALE_REF",
         Error::BridgeUnavailable(_) => "BRIDGE_UNAVAILABLE",
         Error::WindowNotFound(_) => "WINDOW_NOT_FOUND",
+        Error::InvalidParams(_) => "INVALID_PARAMS",
+        Error::Timeout(_) => "TIMEOUT",
+        Error::Io(_) => "IO_ERROR",
+        Error::UnsupportedPlatform(_) => "UNSUPPORTED_PLATFORM",
         Error::Tauri(_) => "AGENT_ERROR",
     }
 }
@@ -400,6 +498,38 @@ mod tests {
     /// Dispatch without token enforcement, for tests that exercise routing.
     fn respond(backend: &impl InlineDebuggerBackend, line: &str) -> String {
         respond_to_json_rpc_line(backend, None, line)
+    }
+
+    #[test]
+    fn read_capped_line_splits_and_bounds_input() {
+        use std::io::Cursor;
+
+        let mut reader = BufReader::new(Cursor::new(b"hello\nworld\n".to_vec()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Line
+        ));
+        assert_eq!(buf, b"hello\n");
+        buf.clear();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Line
+        ));
+        assert_eq!(buf, b"world\n");
+        buf.clear();
+        assert!(matches!(
+            read_capped_line(&mut reader, &mut buf, 1024),
+            LineRead::Eof
+        ));
+
+        // A line longer than the cap is rejected instead of buffered unbounded.
+        let mut long = BufReader::new(Cursor::new(vec![b'a'; 100]));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            read_capped_line(&mut long, &mut buf, 10),
+            LineRead::TooLong
+        ));
     }
 
     struct FakeBackend;

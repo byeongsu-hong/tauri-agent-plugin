@@ -35,6 +35,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Agent {
     config: Config,
     endpoint: Option<AgentEndpointDescriptor>,
+    published: bool,
 }
 
 impl Agent {
@@ -47,6 +48,11 @@ impl Agent {
     }
 
     fn cleanup_endpoint(&self) {
+        // Only remove the registry if this instance actually published it, so we
+        // never delete a sibling instance's file.
+        if !self.published {
+            return;
+        }
         if let Some(endpoint) = &self.endpoint {
             let _ = remove_endpoint_registry(endpoint.app_id(), None);
         }
@@ -116,14 +122,19 @@ impl Builder {
                 } else {
                     None
                 };
-                app.manage(Agent { config, endpoint });
+                let published =
+                    config.inline_server.enabled && config.inline_server.publish_endpoint;
+                app.manage(Agent {
+                    config,
+                    endpoint,
+                    published,
+                });
                 Ok(())
             })
             .on_event(|app, event| {
-                if matches!(
-                    event,
-                    tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
-                ) {
+                // Clean up only on the real Exit; ExitRequested can be vetoed by
+                // the app, which would leave a still-running app undiscoverable.
+                if matches!(event, tauri::RunEvent::Exit) {
                     if let Some(agent) = app.try_state::<Agent>() {
                         agent.cleanup_endpoint();
                     }

@@ -429,7 +429,11 @@ pub(crate) fn control_window<R: Runtime>(
     Ok(window_info(&window))
 }
 
-fn target_webview_window<R: Runtime>(
+/// Resolve the target webview window. With an explicit label, that window or an
+/// error. Without one, prefer a window labelled `main`, then the focused window,
+/// then the lexicographically-first label for determinism. Shared by the direct
+/// commands and the guest bridge so both surfaces agree on the default.
+pub(crate) fn target_webview_window<R: Runtime>(
     app: &AppHandle<R>,
     label: Option<&str>,
 ) -> Result<WebviewWindow<R>> {
@@ -439,32 +443,44 @@ fn target_webview_window<R: Runtime>(
             .ok_or_else(|| Error::WindowNotFound(label.to_string()));
     }
 
-    let mut windows = app.webview_windows().into_values().collect::<Vec<_>>();
-    windows.sort_by(|a, b| a.label().cmp(b.label()));
-    windows
+    let windows = app.webview_windows();
+    if let Some(main) = windows.get("main") {
+        return Ok(main.clone());
+    }
+
+    let mut sorted = windows.into_values().collect::<Vec<_>>();
+    sorted.sort_by(|a, b| a.label().cmp(b.label()));
+    if let Some(focused) = sorted
+        .iter()
+        .find(|window| window.is_focused().unwrap_or(false))
+    {
+        return Ok(focused.clone());
+    }
+    sorted
         .into_iter()
         .next()
-        .ok_or_else(|| Error::WindowNotFound("default".into()))
+        .ok_or_else(|| Error::WindowNotFound("main".into()))
 }
 
 fn required_window_size(request: &AgentWindowRequest) -> Result<PhysicalSize<u32>> {
     let width = request
         .width
         .filter(|width| *width > 0)
-        .ok_or_else(|| Error::BridgeUnavailable("window setSize requires positive width".into()))?;
-    let height = request.height.filter(|height| *height > 0).ok_or_else(|| {
-        Error::BridgeUnavailable("window setSize requires positive height".into())
-    })?;
+        .ok_or_else(|| Error::InvalidParams("window setSize requires positive width".into()))?;
+    let height = request
+        .height
+        .filter(|height| *height > 0)
+        .ok_or_else(|| Error::InvalidParams("window setSize requires positive height".into()))?;
     Ok(PhysicalSize { width, height })
 }
 
 fn required_window_position(request: &AgentWindowRequest) -> Result<PhysicalPosition<i32>> {
     let x = request
         .x
-        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires x".into()))?;
+        .ok_or_else(|| Error::InvalidParams("window setPosition requires x".into()))?;
     let y = request
         .y
-        .ok_or_else(|| Error::BridgeUnavailable("window setPosition requires y".into()))?;
+        .ok_or_else(|| Error::InvalidParams("window setPosition requires y".into()))?;
     Ok(PhysicalPosition { x, y })
 }
 
