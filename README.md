@@ -425,4 +425,10 @@ Rust command names:
 
 ## Security Direction
 
-Default posture is dev-only and local-only. The live bridge must use explicit Tauri permissions, bind local sockets only, and keep webview actions scoped to the app. The inline server can run in debug builds when enabled, but release builds require the explicit `allowReleaseSocket` plugin config opt-in before binding a debugger socket. `eval` is permission-gated with the other bridge commands and should remain a local debugging primitive, not a production remote-code execution surface. Native screenshots are explicit through `backend: "native"` or `backend: "auto"` and remain app-window scoped. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.
+Default posture is dev-only and local-only. The live bridge uses explicit Tauri permissions, binds loopback sockets only, and keeps webview actions scoped to the app.
+
+- **Loopback only.** The inline server binds a loopback host by default; a non-loopback host (e.g. `0.0.0.0`) is rejected unless the explicit `allowNonLoopback` plugin config opt-in is set.
+- **Release gating.** The inline server runs in debug builds when enabled, but release builds require the explicit `allowReleaseSocket` opt-in before binding a debugger socket.
+- **`eval` is not in `agent:default`.** `eval` is arbitrary in-webview code execution, so it is excluded from the `agent:default` permission set and must be granted explicitly with `agent:allow-agent-eval`. A non-mutating `agent:readonly` set is provided for cautious adopters.
+- **Unforgeable bridge ids.** Bridge request ids carry a random suffix so one webview cannot spoof another window's bridge response.
+- **App-scoped native surfaces.** Native screenshots are explicit through `backend: "native"` or `backend: "auto"` and remain app-window scoped. Native input remains a separate fallback path and should not become arbitrary system UI control without a deliberate opt-in.

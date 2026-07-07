@@ -5,6 +5,7 @@ mod commands;
 mod endpoint;
 mod error;
 mod models;
+mod random;
 mod screenshot;
 mod server;
 
@@ -63,12 +64,30 @@ impl<R: Runtime, T: Manager<R>> AgentExt<R> for T {
 }
 
 fn validate_inline_server_config(config: &Config, debug_assertions: bool) -> Result<()> {
-    if config.inline_server.enabled && !debug_assertions && !config.allow_release_socket {
+    if !config.inline_server.enabled {
+        return Ok(());
+    }
+    if !debug_assertions && !config.allow_release_socket {
         return Err(Error::BridgeUnavailable(
             "inlineServer requires allowReleaseSocket in release builds".into(),
         ));
     }
+    if !config.allow_non_loopback && !host_is_loopback(&config.inline_server.host) {
+        return Err(Error::BridgeUnavailable(format!(
+            "inlineServer host {} is not loopback; set allowNonLoopback to bind it",
+            config.inline_server.host
+        )));
+    }
     Ok(())
+}
+
+fn host_is_loopback(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
 }
 
 pub struct Builder;
@@ -189,5 +208,31 @@ mod tests {
     #[test]
     fn debug_build_allows_inline_server_without_release_socket_opt_in() {
         validate_inline_server_config(&inline_enabled_config(false), true).unwrap();
+    }
+
+    #[test]
+    fn rejects_non_loopback_host_without_opt_in() {
+        let mut config = inline_enabled_config(true);
+        config.inline_server.host = "0.0.0.0".into();
+        let error = validate_inline_server_config(&config, true)
+            .expect_err("non-loopback host should require allow_non_loopback");
+        assert!(error.to_string().contains("allowNonLoopback"));
+    }
+
+    #[test]
+    fn allows_non_loopback_host_with_opt_in() {
+        let mut config = inline_enabled_config(true);
+        config.inline_server.host = "0.0.0.0".into();
+        config.allow_non_loopback = true;
+        validate_inline_server_config(&config, true).unwrap();
+    }
+
+    #[test]
+    fn loopback_hosts_are_recognized() {
+        assert!(host_is_loopback("127.0.0.1"));
+        assert!(host_is_loopback("::1"));
+        assert!(host_is_loopback("localhost"));
+        assert!(!host_is_loopback("0.0.0.0"));
+        assert!(!host_is_loopback("192.168.1.4"));
     }
 }

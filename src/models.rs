@@ -7,6 +7,11 @@ pub struct Config {
     /// Allows the inline debugger server to bind a local socket in release builds.
     #[serde(default)]
     pub allow_release_socket: bool,
+    /// Allows the inline debugger server to bind a non-loopback host. Off by
+    /// default: the debugger is unauthenticated code-exec surface and must stay
+    /// local unless explicitly opted in.
+    #[serde(default)]
+    pub allow_non_loopback: bool,
     #[serde(default)]
     pub inline_server: InlineServerConfig,
     /// Advertise a human-facing VNC/noVNC visual surface in the endpoint

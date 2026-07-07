@@ -173,7 +173,7 @@ fn default_runtime_base() -> PathBuf {
 }
 
 fn safe_app_id(app_id: &str) -> String {
-    app_id
+    let sanitized: String = app_id
         .chars()
         .map(|ch| {
             if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
@@ -182,5 +182,15 @@ fn safe_app_id(app_id: &str) -> String {
                 '_'
             }
         })
-        .collect()
+        .collect();
+
+    // An empty or dot-only segment ("", ".", "..", ...) would escape the runtime
+    // directory when joined as a path component; neutralize it.
+    if sanitized.is_empty() {
+        return "_".to_string();
+    }
+    if sanitized.chars().all(|ch| ch == '.') {
+        return sanitized.replace('.', "_");
+    }
+    sanitized
 }

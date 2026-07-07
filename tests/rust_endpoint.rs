@@ -34,6 +34,26 @@ fn rust_endpoint_descriptors_are_app_scoped() {
 }
 
 #[test]
+fn rust_endpoint_runtime_dir_neutralizes_dot_only_app_ids() {
+    // A dot-only app id must not escape the runtime base via path traversal.
+    for app_id in ["..", ".", "..."] {
+        let dir = endpoint_runtime_dir(app_id, Some(PathBuf::from("/run/user/501")));
+        assert!(
+            dir.starts_with("/run/user/501/tauri-agent/"),
+            "{app_id:?} escaped: {dir:?}"
+        );
+        assert!(
+            !dir.to_string_lossy().contains(".."),
+            "{app_id:?} left a traversal: {dir:?}"
+        );
+    }
+    assert_eq!(
+        endpoint_runtime_dir("..", Some(PathBuf::from("/run"))),
+        PathBuf::from("/run/tauri-agent/__")
+    );
+}
+
+#[test]
 fn rust_endpoint_descriptor_advertises_optional_vnc_surface() {
     let plain = AgentEndpointDescriptor::tcp("dev.byeongsu.fixture", 4242, "127.0.0.1", 45127);
     assert!(plain.vnc().is_none());

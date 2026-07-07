@@ -48,7 +48,13 @@ impl AgentBridge {
         commands::ensure_window(app, window)?;
         let target = target_window(app, window)?;
         let target_label = target.label().to_string();
-        let id = format!("bridge-{}", self.next_id.fetch_add(1, Ordering::SeqCst));
+        // The sequence keeps ids readable/ordered; the random suffix makes them
+        // unforgeable so one webview cannot spoof another's bridge response.
+        let id = format!(
+            "bridge-{}-{}",
+            self.next_id.fetch_add(1, Ordering::SeqCst),
+            crate::random::random_hex(16)
+        );
         let pending = self.insert_pending(id.clone());
         let response_timeout = bridge_response_timeout(method, &params);
 

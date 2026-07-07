@@ -64,6 +64,17 @@ describe('debugger endpoint discovery', () => {
     )
   })
 
+  it('neutralizes dot-only app ids that would escape the runtime directory', () => {
+    for (const appId of ['..', '.', '...']) {
+      const dir = endpointRuntimeDir({ appId, env: { XDG_RUNTIME_DIR: '/run/user/501' } })
+      expect(dir.startsWith('/run/user/501/tauri-agent/')).toBe(true)
+      expect(dir.includes('..')).toBe(false)
+    }
+    expect(endpointRuntimeDir({ appId: '..', env: { XDG_RUNTIME_DIR: '/run' } })).toBe(
+      '/run/tauri-agent/__'
+    )
+  })
+
   it('advertises an optional VNC surface alongside the transport', () => {
     const descriptor = createEndpointDescriptor({
       appId: 'dev.byeongsu.fixture',

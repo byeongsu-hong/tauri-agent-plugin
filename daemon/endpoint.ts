@@ -168,7 +168,16 @@ function runtimeBaseDir(env: EndpointPathOptions['env']): string {
 }
 
 function safeAppId(appId: string): string {
-  return appId.replace(/[^A-Za-z0-9._-]/g, '_')
+  const sanitized = appId.replace(/[^A-Za-z0-9._-]/g, '_')
+  // An empty or dot-only segment ("", ".", "..") would escape the runtime
+  // directory when joined as a path component; neutralize it.
+  if (sanitized.length === 0) {
+    return '_'
+  }
+  if (/^\.+$/.test(sanitized)) {
+    return sanitized.replace(/\./g, '_')
+  }
+  return sanitized
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
