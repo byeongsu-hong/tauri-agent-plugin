@@ -85,10 +85,27 @@ async function callTool(params: unknown): Promise<Record<string, unknown>> {
   const client = await debuggerClient(args)
   const result = await executeTool(client, name, args)
   return {
-    content: [{ type: 'text', text: toolText(result) }],
+    content: toolContent(name, result),
     structuredContent: structuredContent(result),
     isError: false
   }
+}
+
+/**
+ * Screenshots return an MCP image content block so clients can render them,
+ * instead of burning tokens on a base64 data URL embedded in JSON text.
+ */
+function toolContent(name: string, result: unknown): Array<Record<string, unknown>> {
+  if (name === 'tauri_shot' && typeof result === 'object' && result !== null) {
+    const dataUrl = (result as { dataUrl?: unknown }).dataUrl
+    if (typeof dataUrl === 'string') {
+      const match = /^data:([^;,]+)(?:;base64)?,(.*)$/s.exec(dataUrl)
+      if (match) {
+        return [{ type: 'image', data: match[2], mimeType: match[1] }]
+      }
+    }
+  }
+  return [{ type: 'text', text: toolText(result) }]
 }
 
 async function executeTool(
