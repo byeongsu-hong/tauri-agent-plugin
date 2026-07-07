@@ -15,6 +15,41 @@ Headless agent debugger for Tauri apps.
 
 The live bridge supports `windows`, `window`, `tree`, `find`, `click`, `hover`, `focus`, `blur`, `scroll`, `drag`, `fill`, `select`, `check`, `inspect`, `eval`, `press`, `shot`, `logs`, `events`, `network`, `storage`, `cookies`, `location`, `wait`, `state`, and `record` against a real Tauri webview when the app installs `WebviewAgentInstrumentation`. The external inline server and direct Tauri commands both route through this bridge. `windows` returns labels, titles, focus/visibility state, minimized/maximized state, scale factor, and inner/outer bounds when the host platform reports them. `window` reads or controls one native Tauri window with `get`, `focus`, `show`, `hide`, `minimize`, `unminimize`, `maximize`, `unmaximize`, `setSize`, and `setPosition`, then returns the updated window metadata. `find` refreshes the semantic snapshot and returns inspect-shaped matches by role, accessible-name substring, visible-text substring, and optional limit so agents can obtain refs without parsing tree text. `wait` can poll for plain text or for the first semantic match by scope, role, accessible-name substring, and visible-text substring; semantic waits return the matched inspect-shaped entry under `match`. `hover` dispatches `mouseover`, `mouseenter`, and `mousemove` against a snapshot-local ref. `focus` moves document focus to a snapshot-local ref before keyboard actions. `blur` removes focus from a snapshot-local ref. `scroll` adjusts a snapshot-local ref by optional `x`/`y` deltas and dispatches a scroll event. `drag` dispatches a semantic drag sequence from one snapshot-local ref to another optional target ref. `select` chooses an option by value or visible label from a `combobox` ref, or directly from an `option` ref. `check` sets native checkbox/radio state idempotently. `press` dispatches a keyboard key to the active element, or focuses a snapshot-local `ref` first, with optional `Alt`, `Control`, `Meta`, and `Shift` modifiers. `eval` is intended for dev-only local debugging and returns `{ type, text, value? }`, with `value` included only when the result can be represented as JSON. `logs` returns captured console messages plus uncaught browser `error` and `unhandledrejection` entries as error-level logs. `network` captures non-Tauri-IPC fetch metadata only: method, URL, status, timing, error text, and request/response byte sizes when measurable without consuming the returned response. `storage` reads or mutates `localStorage`/`sessionStorage` with `get`, `set`, `remove`, and `clear`, returning the resulting key/value entries. `cookies` reads or mutates webview-visible `document.cookie` entries with `get`, `set`, `remove`, and `clear`, returning parsed `{ name, value }` entries; native and HttpOnly cookie-store access is outside this webview bridge path. `location` returns `{ href, origin, pathname, search, hash }` and can `push` or `replace` SPA routes without reloading the webview. `shot` defaults to the DOM-rendered SVG bridge path for deterministic output and can opt into `backend: "native"` for macOS window pixel capture or `backend: "auto"` to try native capture before falling back to DOM.
 
+## Quickstart (add to your Tauri app)
+
+1. **Add the crate** to `src-tauri/Cargo.toml` and register the plugin:
+
+   ```rust
+   tauri::Builder::default()
+     .plugin(tauri_plugin_agent::init())
+     .run(tauri::generate_context!())?;
+   ```
+
+2. **Grant the permission** in `src-tauri/capabilities/*.json`. Without this,
+   every `plugin:agent|*` invoke fails with a permissions error:
+
+   ```json
+   { "permissions": ["core:default", "agent:default"] }
+   ```
+
+   Use `agent:readonly` for a non-mutating subset, and add
+   `agent:allow-agent-eval` only if you need `eval`.
+
+3. **Install the guest instrumentation** in your frontend. Bridge commands
+   (`tree`, `click`, …) hang until the webview calls `install()`:
+
+   ```ts
+   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+   new WebviewAgentInstrumentation({ windowLabel: 'main' }).install()
+   ```
+
+4. **Enable the inline server** (below) if you want out-of-process control via the
+   CLI/MCP, then **verify the wiring**:
+
+   ```bash
+   tauri-agent attach --app <your.app.identifier>
+   ```
+
 ## Bun + TypeScript
 
 This project uses Bun by default.
@@ -208,6 +243,7 @@ Use it as the first real target for live bridge work. Its plugin config enables 
 ```ts
 import {
   WebviewAgentInstrumentation,
+  agentAction,
   agentBlur,
   agentCheck,
   agentCookies,
@@ -222,6 +258,7 @@ import {
   agentInspect,
   agentNetwork,
   agentRecord,
+  agentScreenshot,
   agentScroll,
   agentSnapshot,
   agentSelect,
