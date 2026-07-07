@@ -776,7 +776,12 @@ function safeDecode(value: string): string {
 function applyLocationAction(dom: JSDOM, options: LocationParams): void {
   const action = options.action ?? 'get'
   switch (action) {
+    // reload/back/forward have no observable effect in the static jsdom adapter
+    // (no real history/navigation); they exist for surface parity.
     case 'get':
+    case 'reload':
+    case 'back':
+    case 'forward':
       return
     case 'push':
     case 'replace': {

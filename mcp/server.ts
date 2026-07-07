@@ -406,7 +406,10 @@ function cookieSchema(): JsonSchema {
 
 function locationSchema(): JsonSchema {
   const inputSchema = schema(['window', 'url'])
-  inputSchema.properties.action = { type: 'string', enum: ['get', 'push', 'replace'] }
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['get', 'push', 'replace', 'reload', 'back', 'forward']
+  }
   return inputSchema
 }
 

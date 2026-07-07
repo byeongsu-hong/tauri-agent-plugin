@@ -1096,9 +1096,19 @@ function requiredStorageValue(value: string | undefined): string {
   return value
 }
 
-function locationActionParam(params: Record<string, unknown>, key: string): 'get' | 'push' | 'replace' | undefined {
+function locationActionParam(
+  params: Record<string, unknown>,
+  key: string
+): LocationParams['action'] {
   const value = params[key]
-  return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
+  return value === 'get' ||
+    value === 'push' ||
+    value === 'replace' ||
+    value === 'reload' ||
+    value === 'back' ||
+    value === 'forward'
+    ? value
+    : undefined
 }
 
 function applyLocationAction(options: LocationParams): void {
@@ -1113,6 +1123,15 @@ function applyLocationAction(options: LocationParams): void {
     case 'replace':
       window.history.replaceState(null, '', requiredLocationUrl(options.url))
       window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    case 'reload':
+      window.location.reload()
+      return
+    case 'back':
+      window.history.back()
+      return
+    case 'forward':
+      window.history.forward()
       return
   }
 }

@@ -186,7 +186,7 @@ export interface CookieParams extends WindowTarget {
 }
 
 export interface LocationParams extends WindowTarget {
-  action?: 'get' | 'push' | 'replace'
+  action?: 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward'
   url?: string
 }
 

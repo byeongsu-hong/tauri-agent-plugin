@@ -60,7 +60,7 @@ interface CookieOptions extends ConnectionOptions {
 }
 
 interface LocationOptions extends ConnectionOptions {
-  action?: 'get' | 'push' | 'replace'
+  action?: 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward'
   url?: string
 }
 
@@ -565,7 +565,7 @@ program
   .option('--host <host>', 'debug daemon host', '127.0.0.1')
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
-  .option('--action <action>', 'location action: get, push, or replace', parseLocationAction, 'get')
+  .option('--action <action>', 'location action: get, push, replace, reload, back, or forward', parseLocationAction, 'get')
   .option('--url <url>', 'URL or path for push/replace actions')
   .action(async (options: LocationOptions) => {
     printJson(await call(options, 'location', locationParams(options)))
@@ -897,11 +897,20 @@ function parseCookieAction(value: string): 'get' | 'set' | 'remove' | 'clear' {
   throw new Error(`expected get, set, remove, or clear, got ${value}`)
 }
 
-function parseLocationAction(value: string): 'get' | 'push' | 'replace' {
-  if (value === 'get' || value === 'push' || value === 'replace') {
+function parseLocationAction(
+  value: string
+): 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward' {
+  if (
+    value === 'get' ||
+    value === 'push' ||
+    value === 'replace' ||
+    value === 'reload' ||
+    value === 'back' ||
+    value === 'forward'
+  ) {
     return value
   }
-  throw new Error(`expected get, push, or replace, got ${value}`)
+  throw new Error(`expected get, push, replace, reload, back, or forward, got ${value}`)
 }
 
 function parseWindowAction(value: string): WindowAction {

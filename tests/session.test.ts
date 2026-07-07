@@ -355,6 +355,15 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toEqual([])
   })
 
+  it('accepts reload, back, and forward navigation actions', async () => {
+    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html: '<main></main>' }))
+    for (const action of ['reload', 'back', 'forward'] as const) {
+      await expect(session.execute('location', { action })).resolves.toMatchObject({
+        href: expect.any(String)
+      })
+    }
+  })
+
   it('types text into a ref character by character', async () => {
     const session = new DebuggerSession(
       new StaticHtmlAppAdapter({

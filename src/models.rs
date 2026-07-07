@@ -433,6 +433,9 @@ pub enum LocationAction {
     Get,
     Push,
     Replace,
+    Reload,
+    Back,
+    Forward,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
