@@ -7,11 +7,17 @@ import type { AgentMethod } from '../protocol/types'
 export class DebuggerClient {
   private nextId = 1
 
-  constructor(private readonly transport: LineTransport) {}
+  constructor(
+    private readonly transport: LineTransport,
+    private readonly token?: string
+  ) {}
 
   async call<TResult = unknown>(method: AgentMethod, params?: Record<string, unknown>): Promise<TResult> {
     const request = createRequest(this.nextId++, method, params)
-    const response = JSON.parse(await this.sendWithRetry(JSON.stringify(request), method, params))
+    // The inline server authenticates each request with the per-session token
+    // published in the (0600) endpoint registry.
+    const message = this.token ? { ...request, token: this.token } : request
+    const response = JSON.parse(await this.sendWithRetry(JSON.stringify(message), method, params))
 
     if ('error' in response) {
       throw new Error(`${response.error.code}: ${response.error.message}`)

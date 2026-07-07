@@ -222,7 +222,8 @@ async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
         endpoint.transport === 'tcp'
           ? { port: endpoint.port, host: endpoint.host }
           : { path: endpoint.path }
-      )
+      ),
+      endpoint.token
     )
   }
 

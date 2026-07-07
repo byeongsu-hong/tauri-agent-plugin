@@ -379,9 +379,17 @@ Resulting `endpoint.json`:
   "transport": "tcp",
   "host": "127.0.0.1",
   "port": 45127,
+  "token": "a1b2c3…",
   "vnc": { "host": "127.0.0.1", "port": 5901, "novncUrl": "http://127.0.0.1:6080/vnc.html" }
 }
 ```
+
+The inline server binds a loopback socket that any local process can reach, so
+it authenticates every request with a per-session `token`. The plugin generates
+the token, publishes it in the app's `endpoint.json` (written `0600` on Unix),
+and requires it on each request. The CLI and MCP wrappers read it during
+endpoint discovery automatically; a client dialing a known `--port`/`--host`
+daemon directly sends no token.
 
 Discover it from the CLI:
 

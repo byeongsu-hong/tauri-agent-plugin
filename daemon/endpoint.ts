@@ -24,6 +24,7 @@ export interface EndpointDescriptorOptions extends EndpointPathOptions {
     host: string
     port: number
   }
+  token?: string
   vnc?: VncEndpoint
 }
 
@@ -33,6 +34,7 @@ export type EndpointDescriptor =
       pid: number
       transport: 'unix'
       path: string
+      token?: string
       vnc?: VncEndpoint
     }
   | {
@@ -41,6 +43,7 @@ export type EndpointDescriptor =
       transport: 'tcp'
       host: string
       port: number
+      token?: string
       vnc?: VncEndpoint
     }
 
@@ -54,7 +57,10 @@ export function endpointRegistryPath(options: EndpointPathOptions): string {
 }
 
 export function createEndpointDescriptor(options: EndpointDescriptorOptions): EndpointDescriptor {
-  const vnc = options.vnc ? { vnc: options.vnc } : {}
+  const extra = {
+    ...(options.token ? { token: options.token } : {}),
+    ...(options.vnc ? { vnc: options.vnc } : {})
+  }
   if (options.tcp) {
     return {
       appId: options.appId,
@@ -62,7 +68,7 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
       transport: 'tcp',
       host: options.tcp.host,
       port: options.tcp.port,
-      ...vnc
+      ...extra
     }
   }
 
@@ -71,7 +77,7 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
     pid: options.pid,
     transport: 'unix',
     path: join(endpointRuntimeDir(options), `${options.pid}.sock`),
-    ...vnc
+    ...extra
   }
 }
 
@@ -82,6 +88,7 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
   }
 
   const vnc = parseVnc(parsed.vnc)
+  const token = typeof parsed.token === 'string' ? { token: parsed.token } : {}
 
   if (
     parsed.transport === 'unix' &&
@@ -92,6 +99,7 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       pid: parsed.pid,
       transport: 'unix',
       path: parsed.path,
+      ...token,
       ...vnc
     }
   }
@@ -107,6 +115,7 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
       transport: 'tcp',
       host: parsed.host,
       port: parsed.port,
+      ...token,
       ...vnc
     }
   }

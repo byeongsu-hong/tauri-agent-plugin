@@ -25,6 +25,8 @@ pub enum AgentEndpointDescriptor {
         pid: u32,
         path: PathBuf,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        token: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         vnc: Option<VncEndpoint>,
     },
     #[serde(rename = "tcp")]
@@ -34,6 +36,8 @@ pub enum AgentEndpointDescriptor {
         pid: u32,
         host: String,
         port: u16,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        token: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         vnc: Option<VncEndpoint>,
     },
@@ -45,6 +49,7 @@ impl AgentEndpointDescriptor {
             app_id: app_id.into(),
             pid,
             path,
+            token: None,
             vnc: None,
         }
     }
@@ -55,6 +60,7 @@ impl AgentEndpointDescriptor {
             pid,
             host: host.into(),
             port,
+            token: None,
             vnc: None,
         }
     }
@@ -63,6 +69,21 @@ impl AgentEndpointDescriptor {
         match self {
             Self::Unix { app_id, .. } | Self::Tcp { app_id, .. } => app_id,
         }
+    }
+
+    /// The per-session auth token a client must present, if this server requires one.
+    pub fn token(&self) -> Option<&str> {
+        match self {
+            Self::Unix { token, .. } | Self::Tcp { token, .. } => token.as_deref(),
+        }
+    }
+
+    /// Attach (or clear) the required auth token, consuming self.
+    pub fn with_token(mut self, value: Option<String>) -> Self {
+        match &mut self {
+            Self::Unix { token, .. } | Self::Tcp { token, .. } => *token = value,
+        }
+        self
     }
 
     /// The advertised VNC surface, if this app publishes one.
@@ -129,7 +150,27 @@ pub fn write_endpoint_registry(
     std::fs::write(&path, format!("{contents}\n")).map_err(|source| EndpointRegistryError::Io {
         path: path.clone(),
         source,
+    })?;
+    restrict_registry_permissions(&path)
+}
+
+/// Restrict the registry file to owner-only read/write so the embedded auth
+/// token is not world-readable. No-op on non-Unix platforms, where the user
+/// temp/runtime directory is already per-user.
+#[cfg(unix)]
+fn restrict_registry_permissions(path: &std::path::Path) -> Result<(), EndpointRegistryError> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(|source| {
+        EndpointRegistryError::Io {
+            path: path.to_path_buf(),
+            source,
+        }
     })
+}
+
+#[cfg(not(unix))]
+fn restrict_registry_permissions(_path: &std::path::Path) -> Result<(), EndpointRegistryError> {
+    Ok(())
 }
 
 pub fn read_endpoint_registry(

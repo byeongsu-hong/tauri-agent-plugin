@@ -75,6 +75,29 @@ describe('debugger endpoint discovery', () => {
     )
   })
 
+  it('carries an optional per-session auth token through parse round-trips', () => {
+    const descriptor = createEndpointDescriptor({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      tcp: { host: '127.0.0.1', port: 45127 },
+      token: 'deadbeef'
+    })
+    expect(descriptor).toEqual({
+      appId: 'dev.byeongsu.fixture',
+      pid: 4242,
+      transport: 'tcp',
+      host: '127.0.0.1',
+      port: 45127,
+      token: 'deadbeef'
+    })
+    expect(parseEndpointDescriptor(JSON.stringify(descriptor))).toEqual(descriptor)
+
+    const plain = parseEndpointDescriptor(
+      '{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1}'
+    )
+    expect('token' in plain).toBe(false)
+  })
+
   it('advertises an optional VNC surface alongside the transport', () => {
     const descriptor = createEndpointDescriptor({
       appId: 'dev.byeongsu.fixture',

@@ -96,14 +96,30 @@ struct JsonRpcRequest {
     id: Value,
     method: String,
     params: Option<Value>,
+    #[serde(default)]
+    token: Option<String>,
 }
 
-pub(crate) fn respond_to_json_rpc_line(backend: &impl InlineDebuggerBackend, line: &str) -> String {
+pub(crate) fn respond_to_json_rpc_line(
+    backend: &impl InlineDebuggerBackend,
+    expected_token: Option<&str>,
+    line: &str,
+) -> String {
     let request = match parse_request(line) {
         Ok(request) => request,
         Err(message) => return error_response(json!(0), "INVALID_REQUEST", &message),
     };
     let id = request.id.clone();
+
+    if let Some(expected) = expected_token {
+        if request.token.as_deref() != Some(expected) {
+            return error_response(
+                id,
+                "UNAUTHORIZED",
+                "missing or invalid debugger token; read it from the app endpoint registry",
+            );
+        }
+    }
 
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
@@ -142,12 +158,17 @@ where
     let listener = TcpListener::bind((config.host.as_str(), config.port))?;
     listener.set_nonblocking(true)?;
     let port = listener.local_addr()?.port();
+    // Per-session token: any local process can reach the loopback socket, so
+    // the token (published into the 0600 endpoint registry) is what actually
+    // authenticates a client.
+    let token = crate::random::random_hex(32);
     let descriptor = AgentEndpointDescriptor::tcp(
         app_id.clone(),
         std::process::id(),
         config.host.clone(),
         port,
     )
+    .with_token(Some(token.clone()))
     .with_vnc(vnc);
     if config.publish_endpoint {
         write_endpoint_registry(&descriptor, None)?;
@@ -156,8 +177,9 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_shutdown = Arc::clone(&shutdown);
     let backend = Arc::new(backend);
+    let token: Arc<str> = Arc::from(token);
     let worker = thread::spawn(move || {
-        accept_loop(listener, backend, worker_shutdown);
+        accept_loop(listener, backend, Some(token), worker_shutdown);
     });
 
     Ok(InlineDebuggerServer {
@@ -208,15 +230,20 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
     }
 }
 
-fn accept_loop<B>(listener: TcpListener, backend: Arc<B>, shutdown: Arc<AtomicBool>)
-where
+fn accept_loop<B>(
+    listener: TcpListener,
+    backend: Arc<B>,
+    token: Option<Arc<str>>,
+    shutdown: Arc<AtomicBool>,
+) where
     B: InlineDebuggerBackend + Send + Sync + 'static,
 {
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
                 let backend = Arc::clone(&backend);
-                thread::spawn(move || handle_stream(stream, backend.as_ref()));
+                let token = token.clone();
+                thread::spawn(move || handle_stream(stream, backend.as_ref(), token.as_deref()));
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(10));
@@ -226,7 +253,7 @@ where
     }
 }
 
-fn handle_stream(stream: TcpStream, backend: &impl InlineDebuggerBackend) {
+fn handle_stream(stream: TcpStream, backend: &impl InlineDebuggerBackend, token: Option<&str>) {
     let writer = match stream.try_clone() {
         Ok(writer) => writer,
         Err(_) => return,
@@ -241,7 +268,7 @@ fn handle_stream(stream: TcpStream, backend: &impl InlineDebuggerBackend) {
         if line.trim().is_empty() {
             continue;
         }
-        let response = respond_to_json_rpc_line(backend, &line);
+        let response = respond_to_json_rpc_line(backend, token, &line);
         if writeln!(writer, "{response}")
             .and_then(|_| writer.flush())
             .is_err()
@@ -369,6 +396,11 @@ mod tests {
     use std::net::TcpStream;
 
     use crate::{Error, WindowBounds, WindowInfo};
+
+    /// Dispatch without token enforcement, for tests that exercise routing.
+    fn respond(backend: &impl InlineDebuggerBackend, line: &str) -> String {
+        respond_to_json_rpc_line(backend, None, line)
+    }
 
     struct FakeBackend;
 
@@ -793,8 +825,7 @@ mod tests {
     fn inline_server_handles_windows_and_attach_json_rpc() {
         let backend = FakeBackend;
 
-        let windows =
-            respond_to_json_rpc_line(&backend, r#"{"jsonrpc":"2.0","id":1,"method":"windows"}"#);
+        let windows = respond(&backend, r#"{"jsonrpc":"2.0","id":1,"method":"windows"}"#);
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&windows).unwrap(),
             serde_json::json!({
@@ -814,7 +845,7 @@ mod tests {
             })
         );
 
-        let window = respond_to_json_rpc_line(
+        let window = respond(
             &backend,
             r#"{"jsonrpc":"2.0","id":3,"method":"window","params":{"window":"main","action":"setSize","width":640,"height":480}}"#,
         );
@@ -837,7 +868,7 @@ mod tests {
             })
         );
 
-        let attach = respond_to_json_rpc_line(
+        let attach = respond(
             &backend,
             r#"{"jsonrpc":"2.0","id":2,"method":"attach","params":{"window":"missing"}}"#,
         );
@@ -856,7 +887,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_inspect_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeInspectBackend,
             r#"{"jsonrpc":"2.0","id":4,"method":"inspect","params":{"ref":"@4"}}"#,
         );
@@ -882,7 +913,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_find_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeFindBackend,
             r#"{"jsonrpc":"2.0","id":13,"method":"find","params":{"role":"button","name":"Forge","limit":1}}"#,
         );
@@ -909,7 +940,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_network_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeNetworkBackend,
             r#"{"jsonrpc":"2.0","id":14,"method":"network","params":{"window":"main","clear":true}}"#,
         );
@@ -936,7 +967,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_storage_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeStorageBackend,
             r#"{"jsonrpc":"2.0","id":15,"method":"storage","params":{"area":"session","action":"set","key":"agent.route","value":"/agents"}}"#,
         );
@@ -960,7 +991,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_cookies_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeCookiesBackend,
             r#"{"jsonrpc":"2.0","id":16,"method":"cookies","params":{"window":"main","action":"set","name":"agent.cookie","value":"ready"}}"#,
         );
@@ -982,7 +1013,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_location_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeLocationBackend,
             r#"{"jsonrpc":"2.0","id":17,"method":"location","params":{"window":"main","action":"push","url":"/agents?view=debug#roster"}}"#,
         );
@@ -1005,7 +1036,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_eval_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeEvalBackend,
             r#"{"jsonrpc":"2.0","id":5,"method":"eval","params":{"code":"document.title"}}"#,
         );
@@ -1026,7 +1057,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_select_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeSelectBackend,
             r#"{"jsonrpc":"2.0","id":6,"method":"select","params":{"ref":"@4","value":"remote"}}"#,
         );
@@ -1043,7 +1074,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_check_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeCheckBackend,
             r#"{"jsonrpc":"2.0","id":7,"method":"check","params":{"ref":"@6","checked":true}}"#,
         );
@@ -1060,7 +1091,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_hover_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeHoverBackend,
             r#"{"jsonrpc":"2.0","id":8,"method":"hover","params":{"ref":"@3"}}"#,
         );
@@ -1077,7 +1108,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_focus_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeFocusBackend,
             r#"{"jsonrpc":"2.0","id":9,"method":"focus","params":{"ref":"@4"}}"#,
         );
@@ -1094,7 +1125,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_blur_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeBlurBackend,
             r#"{"jsonrpc":"2.0","id":10,"method":"blur","params":{"ref":"@4"}}"#,
         );
@@ -1111,7 +1142,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_scroll_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeScrollBackend,
             r#"{"jsonrpc":"2.0","id":11,"method":"scroll","params":{"ref":"@7","x":3.0,"y":12.0}}"#,
         );
@@ -1128,7 +1159,7 @@ mod tests {
 
     #[test]
     fn inline_server_proxies_drag_json_rpc_to_bridge() {
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeDragBackend,
             r#"{"jsonrpc":"2.0","id":12,"method":"drag","params":{"ref":"@1","toRef":"@8"}}"#,
         );
@@ -1155,16 +1186,34 @@ mod tests {
             start_line_json_rpc_server(FakeBackend, "dev.byeongsu.fixture".into(), &config, None)
                 .unwrap();
         let descriptor = server.descriptor();
+        let token = descriptor
+            .token()
+            .expect("server issues a token")
+            .to_string();
         let (host, port) = match descriptor {
             crate::AgentEndpointDescriptor::Tcp { host, port, .. } => (host.clone(), *port),
             _ => panic!("expected tcp descriptor"),
         };
         assert!(port > 0);
 
+        // An unauthenticated request is rejected.
+        let mut anon = TcpStream::connect((host.as_str(), port)).unwrap();
+        writeln!(
+            anon,
+            r#"{{"jsonrpc":"2.0","id":"anon","method":"windows"}}"#
+        )
+        .unwrap();
+        let mut anon_response = String::new();
+        BufReader::new(anon).read_line(&mut anon_response).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&anon_response).unwrap()["error"]["code"],
+            "UNAUTHORIZED"
+        );
+
         let mut stream = TcpStream::connect((host.as_str(), port)).unwrap();
         writeln!(
             stream,
-            r#"{{"jsonrpc":"2.0","id":"live-1","method":"windows"}}"#
+            r#"{{"jsonrpc":"2.0","id":"live-1","method":"windows","token":"{token}"}}"#
         )
         .unwrap();
 
@@ -1203,7 +1252,7 @@ mod tests {
         })
         .to_string();
 
-        let response = respond_to_json_rpc_line(
+        let response = respond(
             &FakeScreenshotBackend {
                 expected_path: path_string.clone(),
             },

@@ -791,7 +791,8 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
         endpoint.transport === 'tcp'
           ? { port: endpoint.port, host: endpoint.host }
           : { path: endpoint.path }
-      )
+      ),
+      endpoint.token
     )
   }
   if (!options.fromHtml) {

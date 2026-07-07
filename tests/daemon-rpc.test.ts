@@ -32,6 +32,33 @@ describe('debugger JSON-RPC transport', () => {
     })
   })
 
+  it('injects the per-session auth token into every request when configured', async () => {
+    const seen: unknown[] = []
+    const transport = {
+      async send(message: string): Promise<string> {
+        const request = JSON.parse(message)
+        seen.push(request.token)
+        return JSON.stringify(createSuccessResponse(request.id, { ok: true }))
+      }
+    }
+    const client = new DebuggerClient(transport, 'sekret')
+    await client.call('tree')
+    await client.call('windows')
+    expect(seen).toEqual(['sekret', 'sekret'])
+
+    // Without a token, requests carry none (e.g. local --port daemons).
+    const anon: unknown[] = []
+    const anonClient = new DebuggerClient({
+      async send(message: string): Promise<string> {
+        const request = JSON.parse(message)
+        anon.push('token' in request)
+        return JSON.stringify(createSuccessResponse(request.id, { ok: true }))
+      }
+    })
+    await anonClient.call('tree')
+    expect(anon).toEqual([false])
+  })
+
   it('turns server-side failures into client errors with protocol messages', async () => {
     const session = new DebuggerSession(new StaticHtmlAppAdapter({ html: '<main></main>' }))
     const client = new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
