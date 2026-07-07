@@ -90,8 +90,16 @@ export type SocketTransportOptions =
       path: string
     }
 
+// Generous upper bound: guards against a server that accepts but never replies,
+// while still comfortably covering long-poll methods (the Rust bridge caps its
+// own response at 60s).
+const DEFAULT_RESPONSE_TIMEOUT_MS = 120_000
+
 export class SocketTransport implements LineTransport {
-  constructor(private readonly options: SocketTransportOptions) {}
+  constructor(
+    private readonly options: SocketTransportOptions,
+    private readonly timeoutMs: number = DEFAULT_RESPONSE_TIMEOUT_MS
+  ) {}
 
   async send(message: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -103,6 +111,22 @@ export class SocketTransport implements LineTransport {
               host: this.options.host ?? '127.0.0.1'
             })
       let buffer = ''
+      let settled = false
+
+      const finish = (action: () => void): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        socket.destroy()
+        action()
+      }
+
+      const timer = setTimeout(
+        () => finish(() => reject(new Error('debugger request timed out'))),
+        this.timeoutMs
+      )
 
       socket.on('connect', () => socket.write(`${message}\n`))
       socket.on('data', (chunk) => {
@@ -112,10 +136,14 @@ export class SocketTransport implements LineTransport {
           return
         }
         const response = buffer.slice(0, newlineIndex)
-        socket.end()
-        resolve(response)
+        finish(() => resolve(response))
       })
-      socket.on('error', reject)
+      socket.on('error', (error) => finish(() => reject(error)))
+      // A close before any newline means the server hung up mid-response;
+      // surface it instead of hanging forever.
+      socket.on('close', () =>
+        finish(() => reject(new Error('debugger connection closed before a response')))
+      )
     })
   }
 }

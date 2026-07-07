@@ -91,6 +91,11 @@ export function resolveRef(ref: string, refs: Map<string, Element> = currentRefs
   if (!element) {
     throw new Error(`stale ref ${normalized}; run tree again`)
   }
+  // A ref whose element was detached from the document since the snapshot would
+  // otherwise "succeed" as a silent no-op; fail loudly so callers re-snapshot.
+  if (!element.isConnected) {
+    throw new Error(`stale ref ${normalized}; element is detached, run tree again`)
+  }
   return element
 }
 

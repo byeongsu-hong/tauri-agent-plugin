@@ -40,6 +40,8 @@ export interface LineTransport {
   send(message: string): Promise<string>
 }
 
+const MAX_REQUEST_LINE_BYTES = 4 * 1024 * 1024
+
 export function createLineJsonRpcServer(session: DebuggerSession): Server {
   const handler = createDebuggerRpcHandler(session)
   return createServer((socket) => handleLineSocket(socket, handler))
@@ -47,15 +49,39 @@ export function createLineJsonRpcServer(session: DebuggerSession): Server {
 
 async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<void> {
   let buffer = ''
+  let closed = false
+  const stop = (): void => {
+    closed = true
+  }
+  // Without an error handler a client reset (ECONNRESET) raises an unhandled
+  // 'error' event and crashes the daemon process.
+  socket.on('error', stop)
+  socket.on('close', stop)
   socket.on('data', (chunk) => {
+    if (closed) {
+      return
+    }
     buffer += chunk.toString('utf8')
+    if (buffer.length > MAX_REQUEST_LINE_BYTES) {
+      // A client that never sends a newline would otherwise grow the buffer
+      // without bound.
+      socket.destroy()
+      closed = true
+      return
+    }
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
     for (const line of lines) {
       if (!line.trim()) {
         continue
       }
-      void handler(line).then((response) => socket.write(`${response}\n`))
+      void handler(line)
+        .then((response) => {
+          if (!closed && socket.writable) {
+            socket.write(`${response}\n`)
+          }
+        })
+        .catch(() => {})
     }
   })
 }

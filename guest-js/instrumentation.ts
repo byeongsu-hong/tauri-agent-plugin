@@ -68,7 +68,45 @@ export interface InstrumentedAction {
   y?: number
 }
 
-type ConsoleMethod = 'debug' | 'info' | 'warn' | 'error'
+type ConsoleMethod = 'log' | 'debug' | 'info' | 'warn' | 'error'
+
+// `console.log` — the most common call — maps to info level. Ordered so the
+// captured level is meaningful.
+const CONSOLE_LEVELS: ReadonlyArray<[ConsoleMethod, LogEntry['level']]> = [
+  ['log', 'info'],
+  ['debug', 'debug'],
+  ['info', 'info'],
+  ['warn', 'warn'],
+  ['error', 'error']
+]
+
+/** Maximum entries retained per capture buffer before old entries drop. */
+const MAX_CAPTURE_ENTRIES = 1000
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args.map(formatConsoleArg).join(' ')
+}
+
+function formatConsoleArg(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value instanceof Error) {
+    return value.stack ?? value.message
+  }
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function pushCapped<T>(buffer: T[], entry: T, max = MAX_CAPTURE_ENTRIES): void {
+  buffer.push(entry)
+  if (buffer.length > max) {
+    buffer.shift()
+  }
+}
 
 interface AgentBridgeRequest {
   id: string
@@ -104,11 +142,11 @@ export class WebviewAgentInstrumentation {
       return
     }
     this.installed = true
-    for (const level of ['debug', 'info', 'warn', 'error'] as const) {
-      this.originalConsole.set(level, console[level])
-      console[level] = (...args: unknown[]) => {
-        this.pushLog(level, args.map(String).join(' '))
-        this.originalConsole.get(level)?.apply(console, args)
+    for (const [method, level] of CONSOLE_LEVELS) {
+      this.originalConsole.set(method, console[method])
+      console[method] = (...args: unknown[]) => {
+        this.pushLog(level, formatConsoleArgs(args))
+        this.originalConsole.get(method)?.apply(console, args)
       }
     }
     this.installNetworkCapture()
@@ -560,7 +598,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private pushLog(level: LogEntry['level'], message: string): void {
-    this.capturedLogs.push({
+    pushCapped(this.capturedLogs, {
       level,
       message,
       timestamp: new Date().toISOString()
@@ -568,7 +606,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private pushEvent(kind: string, detail?: unknown): void {
-    this.capturedEvents.push({
+    pushCapped(this.capturedEvents, {
       kind,
       detail,
       timestamp: new Date().toISOString()
@@ -599,7 +637,7 @@ export class WebviewAgentInstrumentation {
       if (requestBodySize !== undefined) {
         entry.requestBodySize = requestBodySize
       }
-      this.capturedNetwork.push(entry)
+      pushCapped(this.capturedNetwork, entry)
 
       try {
         const response = await originalFetch.call(window, input, init)
@@ -623,7 +661,7 @@ export class WebviewAgentInstrumentation {
     if (!this.recording) {
       return
     }
-    this.recordingEntries.push({
+    pushCapped(this.recordingEntries, {
       method: action.action,
       params: serializableAction(action),
       timestamp: new Date().toISOString()

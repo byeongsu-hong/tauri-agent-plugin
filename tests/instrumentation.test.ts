@@ -256,6 +256,36 @@ describe('WebviewAgentInstrumentation', () => {
     sessionStorage.clear()
   })
 
+  it('captures console.log and serializes non-string arguments', () => {
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      console.log('hello', { a: 1 }, 42)
+      console.debug('dbg')
+      expect(instrumentation.logs()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ level: 'info', message: 'hello {"a":1} 42' }),
+          expect.objectContaining({ level: 'debug', message: 'dbg' })
+        ])
+      )
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('rejects actions on a ref whose element was detached since the snapshot', () => {
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      document.body.innerHTML = '<main aria-label="x"><button>Go</button></main>'
+      instrumentation.snapshot()
+      document.body.innerHTML = '' // detach the button that @1 points at
+      expect(() => instrumentation.action({ action: 'click', ref: '@1' })).toThrow(/detached/)
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('captures runtime errors and unhandled rejections as logs', () => {
     const instrumentation = new WebviewAgentInstrumentation()
     instrumentation.install()
