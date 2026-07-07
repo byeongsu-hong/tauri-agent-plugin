@@ -12,8 +12,8 @@ use crate::models::{
     AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
     AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
     AgentStorageRequest, AgentStorageResponse, AgentStreamRequest, AgentStreamResponse,
-    AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend, WindowAction,
-    WindowInfo,
+    AgentTypeRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend,
+    WindowAction, WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -117,6 +117,16 @@ pub async fn agent_select<R: Runtime>(
     request: AgentSelectRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "select", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_type<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentTypeRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "type", &request)?;
     Ok(())
 }
 

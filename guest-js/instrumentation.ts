@@ -15,6 +15,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  typeRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions,
@@ -322,6 +323,12 @@ export class WebviewAgentInstrumentation {
     return { ok: true }
   }
 
+  type(ref: string, text: string): { ok: true } {
+    typeRef(ref, text)
+    this.pushEvent('type', { ref, text })
+    return { ok: true }
+  }
+
   evaluate(code: string): EvalResult {
     return evalResult(window.eval(code))
   }
@@ -534,6 +541,11 @@ export class WebviewAgentInstrumentation {
           ref: requiredStringParam(params, 'ref'),
           value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
         })
+      case 'type':
+        return this.type(
+          requiredStringParam(params, 'ref'),
+          stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
+        )
       case 'select':
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
       case 'check':

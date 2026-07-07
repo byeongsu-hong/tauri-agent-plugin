@@ -18,6 +18,7 @@ export type AgentMethod =
   | 'inspect'
   | 'eval'
   | 'press'
+  | 'type'
   | 'shot'
   | 'logs'
   | 'events'
@@ -102,6 +103,10 @@ export interface RefActionParams extends WindowTarget {
 }
 
 export interface FillParams extends RefActionParams {
+  text: string
+}
+
+export interface TypeParams extends RefActionParams {
   text: string
 }
 

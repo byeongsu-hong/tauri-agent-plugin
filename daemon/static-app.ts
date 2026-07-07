@@ -17,6 +17,7 @@ import {
   scrollRef,
   selectRef,
   snapshotDocument,
+  typeRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions
@@ -284,6 +285,13 @@ export class StaticHtmlAppAdapter {
     return { ok: true }
   }
 
+  async type(ref: string, text: string): Promise<{ ok: true }> {
+    this.bindGlobals()
+    typeRef(ref, text)
+    this.pushEvent('type', { ref, text })
+    return { ok: true }
+  }
+
   async select(ref: string, value?: string): Promise<{ ok: true }> {
     this.bindGlobals()
     selectRef(ref, value)
@@ -463,6 +471,7 @@ export class StaticHtmlAppAdapter {
     globalThis.HTMLSelectElement = this.dom.window.HTMLSelectElement
     globalThis.HTMLTextAreaElement = this.dom.window.HTMLTextAreaElement
     globalThis.KeyboardEvent = this.dom.window.KeyboardEvent
+    globalThis.InputEvent = this.dom.window.InputEvent
     globalThis.MouseEvent = this.dom.window.MouseEvent
     globalThis.Node = this.dom.window.Node
     this.bindStorageGlobals()

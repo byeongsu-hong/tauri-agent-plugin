@@ -333,6 +333,23 @@ program
   })
 
 program
+  .command('type')
+  .description('Type text into a snapshot-local ref with realistic per-key events.')
+  .argument('<ref>', 'snapshot-local ref, for example @4')
+  .argument('<text>', 'text to type')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+  .action(async (ref: string, text: string, options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('type', refActionParams(options, ref, { text })))
+  })
+
+program
   .command('select')
   .description('Select an option in a snapshot-local select control.')
   .argument('<ref>', 'snapshot-local select or option ref, for example @4')

@@ -178,6 +178,15 @@ pub struct AgentSelectRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentTypeRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentCheckRequest {
     pub window: Option<String>,
     #[serde(rename = "ref")]

@@ -18,6 +18,7 @@ export const AGENT_METHODS = [
   'inspect',
   'eval',
   'press',
+  'type',
   'shot',
   'logs',
   'events',

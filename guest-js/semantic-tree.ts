@@ -223,6 +223,29 @@ export function fillRef(ref: string, value: string): void {
   element.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+export function typeRef(ref: string, text: string): void {
+  const element = resolveRef(ref)
+  if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
+    throw new Error(`${normalizeRef(ref)} is not typeable`)
+  }
+  if (typeof element.focus === 'function') {
+    element.focus()
+  }
+  // Append realistic per-character key events so apps with per-keystroke masking,
+  // validation, or autocomplete observe input the way a user would produce it.
+  for (const char of text) {
+    const keyInit: KeyboardEventInit = { key: char, bubbles: true, cancelable: true }
+    element.dispatchEvent(new KeyboardEvent('keydown', keyInit))
+    element.dispatchEvent(new KeyboardEvent('keypress', keyInit))
+    setNativeValue(element, element.value + char)
+    element.dispatchEvent(
+      new InputEvent('input', { bubbles: true, data: char, inputType: 'insertText' })
+    )
+    element.dispatchEvent(new KeyboardEvent('keyup', keyInit))
+  }
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 export function selectRef(ref: string, value?: string): void {
   const element = resolveRef(ref)
   if (element instanceof HTMLOptionElement) {

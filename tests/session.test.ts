@@ -355,6 +355,27 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toEqual([])
   })
 
+  it('types text into a ref character by character', async () => {
+    const session = new DebuggerSession(
+      new StaticHtmlAppAdapter({
+        html: '<main aria-label="Scene"><input aria-label="Name" value="" /></main>'
+      })
+    )
+    let keydowns = 0
+    // The adapter dispatches per-key events, observable from the page.
+    const doc = (session as unknown as { app: { dom: { window: { document: Document } } } }).app.dom
+      .window.document
+    doc.querySelector('input')?.addEventListener('keydown', () => {
+      keydowns += 1
+    })
+
+    await session.execute('tree', {})
+    await expect(session.execute('type', { ref: '@1', text: 'abc' })).resolves.toEqual({ ok: true })
+
+    expect(keydowns).toBe(3)
+    await expect(session.execute('state', { key: 'values' })).resolves.toEqual({ Name: 'abc' })
+  })
+
   it('streams mutation-driven semantic-tree diffs against a cursor', async () => {
     const session = new DebuggerSession(
       new StaticHtmlAppAdapter({ html: '<main aria-label="Scene"><button>One</button></main>' })

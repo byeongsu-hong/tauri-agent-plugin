@@ -147,6 +147,12 @@ export interface AgentSelectRequest {
   value?: string
 }
 
+export interface AgentTypeRequest {
+  window?: string
+  ref: string
+  text: string
+}
+
 export interface AgentCheckRequest {
   window?: string
   ref: string
@@ -281,6 +287,10 @@ export async function agentEval(request: AgentEvalRequest): Promise<EvalResult> 
 
 export async function agentSelect(request: AgentSelectRequest): Promise<void> {
   return invokeAgentCommand('plugin:agent|agent_select', { request: withCurrentWindow(request) })
+}
+
+export async function agentType(request: AgentTypeRequest): Promise<void> {
+  return invokeAgentCommand('plugin:agent|agent_type', { request: withCurrentWindow(request) })
 }
 
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {

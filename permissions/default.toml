@@ -12,6 +12,7 @@ permissions = [
   "allow-agent-find",
   "allow-agent-action",
   "allow-agent-inspect",
+  "allow-agent-type",
   "allow-agent-select",
   "allow-agent-check",
   "allow-agent-hover",

@@ -10,6 +10,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-find`
 - `allow-agent-action`
 - `allow-agent-inspect`
+- `allow-agent-type`
 - `allow-agent-select`
 - `allow-agent-check`
 - `allow-agent-hover`
@@ -660,6 +661,32 @@ Enables the agent_stream command without any pre-configured scope.
 <td>
 
 Denies the agent_stream command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-type`
+
+</td>
+<td>
+
+Enables the agent_type command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-type`
+
+</td>
+<td>
+
+Denies the agent_type command without any pre-configured scope.
 
 </td>
 </tr>

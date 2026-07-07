@@ -74,6 +74,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_scroll',
       'tauri_drag',
       'tauri_fill',
+      'tauri_type',
       'tauri_select',
       'tauri_check',
       'tauri_inspect',

@@ -128,6 +128,9 @@ async function executeTool(
     case 'tauri_fill':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('fill', pick(args, ['window', 'ref', 'text']))
+    case 'tauri_type':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('type', pick(args, ['window', 'ref', 'text']))
     case 'tauri_select':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('select', pick(args, ['window', 'ref', 'value']))
@@ -309,6 +312,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_scroll', 'Scroll', 'Scroll a snapshot-local ref.', schema(['window', 'scope', 'ref', 'y', 'x'], ['ref'])),
   tool('tauri_drag', 'Drag', 'Drag a snapshot-local ref to another ref.', schema(['window', 'scope', 'ref', 'toRef'], ['ref'])),
   tool('tauri_fill', 'Fill', 'Fill a snapshot-local ref.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
+  tool('tauri_type', 'Type', 'Type text into a snapshot-local ref with realistic per-key events.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),

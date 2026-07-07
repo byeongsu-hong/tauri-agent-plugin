@@ -151,6 +151,7 @@ tauri-agent blur @4
 tauri-agent scroll @11 12
 tauri-agent drag @3 @18
 tauri-agent fill @4 worker-a
+tauri-agent type @4 worker-a
 tauri-agent select @5 remote
 tauri-agent check @6 true
 tauri-agent inspect @4
@@ -201,6 +202,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_scroll`
 - `tauri_drag`
 - `tauri_fill`
+- `tauri_type`
 - `tauri_select`
 - `tauri_check`
 - `tauri_inspect`
@@ -447,6 +449,7 @@ Rust command names:
 - `agent_action`
 - `agent_inspect`
 - `agent_eval`
+- `agent_type`
 - `agent_select`
 - `agent_check`
 - `agent_hover`
