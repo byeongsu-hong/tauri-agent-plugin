@@ -23,6 +23,7 @@ export const AGENT_METHODS = [
   'logs',
   'events',
   'network',
+  'ipc',
   'storage',
   'cookies',
   'location',

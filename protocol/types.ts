@@ -23,6 +23,7 @@ export type AgentMethod =
   | 'logs'
   | 'events'
   | 'network'
+  | 'ipc'
   | 'storage'
   | 'cookies'
   | 'location'
@@ -166,6 +167,11 @@ export interface NetworkParams extends WindowTarget {
   clear?: boolean
 }
 
+export interface IpcParams extends WindowTarget {
+  follow?: boolean
+  clear?: boolean
+}
+
 export interface StorageParams extends WindowTarget {
   area?: 'local' | 'session'
   action?: 'get' | 'set' | 'remove' | 'clear'
@@ -281,6 +287,17 @@ export interface NetworkEntry {
   durationMs?: number
   requestBodySize?: number
   responseBodySize?: number
+  error?: string
+  window?: string
+}
+
+export interface IpcEntry {
+  id: string
+  command: string
+  startedAt: string
+  endedAt?: string
+  durationMs?: number
+  ok?: boolean
   error?: string
   window?: string
 }

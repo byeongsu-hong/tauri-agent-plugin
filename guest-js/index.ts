@@ -39,6 +39,7 @@ import type {
   LogsParams,
   LogEntry,
   KeyModifier,
+  IpcEntry,
   NetworkEntry,
   RecordingEntry,
   StorageParams,
@@ -84,6 +85,7 @@ export {
   type LogEntry,
   type LogsParams,
   type KeyModifier,
+  type IpcEntry,
   type NetworkEntry,
   type PressOptions,
   type RecordingEntry,
@@ -202,6 +204,12 @@ export interface AgentEventsRequest extends EventsParams {
 }
 
 export interface AgentNetworkRequest {
+  window?: string
+  follow?: boolean
+  clear?: boolean
+}
+
+export interface AgentIpcRequest {
   window?: string
   follow?: boolean
   clear?: boolean
@@ -333,6 +341,10 @@ export async function agentEvents(request: AgentEventsRequest | string = {}): Pr
 
 export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<NetworkEntry[]> {
   return invokeAgentCommand('plugin:agent|agent_network', { request: withCurrentWindow(request) })
+}
+
+export async function agentIpc(request: AgentIpcRequest = {}): Promise<IpcEntry[]> {
+  return invokeAgentCommand('plugin:agent|agent_ipc', { request: withCurrentWindow(request) })
 }
 
 export async function agentStorage(request: AgentStorageRequest = {}): Promise<StorageResult> {

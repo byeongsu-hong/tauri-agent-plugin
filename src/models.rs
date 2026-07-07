@@ -324,6 +324,27 @@ pub struct AgentNetworkEntry {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentIpcRequest {
+    pub window: Option<String>,
+    pub follow: Option<bool>,
+    pub clear: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentIpcEntry {
+    pub id: String,
+    pub command: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_ms: Option<f64>,
+    pub ok: Option<bool>,
+    pub error: Option<String>,
+    pub window: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStorageRequest {
     pub window: Option<String>,
     pub area: Option<StorageArea>,

@@ -34,6 +34,8 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  IpcEntry,
+  IpcParams,
   LocationParams,
   LocationResult,
   LogsParams,
@@ -122,6 +124,10 @@ export class WebviewAgentInstrumentation {
   private capturedLogs: LogEntry[] = []
   private capturedEvents: AgentEvent[] = []
   private capturedNetwork: NetworkEntry[] = []
+  private capturedIpc: IpcEntry[] = []
+  private ipcEntryId = 0
+  private ipcTarget?: TauriInternals
+  private originalInvoke?: TauriInternals['invoke']
   private recording = false
   private recordingEntries: RecordingEntry[] = []
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
@@ -151,6 +157,7 @@ export class WebviewAgentInstrumentation {
       }
     }
     this.installNetworkCapture()
+    this.installIpcCapture()
     this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
     window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
@@ -166,6 +173,11 @@ export class WebviewAgentInstrumentation {
     if (this.originalFetch) {
       window.fetch = this.originalFetch
       this.originalFetch = undefined
+    }
+    if (this.ipcTarget && this.originalInvoke) {
+      this.ipcTarget.invoke = this.originalInvoke
+      this.ipcTarget = undefined
+      this.originalInvoke = undefined
     }
     window.removeEventListener('error', this.handleRuntimeError, { capture: true })
     window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
@@ -419,6 +431,14 @@ export class WebviewAgentInstrumentation {
     return entries
   }
 
+  ipc(options: { clear?: boolean } = {}): IpcEntry[] {
+    const entries = this.capturedIpc.map((entry) => ({ ...entry }))
+    if (options.clear) {
+      this.capturedIpc = []
+    }
+    return entries
+  }
+
   storage(options: StorageParams = {}): StorageResult {
     const area = storageArea(options.area)
     const store = area === 'session' ? window.sessionStorage : window.localStorage
@@ -569,6 +589,8 @@ export class WebviewAgentInstrumentation {
         return this.events({ clear: booleanParam(params, 'clear') ?? false })
       case 'network':
         return this.network({ clear: booleanParam(params, 'clear') ?? false })
+      case 'ipc':
+        return this.ipc({ clear: booleanParam(params, 'clear') ?? false })
       case 'storage':
         return this.storage({
           area: storageAreaParam(params, 'area'),
@@ -669,6 +691,37 @@ export class WebviewAgentInstrumentation {
     }
   }
 
+  private installIpcCapture(): void {
+    const internals = window.__TAURI_INTERNALS__
+    if (!internals || typeof internals.invoke !== 'function' || this.originalInvoke) {
+      return
+    }
+    const original = internals.invoke.bind(internals)
+    this.ipcTarget = internals
+    this.originalInvoke = internals.invoke
+    internals.invoke = (command: string, args?: unknown, options?: unknown): Promise<unknown> => {
+      const promise = original(command, args, options)
+      // Skip the agent's own bridge traffic so tracing stays signal, not noise.
+      if (typeof command === 'string' && !command.startsWith('plugin:agent|')) {
+        const startedAtMs = Date.now()
+        const entry: IpcEntry = {
+          id: `ipc-${++this.ipcEntryId}`,
+          command,
+          startedAt: new Date(startedAtMs).toISOString()
+        }
+        pushCapped(this.capturedIpc, entry)
+        Promise.resolve(promise).then(
+          () => finishIpcEntry(entry, startedAtMs, true),
+          (error: unknown) => {
+            entry.error = error instanceof Error ? error.message : String(error)
+            finishIpcEntry(entry, startedAtMs, false)
+          }
+        )
+      }
+      return promise
+    }
+  }
+
   private recordAction(action: InstrumentedAction): void {
     if (!this.recording) {
       return
@@ -681,9 +734,14 @@ export class WebviewAgentInstrumentation {
   }
 }
 
+interface TauriInternals {
+  invoke: (command: string, args?: unknown, options?: unknown) => Promise<unknown>
+}
+
 declare global {
   interface Window {
     __TAURI_AGENT__?: WebviewAgentInstrumentation
+    __TAURI_INTERNALS__?: TauriInternals
   }
 }
 
@@ -831,6 +889,13 @@ function finishNetworkEntry(entry: NetworkEntry, startedAtMs: number): void {
   const endedAtMs = Date.now()
   entry.endedAt = new Date(endedAtMs).toISOString()
   entry.durationMs = Math.max(0, endedAtMs - startedAtMs)
+}
+
+function finishIpcEntry(entry: IpcEntry, startedAtMs: number, ok: boolean): void {
+  const endedAtMs = Date.now()
+  entry.endedAt = new Date(endedAtMs).toISOString()
+  entry.durationMs = Math.max(0, endedAtMs - startedAtMs)
+  entry.ok = ok
 }
 
 function isRequest(value: RequestInfo | URL): value is Request {

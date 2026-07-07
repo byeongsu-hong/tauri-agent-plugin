@@ -34,6 +34,7 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  IpcEntry,
   LocationParams,
   LocationResult,
   LogEntry,
@@ -414,6 +415,12 @@ export class StaticHtmlAppAdapter {
       this.network = []
     }
     return entries
+  }
+
+  // The static jsdom adapter has no Tauri IPC channel, so it captures nothing;
+  // the method exists for surface parity with the live guest instrumentation.
+  async ipc(_clear = false): Promise<IpcEntry[]> {
+    return []
   }
 
   storage(options: StorageParams = {}): StorageResult {

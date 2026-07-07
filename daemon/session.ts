@@ -86,6 +86,8 @@ export class DebuggerSession {
         return this.app.getEvents(booleanParam(params.clear) ?? false)
       case 'network':
         return this.app.getNetwork(booleanParam(params.clear) ?? false)
+      case 'ipc':
+        return this.app.ipc(booleanParam(params.clear) ?? false)
       case 'storage':
         return this.app.storage({
           area: storageAreaParam(params.area),

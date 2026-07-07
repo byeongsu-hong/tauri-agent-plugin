@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-ipc"
+description = "Enables the agent_ipc command without any pre-configured scope."
+commands.allow = ["agent_ipc"]
+
+[[permission]]
+identifier = "deny-agent-ipc"
+description = "Denies the agent_ipc command without any pre-configured scope."
+commands.deny = ["agent_ipc"]

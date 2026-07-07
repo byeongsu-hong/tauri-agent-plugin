@@ -84,6 +84,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_logs',
       'tauri_events',
       'tauri_network',
+      'tauri_ipc',
       'tauri_storage',
       'tauri_cookies',
       'tauri_location',

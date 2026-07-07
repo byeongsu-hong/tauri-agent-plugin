@@ -507,6 +507,26 @@ program
   })
 
 program
+  .command('ipc')
+  .description('Print captured Tauri IPC invoke traces.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--follow', 'poll and stream new IPC entries as newline-delimited JSON')
+  .option('--clear', 'clear captured IPC entries after reading')
+  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
+  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+  .action(async (options: FollowOptions) => {
+    if (options.follow) {
+      await followEntries(options, 'ipc')
+      return
+    }
+    printJson(await call(options, 'ipc', { ...targetParams(options), follow: options.follow, clear: options.clear }))
+  })
+
+program
   .command('storage')
   .description('Inspect or mutate webview localStorage/sessionStorage.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
@@ -602,7 +622,10 @@ async function call(
   return debuggerClient(options).then((client) => client.call(method, params))
 }
 
-async function followEntries(options: FollowOptions, method: 'logs' | 'events' | 'network'): Promise<void> {
+async function followEntries(
+  options: FollowOptions,
+  method: 'logs' | 'events' | 'network' | 'ipc'
+): Promise<void> {
   const client = await debuggerClient(options)
   const pollMs = Math.max(1, options.pollMs ?? 250)
   const startedAt = Date.now()

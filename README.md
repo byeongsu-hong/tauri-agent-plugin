@@ -166,6 +166,7 @@ tauri-agent logs --clear
 tauri-agent events --follow
 tauri-agent events --clear
 tauri-agent network --follow
+tauri-agent ipc --follow
 tauri-agent storage --area session --action get
 tauri-agent cookies --action get
 tauri-agent location --action push --url /agents
@@ -212,6 +213,7 @@ It exposes named tools mirroring the debugger protocol:
 - `tauri_logs`
 - `tauri_events`
 - `tauri_network`
+- `tauri_ipc`
 - `tauri_storage`
 - `tauri_cookies`
 - `tauri_location`
@@ -258,6 +260,7 @@ import {
   agentLogs,
   agentLocation,
   agentInspect,
+  agentIpc,
   agentNetwork,
   agentRecord,
   agentScreenshot,
@@ -461,6 +464,7 @@ Rust command names:
 - `agent_logs`
 - `agent_events`
 - `agent_network`
+- `agent_ipc`
 - `agent_storage`
 - `agent_cookies`
 - `agent_location`

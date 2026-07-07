@@ -22,6 +22,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-logs`
 - `allow-agent-events`
 - `allow-agent-network`
+- `allow-agent-ipc`
 - `allow-agent-storage`
 - `allow-agent-cookies`
 - `allow-agent-location`
@@ -375,6 +376,32 @@ Enables the agent_inspect command without any pre-configured scope.
 <td>
 
 Denies the agent_inspect command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-ipc`
+
+</td>
+<td>
+
+Enables the agent_ipc command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-ipc`
+
+</td>
+<td>
+
+Denies the agent_ipc command without any pre-configured scope.
 
 </td>
 </tr>

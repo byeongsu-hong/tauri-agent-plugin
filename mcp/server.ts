@@ -34,7 +34,7 @@ type JsonSchema = {
 }
 
 type ToolCallArgs = Record<string, unknown>
-type FollowMethod = 'logs' | 'events' | 'network'
+type FollowMethod = 'logs' | 'events' | 'network' | 'ipc'
 
 export function createMcpRequestHandler(): McpRequestHandler {
   return async (message: string) => {
@@ -155,6 +155,8 @@ async function executeTool(
       return callFollowableEntries(client, 'events', args)
     case 'tauri_network':
       return callFollowableEntries(client, 'network', args)
+    case 'tauri_ipc':
+      return callFollowableEntries(client, 'ipc', args)
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
     case 'tauri_cookies':
@@ -322,6 +324,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
+  tool('tauri_ipc', 'IPC', 'Return captured Tauri IPC invoke traces (command, timing, ok/error).', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),

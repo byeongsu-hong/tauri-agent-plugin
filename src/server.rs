@@ -135,7 +135,7 @@ pub(crate) fn respond_to_json_rpc_line(
         "window" => handle_window(backend, request.params),
         "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
         | "type" | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events"
-        | "network" | "storage" | "cookies" | "location" | "wait" | "state" | "record"
+        | "network" | "ipc" | "storage" | "cookies" | "location" | "wait" | "state" | "record"
         | "stream" => {
             backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
         }

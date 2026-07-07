@@ -18,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "agent_logs",
     "agent_events",
     "agent_network",
+    "agent_ipc",
     "agent_storage",
     "agent_cookies",
     "agent_location",

@@ -34,6 +34,7 @@ describe('agent debug protocol', () => {
       'logs',
       'events',
       'network',
+      'ipc',
       'storage',
       'cookies',
       'location',
