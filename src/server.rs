@@ -15,6 +15,15 @@ const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Cap concurrent connections so the server cannot be exhausted by open sockets.
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
+/// Methods routed straight to the instrumented webview via `bridge_call`. Single
+/// source for the inline server; `attach`/`windows`/`window`/`shot` are handled
+/// natively and are intentionally not listed here.
+pub(crate) const BRIDGE_METHODS: &[&str] = &[
+    "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
+    "check", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage", "cookies",
+    "location", "wait", "state", "record", "stream",
+];
+
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -133,13 +142,10 @@ pub(crate) fn respond_to_json_rpc_line(
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
         "window" => handle_window(backend, request.params),
-        "tree" | "find" | "click" | "hover" | "focus" | "blur" | "scroll" | "drag" | "fill"
-        | "type" | "select" | "check" | "inspect" | "eval" | "press" | "logs" | "events"
-        | "network" | "ipc" | "storage" | "cookies" | "location" | "wait" | "state" | "record"
-        | "stream" => {
-            backend.bridge_call(&request.method, request.params.unwrap_or_else(|| json!({})))
-        }
         "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
+        method if BRIDGE_METHODS.contains(&method) => {
+            backend.bridge_call(method, request.params.unwrap_or_else(|| json!({})))
+        }
         method => {
             return error_response(
                 id,
