@@ -506,6 +506,31 @@ mod tests {
     }
 
     #[test]
+    fn maps_each_error_variant_to_a_distinct_wire_code() {
+        assert_eq!(error_code(&Error::StaleRef("@1".into())), "STALE_REF");
+        assert_eq!(
+            error_code(&Error::BridgeUnavailable("x".into())),
+            "BRIDGE_UNAVAILABLE"
+        );
+        assert_eq!(
+            error_code(&Error::WindowNotFound("main".into())),
+            "WINDOW_NOT_FOUND"
+        );
+        assert_eq!(
+            error_code(&Error::InvalidParams("x".into())),
+            "INVALID_PARAMS"
+        );
+        assert_eq!(error_code(&Error::Timeout("x".into())), "TIMEOUT");
+        assert_eq!(error_code(&Error::Io("x".into())), "IO_ERROR");
+        // Agents distinguish an unsupported platform (e.g. native screenshot off
+        // macOS) from a transient bridge failure so they don't pointlessly retry.
+        assert_eq!(
+            error_code(&Error::UnsupportedPlatform("x".into())),
+            "UNSUPPORTED_PLATFORM"
+        );
+    }
+
+    #[test]
     fn read_capped_line_splits_and_bounds_input() {
         use std::io::Cursor;
 
