@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-agent"
-version = "0.1.0"
+version = "0.0.1"
 description = "Agent-facing control surface for live Tauri apps using compact semantic trees."
 edition = "2021"
 rust-version = "1.77.2"
@@ -12,13 +12,13 @@ keywords = ["tauri", "agent", "debugger", "automation", "webview"]
 categories = ["development-tools::debugging", "gui", "development-tools::testing"]
 links = "tauri-plugin-agent"
 include = [
-    "src/**/*.rs",
-    "permissions/**",
-    "build.rs",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE-MIT",
-    "LICENSE-APACHE",
+    "/src/**/*.rs",
+    "/permissions/**",
+    "/build.rs",
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE-MIT",
+    "/LICENSE-APACHE",
 ]
 
 [lib]
