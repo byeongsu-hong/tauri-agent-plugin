@@ -21,7 +21,7 @@ describe('socket JSON-RPC transport', () => {
   it('serves headless debugger calls over localhost TCP', async () => {
     server = createLineJsonRpcServer(
       new DebuggerSession(
-        new StaticHtmlAppAdapter({
+        await StaticHtmlAppAdapter.create({
           title: 'Ducktape',
           html: '<main aria-label="Ducktape"><button>Forge</button></main>'
         })

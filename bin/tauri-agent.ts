@@ -128,7 +128,9 @@ program
       exitBridgePending()
     }
     const html = await readFile(options.fromHtml, 'utf8')
-    const server = createLineJsonRpcServer(new DebuggerSession(new StaticHtmlAppAdapter({ html })))
+    const server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
+    )
     await new Promise<void>((resolve) => server.listen(options.port, options.host, resolve))
     const address = server.address()
     printJson({ listening: true, address })
@@ -945,7 +947,7 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
   }
 
   const html = await readFile(options.fromHtml, 'utf8')
-  const session = new DebuggerSession(new StaticHtmlAppAdapter({ html }))
+  const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
   return new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
 }
 

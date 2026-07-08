@@ -274,7 +274,7 @@ async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
   }
 
   const html = await htmlFromArgs(args)
-  const session = new DebuggerSession(new StaticHtmlAppAdapter({ html }))
+  const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
   return new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
 }
 

@@ -76,12 +76,20 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
-    "commander": "^14.0.0",
+    "commander": "^14.0.0"
+  },
+  "peerDependencies": {
     "jsdom": "^26.1.0"
+  },
+  "peerDependenciesMeta": {
+    "jsdom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
     "@types/node": "^24.0.0",
+    "jsdom": "^26.1.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"

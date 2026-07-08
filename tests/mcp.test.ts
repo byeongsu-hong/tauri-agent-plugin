@@ -824,7 +824,7 @@ describe('tauri-agent MCP server', () => {
     const appId = 'dev.byeongsu.fixture'
     const server = createLineJsonRpcServer(
       new DebuggerSession(
-        new StaticHtmlAppAdapter({
+        await StaticHtmlAppAdapter.create({
           title: 'Ducktape',
           html: '<main aria-label="Ducktape"><label>Agent name<input aria-label="Agent name"></label></main>'
         })

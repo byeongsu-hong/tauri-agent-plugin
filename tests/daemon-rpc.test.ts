@@ -9,7 +9,7 @@ import { createSuccessResponse } from '../protocol/json-rpc'
 describe('debugger JSON-RPC transport', () => {
   it('round-trips client calls through the server handler', async () => {
     const session = new DebuggerSession(
-      new StaticHtmlAppAdapter({
+      await StaticHtmlAppAdapter.create({
         title: 'Ducktape',
         html: '<main aria-label="Ducktape"><label>Agent name<input aria-label="Agent name"></label></main>'
       })
@@ -60,7 +60,7 @@ describe('debugger JSON-RPC transport', () => {
   })
 
   it('turns server-side failures into client errors with protocol messages', async () => {
-    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html: '<main></main>' }))
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' }))
     const client = new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
 
     await client.call('tree')

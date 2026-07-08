@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { JSDOM } from 'jsdom'
+// `jsdom` is an optional peer, loaded lazily so merely importing this module
+// (e.g. for the client transports it lives beside) never requires it. Only the
+// static `--from-html` adapter needs it, and only when actually instantiated.
+import type { JSDOM } from 'jsdom'
 
 import {
   assertExpectation,
@@ -103,15 +106,11 @@ export class StaticHtmlAppAdapter {
     session: createMemoryStorage()
   }
 
-  constructor(options: StaticHtmlAppOptions) {
+  private constructor(dom: JSDOM, options: StaticHtmlAppOptions) {
     this.label = options.window ?? 'main'
     this.title = options.title ?? 'Tauri App'
     this.url = options.url ?? 'tauri-agent://static'
-    this.dom = new JSDOM(options.html, {
-      pretendToBeVisual: true,
-      runScripts: 'outside-only',
-      url: this.url
-    })
+    this.dom = dom
     this.windowState = this.createInitialWindowState()
     this.bindGlobals()
     this.dialogController.install(this.dom.window as unknown as DialogWindow)
@@ -121,6 +120,28 @@ export class StaticHtmlAppAdapter {
     })
     this.semanticStream.prime()
     this.installSemanticStream()
+  }
+
+  /**
+   * Build a static adapter, lazily loading the optional `jsdom` peer. Throws a
+   * clear, actionable error if it is not installed rather than a bare module
+   * resolution failure.
+   */
+  static async create(options: StaticHtmlAppOptions): Promise<StaticHtmlAppAdapter> {
+    let JSDOMCtor: typeof JSDOM
+    try {
+      ;({ JSDOM: JSDOMCtor } = await import('jsdom'))
+    } catch {
+      throw new Error(
+        "the static HTML adapter (--from-html / html:) requires the optional 'jsdom' package; install it with `npm install jsdom`"
+      )
+    }
+    const dom = new JSDOMCtor(options.html, {
+      pretendToBeVisual: true,
+      runScripts: 'outside-only',
+      url: options.url ?? 'tauri-agent://static'
+    })
+    return new StaticHtmlAppAdapter(dom, options)
   }
 
   async stream(params: StreamParams = {}): Promise<StreamResult> {
