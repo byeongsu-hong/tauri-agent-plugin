@@ -155,6 +155,9 @@ export class WebviewAgentInstrumentation {
   private recordingEntries: RecordingEntry[] = []
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
   private originalFetch?: typeof window.fetch
+  private originalXhrOpen?: XMLHttpRequest['open']
+  private originalXhrSend?: XMLHttpRequest['send']
+  private originalWebSocket?: typeof WebSocket
   private networkEntryId = 0
   private semanticStream?: SemanticStream
   private streamObserver?: MutationObserver
@@ -180,6 +183,8 @@ export class WebviewAgentInstrumentation {
       }
     }
     this.installNetworkCapture()
+    this.installXhrCapture()
+    this.installWebSocketCapture()
     this.installIpcCapture()
     this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
@@ -196,6 +201,16 @@ export class WebviewAgentInstrumentation {
     if (this.originalFetch) {
       window.fetch = this.originalFetch
       this.originalFetch = undefined
+    }
+    if (this.originalXhrOpen && this.originalXhrSend && typeof window.XMLHttpRequest === 'function') {
+      window.XMLHttpRequest.prototype.open = this.originalXhrOpen
+      window.XMLHttpRequest.prototype.send = this.originalXhrSend
+      this.originalXhrOpen = undefined
+      this.originalXhrSend = undefined
+    }
+    if (this.originalWebSocket) {
+      window.WebSocket = this.originalWebSocket
+      this.originalWebSocket = undefined
     }
     if (this.ipcTarget && this.originalInvoke) {
       this.ipcTarget.invoke = this.originalInvoke
@@ -731,6 +746,124 @@ export class WebviewAgentInstrumentation {
     }
   }
 
+  private installXhrCapture(): void {
+    const XHR = window.XMLHttpRequest
+    if (typeof XHR !== 'function' || this.originalXhrOpen) {
+      return
+    }
+    const capture = this
+    const openImpl = XHR.prototype.open
+    const sendImpl = XHR.prototype.send
+    this.originalXhrOpen = openImpl
+    this.originalXhrSend = sendImpl
+
+    XHR.prototype.open = function (
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      method: string,
+      url: string | URL,
+      ...rest: unknown[]
+    ) {
+      this.__agentNet = { method: String(method ?? 'GET').toUpperCase(), url: resolveUrl(String(url)) }
+      // eslint-disable-next-line prefer-rest-params
+      return (openImpl as (...args: unknown[]) => void).apply(this, [method, url, ...rest])
+    } as XMLHttpRequest['open']
+
+    XHR.prototype.send = function (
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      body?: Document | XMLHttpRequestBodyInit | null
+    ) {
+      const meta = this.__agentNet
+      if (meta && !isTauriIpcUrl(meta.url)) {
+        const startedAtMs = Date.now()
+        const entry: NetworkEntry = {
+          id: `xhr-${++capture.networkEntryId}`,
+          type: 'xhr',
+          method: meta.method,
+          url: meta.url,
+          startedAt: new Date(startedAtMs).toISOString()
+        }
+        const requestBodySize = bodySize(body as BodyInit | null | undefined)
+        if (requestBodySize !== undefined) {
+          entry.requestBodySize = requestBodySize
+        }
+        pushCapped(capture.capturedNetwork, entry)
+        this.addEventListener('loadend', () => {
+          entry.status = this.status
+          entry.ok = this.status >= 200 && this.status < 400
+          const responseBodySize = xhrResponseSize(this)
+          if (responseBodySize !== undefined) {
+            entry.responseBodySize = responseBodySize
+          }
+          finishNetworkEntry(entry, startedAtMs)
+        })
+        this.addEventListener('error', () => {
+          entry.error = 'XHR network error'
+          finishNetworkEntry(entry, startedAtMs)
+        })
+      }
+      return (sendImpl as (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) => void).call(
+        this,
+        body
+      )
+    } as XMLHttpRequest['send']
+  }
+
+  private installWebSocketCapture(): void {
+    const OriginalWebSocket = window.WebSocket
+    if (typeof OriginalWebSocket !== 'function' || this.originalWebSocket) {
+      return
+    }
+    const capture = this
+    this.originalWebSocket = OriginalWebSocket
+
+    const Wrapped = function (this: unknown, url: string | URL, protocols?: string | string[]): WebSocket {
+      const socket =
+        protocols === undefined ? new OriginalWebSocket(url) : new OriginalWebSocket(url, protocols)
+      const startedAtMs = Date.now()
+      const entry: NetworkEntry = {
+        id: `ws-${++capture.networkEntryId}`,
+        type: 'websocket',
+        method: 'GET',
+        url: resolveUrl(typeof url === 'string' ? url : url.href),
+        startedAt: new Date(startedAtMs).toISOString()
+      }
+      let sent = 0
+      let received = 0
+      pushCapped(capture.capturedNetwork, entry)
+      socket.addEventListener('open', () => {
+        entry.status = 101
+        entry.ok = true
+      })
+      socket.addEventListener('message', (event: MessageEvent) => {
+        received += messageSize(event.data)
+        entry.responseBodySize = received
+      })
+      socket.addEventListener('error', () => {
+        entry.error = 'WebSocket error'
+        finishNetworkEntry(entry, startedAtMs)
+      })
+      socket.addEventListener('close', () => {
+        finishNetworkEntry(entry, startedAtMs)
+      })
+      const originalSend = socket.send.bind(socket)
+      socket.send = (data: string | ArrayBufferLike | Blob | ArrayBufferView): void => {
+        sent += messageSize(data)
+        entry.requestBodySize = sent
+        originalSend(data)
+      }
+      return socket
+    } as unknown as typeof WebSocket
+    // Preserve the readyState constants and prototype so `instanceof` and
+    // `WebSocket.OPEN` keep working through the wrapper.
+    Wrapped.prototype = OriginalWebSocket.prototype
+    const statics = Wrapped as unknown as Record<'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED', number>
+    statics.CONNECTING = OriginalWebSocket.CONNECTING
+    statics.OPEN = OriginalWebSocket.OPEN
+    statics.CLOSING = OriginalWebSocket.CLOSING
+    statics.CLOSED = OriginalWebSocket.CLOSED
+    window.WebSocket = Wrapped
+  }
+
   private installIpcCapture(): void {
     const internals = window.__TAURI_INTERNALS__
     if (!internals || typeof internals.invoke !== 'function' || this.originalInvoke) {
@@ -927,6 +1060,51 @@ function bodySize(body: BodyInit | ReadableStream<Uint8Array> | null | undefined
     return body.size
   }
   return undefined
+}
+
+function resolveUrl(url: string): string {
+  try {
+    return new URL(url, window.location.href).href
+  } catch {
+    return url
+  }
+}
+
+function xhrResponseSize(xhr: XMLHttpRequest): number | undefined {
+  try {
+    if (typeof xhr.responseText === 'string') {
+      return new TextEncoder().encode(xhr.responseText).byteLength
+    }
+  } catch {
+    // responseText throws for non-text responseTypes; fall through.
+  }
+  const response: unknown = xhr.response
+  if (typeof response === 'string') {
+    return new TextEncoder().encode(response).byteLength
+  }
+  if (response instanceof ArrayBuffer) {
+    return response.byteLength
+  }
+  if (typeof Blob !== 'undefined' && response instanceof Blob) {
+    return response.size
+  }
+  return undefined
+}
+
+function messageSize(data: unknown): number {
+  if (typeof data === 'string') {
+    return new TextEncoder().encode(data).byteLength
+  }
+  if (data instanceof ArrayBuffer) {
+    return data.byteLength
+  }
+  if (ArrayBuffer.isView(data)) {
+    return data.byteLength
+  }
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return data.size
+  }
+  return 0
 }
 
 async function clonedResponseBodySize(response: Response): Promise<number | undefined> {

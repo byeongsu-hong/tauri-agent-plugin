@@ -312,7 +312,8 @@ export interface AgentEvent {
 
 export interface NetworkEntry {
   id: string
-  type: 'fetch'
+  /** Transport that produced the entry. WebSocket entries carry a `101` status on open. */
+  type: 'fetch' | 'xhr' | 'websocket'
   method: string
   url: string
   status?: number

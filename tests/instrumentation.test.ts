@@ -325,6 +325,89 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('captures XHR and WebSocket activity alongside fetch', () => {
+    class FakeXHR {
+      status = 0
+      responseText = ''
+      private readonly listeners: Record<string, Array<() => void>> = {}
+      open(_method: string, _url: string): void {}
+      send(_body?: unknown): void {}
+      addEventListener(type: string, cb: () => void): void {
+        ;(this.listeners[type] ??= []).push(cb)
+      }
+      emit(type: string): void {
+        for (const cb of this.listeners[type] ?? []) cb()
+      }
+    }
+
+    class FakeWebSocket {
+      static readonly CONNECTING = 0
+      static readonly OPEN = 1
+      static readonly CLOSING = 2
+      static readonly CLOSED = 3
+      readonly sent: unknown[] = []
+      private readonly listeners: Record<string, Array<(event: unknown) => void>> = {}
+      constructor(readonly url: string) {}
+      addEventListener(type: string, cb: (event: unknown) => void): void {
+        ;(this.listeners[type] ??= []).push(cb)
+      }
+      send(data: unknown): void {
+        this.sent.push(data)
+      }
+      emit(type: string, event?: unknown): void {
+        for (const cb of this.listeners[type] ?? []) cb(event)
+      }
+    }
+
+    const realXHR = window.XMLHttpRequest
+    const realWS = window.WebSocket
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const xhr = new window.XMLHttpRequest() as unknown as FakeXHR
+      xhr.open('GET', 'https://example.test/data')
+      xhr.send()
+      xhr.status = 200
+      xhr.responseText = 'hello'
+      xhr.emit('loadend')
+
+      const socket = new window.WebSocket('wss://example.test/socket') as unknown as FakeWebSocket
+      socket.emit('open')
+      socket.send('ping')
+      socket.emit('message', { data: 'pong-response' })
+      socket.emit('close')
+
+      const network = instrumentation.network()
+      const xhrEntry = network.find((entry) => entry.type === 'xhr')
+      expect(xhrEntry).toMatchObject({
+        method: 'GET',
+        url: 'https://example.test/data',
+        status: 200,
+        ok: true,
+        responseBodySize: 5
+      })
+      expect(xhrEntry?.durationMs).toBeGreaterThanOrEqual(0)
+
+      const wsEntry = network.find((entry) => entry.type === 'websocket')
+      expect(wsEntry).toMatchObject({
+        method: 'GET',
+        url: 'wss://example.test/socket',
+        status: 101,
+        ok: true,
+        requestBodySize: 4,
+        responseBodySize: 'pong-response'.length
+      })
+      // The wrapper still forwards sent frames to the underlying socket.
+      expect(socket.sent).toEqual(['ping'])
+    } finally {
+      instrumentation.dispose()
+      window.XMLHttpRequest = realXHR
+      window.WebSocket = realWS
+    }
+  })
+
   it('captures runtime errors and unhandled rejections as logs', () => {
     const instrumentation = new WebviewAgentInstrumentation()
     instrumentation.install()
