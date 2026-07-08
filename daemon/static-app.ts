@@ -23,7 +23,7 @@ import {
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
-import { evalResult } from '../guest-js/evaluate'
+import { evalResultAsync } from '../guest-js/evaluate'
 import { SemanticStream } from '../guest-js/semantic-stream'
 import type {
   AgentEvent,
@@ -307,7 +307,7 @@ export class StaticHtmlAppAdapter {
 
   async evaluate(code: string): Promise<EvalResult> {
     this.bindGlobals()
-    return evalResult(this.dom.window.eval(code))
+    return evalResultAsync(this.dom.window.eval(code))
   }
 
   async press(key: string, options: { ref?: string; modifiers?: KeyModifier[] } = {}): Promise<{ ok: true }> {

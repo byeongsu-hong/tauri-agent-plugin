@@ -22,7 +22,7 @@ import {
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import { evalResult } from './evaluate'
+import { evalResultAsync } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
 import { SemanticStream } from './semantic-stream'
 import type {
@@ -341,8 +341,8 @@ export class WebviewAgentInstrumentation {
     return { ok: true }
   }
 
-  evaluate(code: string): EvalResult {
-    return evalResult(window.eval(code))
+  evaluate(code: string): Promise<EvalResult> {
+    return evalResultAsync(window.eval(code))
   }
 
   async wait(options: WaitParams): Promise<WaitResult> {
