@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -42,6 +42,18 @@ describe('debugger endpoint discovery', () => {
       transport: 'unix',
       path: '/run/user/501/tauri-agent/dev.byeongsu.fixture/4242.sock'
     })
+  })
+
+  it('sanitizes app ids identically to the Rust implementation (golden fixture)', () => {
+    const golden = JSON.parse(
+      readFileSync(join(process.cwd(), 'tests/fixtures/endpoint-app-ids.json'), 'utf8')
+    ) as { cases: Array<{ appId: string; safeAppId: string }> }
+
+    for (const { appId, safeAppId } of golden.cases) {
+      expect(
+        endpointRuntimeDir({ appId, env: { XDG_RUNTIME_DIR: '/run/user/501' } })
+      ).toBe(`/run/user/501/tauri-agent/${safeAppId}`)
+    }
   })
 
   it('uses explicit TCP endpoint descriptors for fallback transports', () => {

@@ -6,6 +6,29 @@ use tauri_plugin_agent::{
 };
 
 #[test]
+fn rust_app_id_sanitization_matches_the_shared_golden_fixture() {
+    // The same fixture is asserted by tests/endpoint.test.ts, so the Rust
+    // `safe_app_id` and the TS `safeAppId` cannot drift apart.
+    let fixture = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/endpoint-app-ids.json"
+    ))
+    .expect("golden fixture readable");
+    let parsed: serde_json::Value = serde_json::from_str(&fixture).expect("golden fixture is JSON");
+    let cases = parsed["cases"].as_array().expect("cases array");
+    assert!(!cases.is_empty());
+    for case in cases {
+        let app_id = case["appId"].as_str().expect("appId string");
+        let safe = case["safeAppId"].as_str().expect("safeAppId string");
+        assert_eq!(
+            endpoint_runtime_dir(app_id, Some(PathBuf::from("/run/user/501"))),
+            PathBuf::from(format!("/run/user/501/tauri-agent/{safe}")),
+            "app id {app_id:?} sanitization drifted from the golden fixture"
+        );
+    }
+}
+
+#[test]
 fn rust_endpoint_descriptors_are_app_scoped() {
     assert_eq!(
         endpoint_runtime_dir("dev.byeongsu.fixture", Some(PathBuf::from("/run/user/501"))),
