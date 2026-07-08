@@ -467,6 +467,12 @@ pub struct AgentWaitRequest {
     pub name: Option<String>,
     pub timeout_ms: Option<u64>,
     pub state: Option<String>,
+    #[serde(rename = "fn", default, skip_serializing_if = "Option::is_none")]
+    pub wait_fn: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_idle: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -687,6 +693,9 @@ mod tests {
             name: None,
             timeout_ms: Some(250),
             state: None,
+            wait_fn: None,
+            network_idle: None,
+            idle_ms: None,
         };
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
@@ -709,6 +718,9 @@ mod tests {
             name: Some("Forge".into()),
             timeout_ms: Some(250),
             state: Some("absent".into()),
+            wait_fn: None,
+            network_idle: None,
+            idle_ms: None,
         };
         assert_eq!(
             serde_json::to_value(semantic_wait).unwrap(),

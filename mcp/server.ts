@@ -183,7 +183,18 @@ async function executeTool(
     case 'tauri_wait':
       return client.call(
         'wait',
-        pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])
+        pick(args, [
+          'window',
+          'text',
+          'scope',
+          'role',
+          'name',
+          'timeoutMs',
+          'state',
+          'fn',
+          'networkIdle',
+          'idleMs'
+        ])
       )
     case 'tauri_expect':
       return client.call(
@@ -332,7 +343,10 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
     description: 'wait target state: present (default, appear) or absent (disappear).'
   },
   present: { type: 'boolean', description: 'expect: whether the target must exist (default true).' },
-  hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' }
+  hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' },
+  fn: { type: 'string', description: 'wait: JS expression polled until it evaluates truthy (waitForFunction).' },
+  networkIdle: { type: 'boolean', description: 'wait: resolve once no fetch/XHR request is in flight for idleMs.' },
+  idleMs: { type: 'number', description: 'wait: quiet window for networkIdle in milliseconds (default 500).' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -362,7 +376,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
-  tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear, or disappear with state=absent.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])),
+  tool('tauri_wait', 'Wait', 'Wait for text/a semantic element to appear (or disappear with state=absent), a JS expression to become truthy (fn), or the network to go idle (networkIdle).', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state', 'fn', 'networkIdle', 'idleMs'])),
   tool('tauri_expect', 'Expect', 'Assert a semantic target exists (or is absent) and matches value/state; errors on mismatch.', schema(['window', 'scope', 'role', 'name', 'text', 'present', 'value', 'hasState'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),

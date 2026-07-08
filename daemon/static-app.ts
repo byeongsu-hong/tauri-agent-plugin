@@ -24,7 +24,7 @@ import {
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
-import { evalResultAsync } from '../guest-js/evaluate'
+import { evalResult, evalResultAsync } from '../guest-js/evaluate'
 import { SemanticStream } from '../guest-js/semantic-stream'
 import {
   applyCookieAction,
@@ -391,8 +391,16 @@ export class StaticHtmlAppAdapter {
     const timeoutMs = options.timeoutMs ?? 1000
     const wantAbsent = options.state === 'absent'
     const semantic = hasSemanticWaitFilter(options)
+    if (options.networkIdle) {
+      // The static jsdom adapter has no live request model, so it is always idle.
+      this.pushEvent('wait', { networkIdle: true })
+      return { matched: true, text: '' }
+    }
+    if (options.fn) {
+      return this.waitForFunction(options.fn, startedAt, timeoutMs)
+    }
     if (!semantic && !options.text) {
-      throw new Error('wait requires text or semantic filter')
+      throw new Error('wait requires text, a semantic filter, fn, or networkIdle')
     }
 
     while (Date.now() - startedAt <= timeoutMs) {
@@ -419,6 +427,22 @@ export class StaticHtmlAppAdapter {
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
     throw new Error(waitTimeoutMessage(options, wantAbsent, semantic))
+  }
+
+  private async waitForFunction(fn: string, startedAt: number, timeoutMs: number): Promise<WaitResult> {
+    while (Date.now() - startedAt <= timeoutMs) {
+      this.bindGlobals()
+      let raw: unknown = this.dom.window.eval(fn)
+      if (raw && typeof (raw as { then?: unknown }).then === 'function') {
+        raw = await (raw as PromiseLike<unknown>)
+      }
+      if (raw) {
+        this.pushEvent('wait', { fn })
+        return { matched: true, text: evalResult(raw).text }
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error(`wait timed out for function: ${fn}`)
   }
 
   getLogs(clear = false): LogEntry[] {

@@ -114,7 +114,10 @@ export class DebuggerSession {
           role: stringParam(params.role),
           name: stringParam(params.name),
           timeoutMs: numberParam(params.timeoutMs),
-          state: params.state === 'absent' ? 'absent' : undefined
+          state: params.state === 'absent' ? 'absent' : undefined,
+          fn: stringParam(params.fn),
+          networkIdle: booleanParam(params.networkIdle),
+          idleMs: numberParam(params.idleMs)
         })
       case 'expect':
         return this.app.expect({

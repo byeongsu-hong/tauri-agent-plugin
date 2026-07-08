@@ -211,6 +211,18 @@ export interface WaitParams extends WindowTarget {
   timeoutMs?: number
   /** `present` (default) waits for appearance; `absent` waits for disappearance. */
   state?: 'present' | 'absent'
+  /**
+   * Poll a JS expression, resolving when it evaluates to a truthy value
+   * (Playwright's `waitForFunction`). Thenable results are awaited each poll.
+   */
+  fn?: string
+  /**
+   * Wait until no fetch/XHR request is in flight for `idleMs` consecutive
+   * milliseconds. WebSockets are excluded (they stay open by design).
+   */
+  networkIdle?: boolean
+  /** Quiet window for `networkIdle`, in ms. Defaults to 500. */
+  idleMs?: number
 }
 
 export interface ExpectParams extends WindowTarget {

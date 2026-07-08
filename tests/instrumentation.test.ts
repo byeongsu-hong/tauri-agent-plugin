@@ -325,6 +325,34 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('waits for a JS predicate and for the network to go idle', async () => {
+    document.body.innerHTML = '<main><p>loading</p></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const flagged = window as typeof window & { __ready?: boolean }
+      flagged.__ready = false
+      setTimeout(() => {
+        flagged.__ready = true
+      }, 5)
+      await expect(instrumentation.wait({ fn: 'window.__ready === true', timeoutMs: 500 })).resolves.toEqual({
+        matched: true,
+        text: 'true'
+      })
+
+      // No requests are in flight, so networkIdle resolves after the quiet window.
+      await expect(
+        instrumentation.wait({ networkIdle: true, idleMs: 5, timeoutMs: 500 })
+      ).resolves.toEqual({ matched: true, text: '' })
+
+      await expect(instrumentation.wait({ fn: 'false', timeoutMs: 20 })).rejects.toThrow(
+        'wait timed out for function'
+      )
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('captures XHR and WebSocket activity alongside fetch', () => {
     class FakeXHR {
       status = 0

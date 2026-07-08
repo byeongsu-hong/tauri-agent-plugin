@@ -23,7 +23,7 @@ import {
   type SnapshotResult
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import { evalResultAsync } from './evaluate'
+import { evalResult, evalResultAsync } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
 import { SemanticStream } from './semantic-stream'
 import {
@@ -159,6 +159,8 @@ export class WebviewAgentInstrumentation {
   private originalXhrSend?: XMLHttpRequest['send']
   private originalWebSocket?: typeof WebSocket
   private networkEntryId = 0
+  /** In-flight fetch/XHR count, used by `wait({ networkIdle: true })`. */
+  private inFlightRequests = 0
   private semanticStream?: SemanticStream
   private streamObserver?: MutationObserver
   private readonly handleRuntimeError = (event: ErrorEvent): void => {
@@ -399,8 +401,14 @@ export class WebviewAgentInstrumentation {
     const timeoutMs = options.timeoutMs ?? 1000
     const wantAbsent = options.state === 'absent'
     const semantic = hasSemanticWaitFilter(options)
+    if (options.networkIdle) {
+      return this.waitForNetworkIdle(options, startedAt, timeoutMs)
+    }
+    if (options.fn) {
+      return this.waitForFunction(options.fn, startedAt, timeoutMs)
+    }
     if (!semantic && !options.text) {
-      throw new Error('wait requires text or semantic filter')
+      throw new Error('wait requires text, a semantic filter, fn, or networkIdle')
     }
 
     while (Date.now() - startedAt <= timeoutMs) {
@@ -421,6 +429,43 @@ export class WebviewAgentInstrumentation {
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
     throw new Error(waitTimeoutMessage(options, wantAbsent, semantic))
+  }
+
+  private async waitForFunction(fn: string, startedAt: number, timeoutMs: number): Promise<WaitResult> {
+    while (Date.now() - startedAt <= timeoutMs) {
+      let raw: unknown = window.eval(fn)
+      if (raw && typeof (raw as { then?: unknown }).then === 'function') {
+        raw = await (raw as PromiseLike<unknown>)
+      }
+      if (raw) {
+        this.pushEvent('wait', { fn })
+        return { matched: true, text: evalResult(raw).text }
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error(`wait timed out for function: ${fn}`)
+  }
+
+  private async waitForNetworkIdle(
+    options: WaitParams,
+    startedAt: number,
+    timeoutMs: number
+  ): Promise<WaitResult> {
+    const idleMs = options.idleMs ?? 500
+    let idleSince: number | undefined = this.inFlightRequests === 0 ? startedAt : undefined
+    while (Date.now() - startedAt <= timeoutMs) {
+      if (this.inFlightRequests === 0) {
+        idleSince ??= Date.now()
+        if (Date.now() - idleSince >= idleMs) {
+          this.pushEvent('wait', { networkIdle: true })
+          return { matched: true, text: '' }
+        }
+      } else {
+        idleSince = undefined
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error('wait timed out: network did not become idle')
   }
 
   state(key?: string): unknown {
@@ -660,7 +705,10 @@ export class WebviewAgentInstrumentation {
           role: stringParam(params, 'role'),
           name: stringParam(params, 'name'),
           timeoutMs: numberParam(params, 'timeoutMs'),
-          state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined
+          state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined,
+          fn: stringParam(params, 'fn'),
+          networkIdle: booleanParam(params, 'networkIdle'),
+          idleMs: numberParam(params, 'idleMs')
         })
       case 'expect':
         return this.expect({
@@ -727,6 +775,7 @@ export class WebviewAgentInstrumentation {
         entry.requestBodySize = requestBodySize
       }
       pushCapped(this.capturedNetwork, entry)
+      this.inFlightRequests++
 
       try {
         const response = await originalFetch.call(window, input, init)
@@ -742,6 +791,8 @@ export class WebviewAgentInstrumentation {
         entry.error = error instanceof Error ? error.message : String(error)
         finishNetworkEntry(entry, startedAtMs)
         throw error
+      } finally {
+        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1)
       }
     }
   }
@@ -787,6 +838,15 @@ export class WebviewAgentInstrumentation {
           entry.requestBodySize = requestBodySize
         }
         pushCapped(capture.capturedNetwork, entry)
+        capture.inFlightRequests++
+        let settled = false
+        const settle = (): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          capture.inFlightRequests = Math.max(0, capture.inFlightRequests - 1)
+        }
         this.addEventListener('loadend', () => {
           entry.status = this.status
           entry.ok = this.status >= 200 && this.status < 400
@@ -795,10 +855,12 @@ export class WebviewAgentInstrumentation {
             entry.responseBodySize = responseBodySize
           }
           finishNetworkEntry(entry, startedAtMs)
+          settle()
         })
         this.addEventListener('error', () => {
           entry.error = 'XHR network error'
           finishNetworkEntry(entry, startedAtMs)
+          settle()
         })
       }
       return (sendImpl as (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) => void).call(

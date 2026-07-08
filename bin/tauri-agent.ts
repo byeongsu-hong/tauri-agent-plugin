@@ -82,6 +82,9 @@ interface WaitOptions extends ConnectionOptions {
   name?: string
   timeoutMs?: number
   absent?: boolean
+  fn?: string
+  networkIdle?: boolean
+  idleMs?: number
 }
 
 interface ExpectOptions extends ConnectionOptions {
@@ -594,6 +597,9 @@ program
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
   .option('--absent', 'wait for the target to disappear instead of appear')
+  .option('--fn <expression>', 'wait until this JS expression evaluates truthy')
+  .option('--network-idle', 'wait until no fetch/XHR request is in flight')
+  .option('--idle-ms <ms>', 'quiet window for --network-idle in milliseconds', Number)
   .option('--timeout-ms <ms>', 'timeout in milliseconds', Number)
   .action(async (text: string | undefined, options: WaitOptions) =>
     printJson(await call(options, 'wait', waitParams(options, text)))
@@ -831,7 +837,10 @@ function waitParams(options: WaitOptions, text: string | undefined): Record<stri
     role: options.role,
     name: options.name,
     timeoutMs: options.timeoutMs,
-    state: options.absent ? 'absent' : undefined
+    state: options.absent ? 'absent' : undefined,
+    fn: options.fn,
+    networkIdle: options.networkIdle ? true : undefined,
+    idleMs: options.idleMs
   }
 }
 
