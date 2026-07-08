@@ -26,6 +26,21 @@ import {
 import { screenshotDocument } from '../guest-js/screenshot'
 import { evalResultAsync } from '../guest-js/evaluate'
 import { SemanticStream } from '../guest-js/semantic-stream'
+import {
+  applyCookieAction,
+  applyStorageAction,
+  cookieResult,
+  errorLikeMessage,
+  hasSemanticWaitFilter,
+  locationResult,
+  requiredLocationUrl,
+  runtimeErrorMessage,
+  stateValue,
+  storageArea,
+  storageResult,
+  waitEventDetail,
+  waitTimeoutMessage
+} from '../guest-js/dom-actions'
 import type {
   AgentEvent,
   AgentWindow,
@@ -533,29 +548,6 @@ function requiredDataUrlBody(dataUrl: string | undefined): string {
   return body
 }
 
-function hasSemanticWaitFilter(options: WaitParams): boolean {
-  return Boolean(options.scope || options.role || options.name)
-}
-
-function waitTimeoutMessage(options: WaitParams, wantAbsent: boolean, semantic: boolean): string {
-  if (wantAbsent) {
-    return semantic
-      ? 'wait timed out: semantic target still present'
-      : `wait timed out: text still present: ${options.text}`
-  }
-  return semantic ? 'wait timed out for semantic target' : `wait timed out for text: ${options.text}`
-}
-
-function waitEventDetail(options: WaitParams, match: InspectResult): Record<string, unknown> {
-  return {
-    ...(options.text ? { text: options.text } : {}),
-    ...(options.scope ? { scope: options.scope } : {}),
-    ...(options.role ? { role: options.role } : {}),
-    ...(options.name ? { name: options.name } : {}),
-    match
-  }
-}
-
 function actionDetail(detail: Record<string, string | number | undefined>): Record<string, string | number> {
   return Object.fromEntries(
     Object.entries(detail).filter((entry): entry is [string, string | number] => entry[1] !== undefined)
@@ -568,10 +560,6 @@ function pressDetail(key: string, options: { ref?: string; modifiers?: KeyModifi
     ...(options.ref ? { ref: options.ref } : {}),
     ...(options.modifiers?.length ? { modifiers: options.modifiers } : {})
   }
-}
-
-function stateValue(state: Record<string, unknown>, key: string | undefined): unknown {
-  return key === undefined ? state : state[key] ?? null
 }
 
 function requiredFiniteNumber(value: number | undefined, name: string): number {
@@ -587,10 +575,6 @@ function requiredPositiveNumber(value: number | undefined, name: string): number
     throw new Error(`window action requires positive ${name}`)
   }
   return number
-}
-
-function storageArea(area: StorageParams['area']): 'local' | 'session' {
-  return area === 'session' ? 'session' : 'local'
 }
 
 function createMemoryStorage(): Storage {
@@ -625,176 +609,6 @@ function defineStorage(target: object, key: 'localStorage' | 'sessionStorage', s
   })
 }
 
-function runtimeErrorMessage(event: Event): string {
-  const errorEvent = event as ErrorEvent
-  return errorLikeMessage(errorEvent.error) || errorEvent.message || 'Unknown runtime error'
-}
-
-function errorLikeMessage(value: unknown): string {
-  if (value instanceof Error) {
-    return messageWithStack(value.message, value.stack) || value.name
-  }
-  if (typeof value === 'string') {
-    return value
-  }
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    const formatted = messageWithStack(
-      typeof record.message === 'string' ? record.message : undefined,
-      typeof record.stack === 'string' ? record.stack : undefined
-    )
-    if (formatted) {
-      return formatted
-    }
-  }
-  try {
-    const serialized = JSON.stringify(value)
-    if (serialized) {
-      return serialized
-    }
-  } catch {
-    // Fall through to String(value).
-  }
-  return String(value)
-}
-
-function messageWithStack(message?: string, stack?: string): string {
-  if (message && stack) {
-    return stack.includes(message) ? stack : `${message}\n${stack}`
-  }
-  return stack || message || ''
-}
-
-function applyStorageAction(store: Storage, options: StorageParams): void {
-  const action = options.action ?? 'get'
-  switch (action) {
-    case 'get':
-      return
-    case 'set':
-      store.setItem(requiredStorageKey(options.key), requiredStorageValue(options.value))
-      return
-    case 'remove':
-      store.removeItem(requiredStorageKey(options.key))
-      return
-    case 'clear':
-      store.clear()
-      return
-  }
-}
-
-function storageResult(
-  store: Storage,
-  area: 'local' | 'session',
-  key?: string
-): StorageResult {
-  const keys = key === undefined
-    ? Array.from({ length: store.length }, (_, index) => store.key(index)).filter((value): value is string => value !== null).sort()
-    : store.getItem(key) === null ? [] : [key]
-  return {
-    area,
-    entries: keys.map((entryKey) => ({
-      area,
-      key: entryKey,
-      value: store.getItem(entryKey) ?? ''
-    }))
-  }
-}
-
-function requiredStorageKey(key: string | undefined): string {
-  if (!key) {
-    throw new Error('storage action requires key')
-  }
-  return key
-}
-
-function requiredStorageValue(value: string | undefined): string {
-  if (value === undefined) {
-    throw new Error('storage set requires value')
-  }
-  return value
-}
-
-function applyCookieAction(document: Document, options: CookieParams): void {
-  const action = options.action ?? 'get'
-  switch (action) {
-    case 'get':
-      return
-    case 'set':
-      document.cookie = `${encodeURIComponent(requiredCookieName(options.name))}=${encodeURIComponent(requiredCookieValue(options.value))}; path=/`
-      return
-    case 'remove':
-      expireCookie(document, requiredCookieName(options.name))
-      return
-    case 'clear':
-      for (const entry of parseCookies(document.cookie)) {
-        expireCookie(document, entry.name)
-      }
-      return
-  }
-}
-
-function cookieResult(document: Document, name?: string): CookieResult {
-  const entries = parseCookies(document.cookie)
-  return {
-    entries: name === undefined ? entries : entries.filter((entry) => entry.name === name)
-  }
-}
-
-function parseCookies(cookie: string): CookieResult['entries'] {
-  return cookie
-    .split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const separatorIndex = part.indexOf('=')
-      const name = separatorIndex === -1 ? part : part.slice(0, separatorIndex)
-      const value = separatorIndex === -1 ? '' : part.slice(separatorIndex + 1)
-      return { name: safeDecode(name), value: safeDecode(value) }
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-function expireCookie(document: Document, name: string): void {
-  const encodedName = encodeURIComponent(name)
-  for (const path of cookiePathCandidates(document.location.pathname)) {
-    document.cookie = `${encodedName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}`
-  }
-}
-
-function cookiePathCandidates(pathname: string): string[] {
-  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
-  const paths = new Set<string>(['/'])
-  let current = ''
-  for (const segment of normalizedPath.split('/').filter(Boolean)) {
-    current = `${current}/${segment}`
-    paths.add(current)
-    paths.add(`${current}/`)
-  }
-  return [...paths].sort((a, b) => b.length - a.length)
-}
-
-function requiredCookieName(name: string | undefined): string {
-  if (!name) {
-    throw new Error('cookie action requires name')
-  }
-  return name
-}
-
-function requiredCookieValue(value: string | undefined): string {
-  if (value === undefined) {
-    throw new Error('cookie set requires value')
-  }
-  return value
-}
-
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
 function applyLocationAction(dom: JSDOM, options: LocationParams): void {
   const action = options.action ?? 'get'
   switch (action) {
@@ -813,21 +627,4 @@ function applyLocationAction(dom: JSDOM, options: LocationParams): void {
       return
     }
   }
-}
-
-function locationResult(location: Location): LocationResult {
-  return {
-    href: location.href,
-    origin: location.origin,
-    pathname: location.pathname,
-    search: location.search,
-    hash: location.hash
-  }
-}
-
-function requiredLocationUrl(url: string | undefined): string {
-  if (!url) {
-    throw new Error('location action requires url')
-  }
-  return url
 }
