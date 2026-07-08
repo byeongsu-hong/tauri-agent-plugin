@@ -68,6 +68,10 @@ const appRoot = mustFindAppRoot()
 
 render()
 
+if (new URL(location.href).searchParams.has('selfTest')) {
+  void autoRunSelfTest()
+}
+
 function render(): void {
   const appLabel = fixtureWindowLabel === 'main' ? 'Ducktape' : `Ducktape ${fixtureWindowLabel}`
   appRoot.innerHTML = `
@@ -175,8 +179,8 @@ function render(): void {
   }
 }
 
-async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<void> {
-  if (!status) return
+async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boolean> {
+  if (!status) return false
   status.textContent = 'Command bridge running'
   const tree = await agentSnapshot({ scope: 'main' })
   const foundForge = await agentFind({ scope: 'main', role: 'button', name: 'Forge', limit: 1 })
@@ -267,6 +271,20 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<voi
 
   status.textContent = verified ? 'Command bridge verified' : 'Command bridge failed'
   console.info(status.textContent)
+  return verified
+}
+
+// Autorun mode: when launched with `?selfTest` (the Rust `--self-test` harness
+// adds it), run the bridge self-test on boot and encode the result in the
+// document title so the native side can exit with a matching code.
+async function autoRunSelfTest(): Promise<void> {
+  const status = appRoot.querySelector<HTMLElement>('[data-status]')
+  const passed = await runCommandBridgeSelfTest(status).catch((error) => {
+    console.error('self-test threw', error)
+    return false
+  })
+  document.title = passed ? 'SELFTEST:PASS' : 'SELFTEST:FAIL'
+  console.info(document.title)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
