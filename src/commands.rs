@@ -197,18 +197,33 @@ pub async fn agent_screenshot<R: Runtime>(
     request: AgentScreenshotRequest,
 ) -> Result<String> {
     let path = request.path.clone();
-    let result = match request.backend.unwrap_or(ScreenshotBackend::Dom) {
-        ScreenshotBackend::Dom => {
-            request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)?
-        }
-        ScreenshotBackend::Native => capture_native_screenshot_for_request(&app, &request)?,
-        ScreenshotBackend::Auto => {
-            capture_native_screenshot_for_request(&app, &request).or_else(|_| {
-                request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request)
-            })?
-        }
-    };
+    let result = resolve_screenshot(
+        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        || request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request),
+        || capture_native_screenshot_for_request(&app, &request),
+    )?;
     screenshot_return_value(result, path.as_deref())
+}
+
+/// Shared Dom/Native/Auto screenshot dispatch for both the direct command and
+/// the inline server. `auto` tries native first, then dom, and — unlike the old
+/// paths — surfaces the swallowed native error as context when dom also fails.
+pub(crate) fn resolve_screenshot(
+    backend: ScreenshotBackend,
+    dom: impl FnOnce() -> Result<Value>,
+    native: impl FnOnce() -> Result<Value>,
+) -> Result<Value> {
+    match backend {
+        ScreenshotBackend::Dom => dom(),
+        ScreenshotBackend::Native => native(),
+        ScreenshotBackend::Auto => native().or_else(|native_error| {
+            dom().map_err(|dom_error| {
+                Error::BridgeUnavailable(format!(
+                    "auto screenshot failed: native ({native_error}); dom ({dom_error})"
+                ))
+            })
+        }),
+    }
 }
 
 #[tauri::command]

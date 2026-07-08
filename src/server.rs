@@ -411,13 +411,11 @@ fn handle_window(
 
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
-    match request.backend.unwrap_or(ScreenshotBackend::Dom) {
-        ScreenshotBackend::Dom => handle_bridge_shot(backend, params),
-        ScreenshotBackend::Native => backend.native_screenshot(request),
-        ScreenshotBackend::Auto => backend
-            .native_screenshot(request)
-            .or_else(|_| handle_bridge_shot(backend, params)),
-    }
+    commands::resolve_screenshot(
+        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        || handle_bridge_shot(backend, params.clone()),
+        || backend.native_screenshot(request.clone()),
+    )
 }
 
 fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
