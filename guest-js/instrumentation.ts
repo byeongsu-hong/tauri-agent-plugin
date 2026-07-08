@@ -13,6 +13,7 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resolveRef,
   scrollRef,
   selectRef,
   snapshotDocument,
@@ -493,6 +494,9 @@ export class WebviewAgentInstrumentation {
   }
 
   screenshot(options: ScreenshotOptions = {}): ScreenshotResult {
+    if (options.ref) {
+      return screenshotDocument(document, { ...options, element: resolveRef(options.ref) })
+    }
     return screenshotDocument(document, options)
   }
 
@@ -671,7 +675,7 @@ export class WebviewAgentInstrumentation {
           modifiers: modifierListParam(params, 'modifiers')
         })
       case 'shot':
-        return this.screenshot({ path: stringParam(params, 'path') })
+        return this.screenshot({ path: stringParam(params, 'path'), ref: stringParam(params, 'ref') })
       case 'logs':
         return this.logs({ clear: booleanParam(params, 'clear') ?? false })
       case 'events':

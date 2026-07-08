@@ -32,7 +32,7 @@ use crate::screenshot::write_data_url_to_path;
 use crate::{
     bridge::AgentBridge, commands, write_endpoint_registry, AgentAttachRequest,
     AgentEndpointDescriptor, AgentScreenshotRequest, AgentWindowRequest, EndpointRegistryError,
-    Error, InlineServerConfig, ScreenshotBackend, WindowAction, WindowInfo,
+    Error, InlineServerConfig, WindowAction, WindowInfo,
 };
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -412,7 +412,7 @@ fn handle_window(
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
     commands::resolve_screenshot(
-        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        commands::effective_screenshot_backend(&request),
         || handle_bridge_shot(backend, params.clone()),
         || backend.native_screenshot(request.clone()),
     )

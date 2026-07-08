@@ -102,6 +102,7 @@ interface StateOptions extends ConnectionOptions {
 
 interface ShotOptions extends ConnectionOptions {
   backend?: ScreenshotBackend
+  ref?: string
 }
 
 const program = new Command()
@@ -455,8 +456,16 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .option('--window <label>', 'Tauri window label')
   .option('--backend <backend>', 'screenshot backend: dom, native, or auto', parseScreenshotBackend)
+  .option('--ref <ref>', 'scope the capture to a single element ref (forces the DOM backend)')
   .action(async (path: string | undefined, options: ShotOptions) =>
-    printJson(await call(options, 'shot', { ...targetParams(options), path, backend: options.backend }))
+    printJson(
+      await call(options, 'shot', {
+        ...targetParams(options),
+        path,
+        backend: options.backend,
+        ref: options.ref
+      })
+    )
   )
 
 program

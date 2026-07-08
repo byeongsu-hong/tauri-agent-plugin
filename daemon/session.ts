@@ -79,7 +79,8 @@ export class DebuggerSession {
       case 'shot':
         return this.app.shot({
           path: stringParam(params.path),
-          backend: screenshotBackendParam(params.backend)
+          backend: screenshotBackendParam(params.backend),
+          ref: stringParam(params.ref)
         })
       case 'logs':
         return this.app.getLogs(booleanParam(params.clear) ?? false)

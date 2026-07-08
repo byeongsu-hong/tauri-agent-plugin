@@ -260,6 +260,8 @@ pub struct AgentScreenshotRequest {
     pub window: Option<String>,
     pub path: Option<String>,
     pub backend: Option<ScreenshotBackend>,
+    #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
+    pub ref_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -1080,6 +1082,7 @@ mod tests {
             window: Some("main".into()),
             path: Some("/tmp/app.png".into()),
             backend: Some(ScreenshotBackend::Native),
+            ref_id: None,
         };
         assert_eq!(
             serde_json::to_value(screenshot).unwrap(),

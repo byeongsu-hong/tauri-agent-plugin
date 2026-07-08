@@ -199,11 +199,23 @@ pub async fn agent_screenshot<R: Runtime>(
 ) -> Result<String> {
     let path = request.path.clone();
     let result = resolve_screenshot(
-        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        effective_screenshot_backend(&request),
         || request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request),
         || capture_native_screenshot_for_request(&app, &request),
     )?;
     screenshot_return_value(result, path.as_deref())
+}
+
+/// Element-scoped captures (`ref`) are a DOM-backend concept — the native
+/// backend grabs whole-window pixels and cannot crop to a semantic ref — so any
+/// request carrying a `ref` is served by the DOM backend regardless of the
+/// requested `backend`.
+pub(crate) fn effective_screenshot_backend(request: &AgentScreenshotRequest) -> ScreenshotBackend {
+    if request.ref_id.is_some() {
+        ScreenshotBackend::Dom
+    } else {
+        request.backend.unwrap_or(ScreenshotBackend::Dom)
+    }
 }
 
 /// Shared Dom/Native/Auto screenshot dispatch for both the direct command and

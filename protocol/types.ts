@@ -163,6 +163,12 @@ export interface PressParams extends WindowTarget {
 export interface ShotParams extends WindowTarget {
   path?: string
   backend?: ScreenshotBackend
+  /**
+   * Snapshot-local ref to scope the capture to a single element's subtree.
+   * Element scoping is a DOM-backend concept, so a request that carries `ref`
+   * is served by the DOM backend regardless of the requested `backend`.
+   */
+  ref?: string
 }
 
 export interface LogsParams extends WindowTarget {

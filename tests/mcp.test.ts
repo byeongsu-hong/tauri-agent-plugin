@@ -106,7 +106,10 @@ describe('tauri-agent MCP server', () => {
       description: 'Keyboard modifiers held while dispatching the key.'
     })
     const shotTool = list.result.tools.find((tool: { name: string }) => tool.name === 'tauri_shot')
-    expect(shotTool.description).toBe('Capture a DOM or native screenshot.')
+    expect(shotTool.description).toBe(
+      'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).'
+    )
+    expect(shotTool.inputSchema.properties.ref).toEqual({ type: 'string', description: 'Snapshot-local ref such as @3.' })
     expect(shotTool.inputSchema.properties.backend).toEqual({
       type: 'string',
       enum: ['dom', 'native', 'auto'],

@@ -165,7 +165,7 @@ async function executeTool(
       }
       return client.call('press', { ...pick(args, ['window', 'ref', 'modifiers']), key: stringField(args, 'key') })
     case 'tauri_shot':
-      return client.call('shot', pick(args, ['window', 'path', 'backend']))
+      return client.call('shot', pick(args, ['window', 'path', 'backend', 'ref']))
     case 'tauri_logs':
       return callFollowableEntries(client, 'logs', args)
     case 'tauri_events':
@@ -368,7 +368,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
-  tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot.', schema(['window', 'path', 'backend'])),
+  tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).', schema(['window', 'path', 'backend', 'ref'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),

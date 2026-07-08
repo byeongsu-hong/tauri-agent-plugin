@@ -325,6 +325,28 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('scopes a screenshot to a single element ref', () => {
+    document.body.innerHTML = '<main><button>Keep me</button><p>excluded paragraph</p></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const snapshot = instrumentation.snapshot()
+      const ref = [...snapshot.refs.keys()][0]
+      const scoped = instrumentation.screenshot({ ref })
+      expect(scoped.mime).toBe('image/svg+xml')
+      const decoded = Buffer.from(scoped.dataUrl!.split(',')[1], 'base64').toString('utf8')
+      expect(decoded).toContain('Keep me')
+      expect(decoded).not.toContain('excluded paragraph')
+
+      // A full-page capture still includes everything.
+      const full = instrumentation.screenshot()
+      const fullDecoded = Buffer.from(full.dataUrl!.split(',')[1], 'base64').toString('utf8')
+      expect(fullDecoded).toContain('excluded paragraph')
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('waits for a JS predicate and for the network to go idle', async () => {
     document.body.innerHTML = '<main><p>loading</p></main>'
     const instrumentation = new WebviewAgentInstrumentation()

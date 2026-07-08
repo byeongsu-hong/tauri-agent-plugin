@@ -15,6 +15,7 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resolveRef,
   scrollRef,
   selectRef,
   snapshotDocument,
@@ -355,7 +356,10 @@ export class StaticHtmlAppAdapter {
       throw new Error('native screenshot backend requires a live Tauri window')
     }
     const path = options.path
-    const screenshot = screenshotDocument(this.dom.window.document, { path })
+    const element = options.ref
+      ? resolveRef(options.ref, snapshotDocument(this.dom.window.document).refs)
+      : undefined
+    const screenshot = screenshotDocument(this.dom.window.document, { path, element })
     const result = path
       ? { path, mime: screenshot.mime, width: screenshot.width, height: screenshot.height }
       : screenshot

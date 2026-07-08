@@ -210,6 +210,8 @@ export interface AgentScreenshotRequest {
   window?: string
   path?: string
   backend?: ScreenshotOptions['backend']
+  /** Snapshot-local ref to scope the capture to a single element (forces the DOM backend). */
+  ref?: string
 }
 
 export interface AgentLogRequest extends LogsParams {
