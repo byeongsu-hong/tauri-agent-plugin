@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   blurRef,
   clickRef,
@@ -10,6 +10,7 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resetRefRegistry,
   resolveRef,
   selectRef,
   scrollRef,
@@ -17,6 +18,12 @@ import {
 } from '../guest-js/semantic-tree'
 
 describe('snapshotDocument', () => {
+  // Ref numbering is process-global and never auto-resets in production, so each
+  // test declares its own fresh surface explicitly rather than relying on any
+  // reset heuristic.
+  beforeEach(() => resetRefRegistry())
+
+
   it('formats a compact semantic tree with snapshot-local refs and useful state', () => {
     document.body.innerHTML = `
       <main aria-label="Ducktape">
@@ -109,6 +116,26 @@ describe('snapshotDocument', () => {
     // Alpha's @1 left the tree, so it is rejected distinctly rather than
     // resolving to whatever now sits at that position.
     expect(() => resolveRef('@1')).toThrow('stale ref @1')
+  })
+
+  it('never recycles a handle across a full turnover on a persistent surface', () => {
+    document.body.innerHTML = '<main><button>Alpha</button><button>Beta</button></main>'
+    const first = snapshotDocument(document)
+    expect([...first.refs.keys()]).toEqual(['@1', '@2'])
+
+    // Replace the entire body — a client-side route change, no new surface
+    // created. Numbering does NOT reset, so the fresh buttons get fresh handles
+    // (@3, @4), never the recycled @1/@2 that an old cached ref could collide
+    // with. This is the wrong-element guarantee across a page turnover.
+    document.body.innerHTML = '<main><button>Gamma</button><button>Delta</button></main>'
+    const second = snapshotDocument(document)
+    expect([...second.refs.keys()]).toEqual(['@3', '@4'])
+    expect(inspectRef('@3').name).toBe('Gamma')
+    expect(inspectRef('@4').name).toBe('Delta')
+
+    // The old handles are permanently retired, never pointing at Gamma/Delta.
+    expect(() => resolveRef('@1')).toThrow('stale ref @1')
+    expect(() => resolveRef('@2')).toThrow('stale ref @2')
   })
 
   it('scopes snapshots and fails stale refs clearly', () => {

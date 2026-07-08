@@ -25,14 +25,22 @@ check` green, `cargo fmt`/`clippy -D warnings`/`test` green.
   CLI/MCP self-contained re-tree flow (24 sites re-run `tree` before each action)
   and 324 ref assertions across 13 test files — refs are now bound to element
   identity: a given element keeps its `@n` across re-snapshots of the same
-  document, and numbers are never reused for a different element. This closes the
-  whole wrong-element bug class (`tree → find → click @5` can never resolve `@5`
-  to a *different* element after a mutation) with the `@n` format unchanged, and
-  it coexists with the re-tree flow (an unchanged DOM keeps the caller's ref
-  valid). A ref whose element left the latest tree — removed, detached, or
-  filtered — is absent from `currentRefs` and rejected with a distinct stale
-  error. Numbering restarts per fresh surface (a new document or a fully
-  turned-over body). Zero test churn; a regression test locks the mutation case.
+  document, and a number is **never reused** for a different element — the
+  process-global counter only ever climbs and production snapshotting never
+  auto-resets. This closes the whole wrong-element bug class (`tree → find →
+  click @5` can never resolve `@5` to a *different* element, even across a full
+  page turnover or route change: a departed `@5` stays permanently stale rather
+  than being recycled) with the `@n` format unchanged, and it coexists with the
+  re-tree flow (an unchanged DOM keeps the caller's ref valid). A ref whose
+  element left the latest tree — removed, detached, or filtered — is absent from
+  `currentRefs` and rejected with a distinct stale error. Numbering restarts only
+  at a *deliberate* fresh surface: `StaticHtmlAppAdapter.create()` (each isolated
+  jsdom / self-contained `html`-per-call request) resets via the sole explicit
+  `resetRefRegistry()`, which is safe because refs never span two `create()`
+  calls. The earlier turnover-*heuristic* reset was removed — guessing when a
+  surface is "fresh" was itself what could recycle a number onto the wrong
+  element. Regression tests lock both the within-surface mutation case and the
+  across-turnover no-recycle guarantee.
 - **WS3 Release — DONE.** Dual licenses, CI workflow (live at
   `.github/workflows/ci.yml`), packaging metadata, `check:rust`, CHANGELOG,
   `jsdom` demoted to a lazy dynamic import (phase 3).

@@ -31,40 +31,30 @@ interface RenderState {
   verbose: boolean
 }
 
-// Refs are element-identity-stable, not snapshot-local: a given element keeps
-// the same `@n` across re-snapshots of the same document. This closes the
-// wrong-element bug class — `tree → find → click @5` can never resolve `@5` to a
-// *different* element after a mutation, because `@5` is bound to one element for
-// the life of the document. A ref whose element left the latest tree (removed,
-// detached, or filtered out) is simply absent from `currentRefs` and rejected
-// with a distinct stale error, so callers re-snapshot instead of acting blind.
+// Refs are element-identity-stable and never reused: a given element keeps the
+// same `@n` for the life of the process, and a number is never handed to a
+// second element — the counter only ever climbs. This closes the wrong-element
+// bug class outright. `tree → find → click @5` can never resolve `@5` to a
+// *different* element, even across a full page turnover or document swap: the
+// counter does not reset, so a departed `@5` stays permanently stale rather than
+// being recycled for whatever renders next. A ref whose element left the latest
+// tree (removed, detached, or filtered out) is absent from `currentRefs` and
+// rejected with a distinct stale error, so callers re-snapshot instead of acting
+// blind. New surfaces simply continue numbering (`@842`, not `@1`);
+// `resetRefRegistry()` is the sole, explicit way to restart.
 let currentRefs = new Map<string, Element>()
 let refCounter = 0
 let stickyRefs = new WeakMap<Element, string>()
-let lastDocument: Document | undefined
 
-// Restart ref numbering for a genuinely fresh surface: a different document (the
-// static adapter swaps `globalThis.document`) or the same document after its
-// tracked elements all detached (a re-rendered page or a fresh test body). This
-// keeps a live session's refs stable while giving each new page a clean `@1`.
-function resetRefsIfFreshSurface(doc: Document | null): void {
-  const documentChanged = doc !== lastDocument
-  const turnedOver = ![...currentRefs.values()].some((element) => element.isConnected)
-  if (documentChanged || turnedOver) {
-    refCounter = 0
-    stickyRefs = new WeakMap<Element, string>()
-  }
-  if (doc) {
-    lastDocument = doc
-  }
-}
-
-/** Clear the shared ref registry. Exposed for tests that need a clean surface. */
+/**
+ * Clear the shared ref registry — the sole, explicit reset. Used by tests and by
+ * callers that deliberately begin a fresh session. Production snapshotting never
+ * resets on its own, so a handle is never silently recycled onto a new element.
+ */
 export function resetRefRegistry(): void {
   currentRefs = new Map<string, Element>()
   refCounter = 0
   stickyRefs = new WeakMap<Element, string>()
-  lastDocument = undefined
 }
 
 const REF_ROLES = new Set([
@@ -102,10 +92,6 @@ export function snapshotDocument(root: ParentNode = document, options: SnapshotO
   if (!target) {
     return finish({ refs: new Map(), lines: [], verbose: options.mode === 'verbose' })
   }
-
-  const documentForTarget =
-    target instanceof Document ? target : (target.ownerDocument as Document | null)
-  resetRefsIfFreshSurface(documentForTarget)
 
   const start = target instanceof Document ? target.body : target
   const state: RenderState = {

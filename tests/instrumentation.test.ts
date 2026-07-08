@@ -1,8 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { WebviewAgentInstrumentation } from '../guest-js/instrumentation'
+import { resetRefRegistry } from '../guest-js/semantic-tree'
 
 describe('WebviewAgentInstrumentation', () => {
+  // Ref numbering is process-global and never auto-resets in production; give
+  // each test a fresh surface explicitly.
+  beforeEach(() => resetRefRegistry())
+
+
   it('captures trees, actions, logs, events, state probes, waits, and recordings', async () => {
     const originalHref = window.location.href
     localStorage.clear()
@@ -284,9 +290,12 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.install()
     try {
       document.body.innerHTML = '<main aria-label="x"><button>Go</button></main>'
-      instrumentation.snapshot()
-      document.body.innerHTML = '' // detach the button that @1 points at
-      expect(() => instrumentation.action({ action: 'click', ref: '@1' })).toThrow(/detached/)
+      // Capture the button's actual ref rather than assuming @1: install() primes
+      // a baseline snapshot, so the counter value here is incidental. What the
+      // test asserts is the detached-vs-stale distinction, not the number.
+      const [buttonRef] = [...instrumentation.snapshot().refs.keys()]
+      document.body.innerHTML = '' // detach the button that ref points at
+      expect(() => instrumentation.action({ action: 'click', ref: buttonRef })).toThrow(/detached/)
     } finally {
       instrumentation.dispose()
     }

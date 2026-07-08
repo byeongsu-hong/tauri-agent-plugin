@@ -18,6 +18,7 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resetRefRegistry,
   resolveRef,
   scrollRef,
   selectRef,
@@ -141,6 +142,12 @@ export class StaticHtmlAppAdapter {
       runScripts: 'outside-only',
       url: options.url ?? 'tauri-agent://static'
     })
+    // A newly created isolated jsdom is a deliberate fresh surface: restart ref
+    // numbering at @1. Refs never span two `create()` calls (each is its own
+    // session / self-contained html-per-call request), so this cannot recycle a
+    // handle onto the wrong element — unlike re-snapshotting a live surface,
+    // which never resets so its handles stay stable and are never reused.
+    resetRefRegistry()
     return new StaticHtmlAppAdapter(dom, options)
   }
 
