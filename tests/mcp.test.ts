@@ -78,6 +78,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_type',
       'tauri_select',
       'tauri_check',
+      'tauri_upload',
       'tauri_inspect',
       'tauri_eval',
       'tauri_press',
@@ -506,6 +507,28 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(checked.result.structuredContent).toEqual({ ok: true })
+
+    const uploaded = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 11,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_upload',
+              arguments: {
+                html: '<main><input type="file" aria-label="Attachment"></main>',
+                ref: '@1',
+                files: [{ name: 'notes.txt', text: 'hello' }]
+              }
+            }
+          })
+        )
+      )
+    )
+
+    expect(uploaded.result.structuredContent).toEqual({ ok: true })
 
     const hovered = JSON.parse(
       await requiredResponse(

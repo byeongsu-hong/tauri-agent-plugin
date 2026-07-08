@@ -61,6 +61,7 @@ import type {
   StorageResult,
   StreamParams,
   StreamResult,
+  UploadFileDescriptor,
   WindowAction,
   WindowBounds,
   WaitParams,
@@ -114,6 +115,7 @@ export {
   type StorageResult,
   type StreamParams,
   type StreamResult,
+  type UploadFileDescriptor,
   type WindowAction,
   type WindowBounds,
   type WaitParams,
@@ -176,6 +178,12 @@ export interface AgentCheckRequest {
   window?: string
   ref: string
   checked?: boolean
+}
+
+export interface AgentUploadRequest {
+  window?: string
+  ref: string
+  files: UploadFileDescriptor[]
 }
 
 export interface AgentHoverRequest {
@@ -334,6 +342,11 @@ export async function agentType(request: AgentTypeRequest): Promise<void> {
 /** Set the checked state of a checkbox/radio ref (toggles when `checked` omitted). */
 export async function agentCheck(request: AgentCheckRequest): Promise<void> {
   return invokeAgentCommand('plugin:agent|agent_check', { request: withCurrentWindow(request) })
+}
+
+/** Set synthetic files on an `<input type="file">` ref and fire input/change. */
+export async function agentUpload(request: AgentUploadRequest): Promise<void> {
+  return invokeAgentCommand('plugin:agent|agent_upload', { request: withCurrentWindow(request) })
 }
 
 /** Dispatch pointer hover events over a ref. */

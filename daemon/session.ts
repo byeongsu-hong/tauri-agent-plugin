@@ -1,6 +1,7 @@
 import type { StaticHtmlAppAdapter } from './static-app'
 import type { AgentMethod, KeyModifier, RecordingEntry, ScreenshotBackend, WindowAction } from '../protocol/types'
 import { isRecordableMethod } from '../protocol/json-rpc'
+import type { UploadFile } from '../guest-js/semantic-tree'
 
 export class DebuggerSession {
   private recording = false
@@ -67,6 +68,8 @@ export class DebuggerSession {
         return this.app.select(requiredString(params.ref, 'ref'), stringParam(params.value))
       case 'check':
         return this.app.check(requiredString(params.ref, 'ref'), booleanParam(params.checked))
+      case 'upload':
+        return this.app.upload(requiredString(params.ref, 'ref'), uploadFilesParam(params.files))
       case 'inspect':
         return this.app.inspect(requiredString(params.ref, 'ref'))
       case 'eval':
@@ -194,6 +197,26 @@ function numberParam(value: unknown): number | undefined {
 
 function booleanParam(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
+}
+
+function uploadFilesParam(value: unknown): UploadFile[] {
+  if (!Array.isArray(value)) {
+    throw new Error('upload requires a files array')
+  }
+  return value.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('each upload file must be an object with a name')
+    }
+    const record = entry as Record<string, unknown>
+    if (typeof record.name !== 'string' || record.name.length === 0) {
+      throw new Error('each upload file requires a name')
+    }
+    return {
+      name: record.name,
+      type: typeof record.type === 'string' ? record.type : undefined,
+      text: typeof record.text === 'string' ? record.text : undefined
+    }
+  })
 }
 
 function keyModifiersParam(value: unknown): KeyModifier[] | undefined {

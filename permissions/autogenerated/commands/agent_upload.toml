@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-upload"
+description = "Enables the agent_upload command without any pre-configured scope."
+commands.allow = ["agent_upload"]
+
+[[permission]]
+identifier = "deny-agent-upload"
+description = "Denies the agent_upload command without any pre-configured scope."
+commands.deny = ["agent_upload"]

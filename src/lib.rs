@@ -156,6 +156,7 @@ impl Builder {
                 commands::agent_type,
                 commands::agent_select,
                 commands::agent_check,
+                commands::agent_upload,
                 commands::agent_hover,
                 commands::agent_focus,
                 commands::agent_blur,

@@ -325,6 +325,27 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('sets synthetic files on a file input ref', () => {
+    document.body.innerHTML = '<main><input type="file" aria-label="Attachment" /></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const snapshot = instrumentation.snapshot()
+      const ref = [...snapshot.refs.keys()][0]
+      let changes = 0
+      document.querySelector('input')?.addEventListener('change', () => {
+        changes++
+      })
+      instrumentation.upload(ref, [{ name: 'notes.txt', text: 'hello' }])
+      const input = document.querySelector('input') as HTMLInputElement
+      expect(input.files?.length).toBe(1)
+      expect(input.files?.[0]?.name).toBe('notes.txt')
+      expect(changes).toBe(1)
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('scopes a screenshot to a single element ref', () => {
     document.body.innerHTML = '<main><button>Keep me</button><p>excluded paragraph</p></main>'
     const instrumentation = new WebviewAgentInstrumentation()

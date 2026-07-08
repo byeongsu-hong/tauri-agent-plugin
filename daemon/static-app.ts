@@ -20,8 +20,10 @@ import {
   selectRef,
   snapshotDocument,
   typeRef,
+  uploadRef,
   type DragOptions,
   type ScrollOptions,
+  type UploadFile,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
@@ -326,6 +328,13 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     selectRef(ref, value)
     this.pushEvent('select', value === undefined ? { ref } : { ref, value })
+    return { ok: true }
+  }
+
+  async upload(ref: string, files: UploadFile[]): Promise<{ ok: true }> {
+    this.bindGlobals()
+    uploadRef(ref, files)
+    this.pushEvent('upload', { ref, files })
     return { ok: true }
   }
 

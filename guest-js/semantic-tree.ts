@@ -290,6 +290,68 @@ export function typeRef(ref: string, text: string): void {
   element.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+export interface UploadFile {
+  name: string
+  type?: string
+  /** Text content of the synthetic file (base64 is out of scope; agents upload small fixtures). */
+  text?: string
+}
+
+export function uploadRef(ref: string, files: UploadFile[]): void {
+  const element = resolveRef(ref)
+  if (!(element instanceof HTMLInputElement) || element.type !== 'file') {
+    throw new Error(`${normalizeRef(ref)} is not a file input`)
+  }
+  if (files.length === 0) {
+    throw new Error('upload requires at least one file')
+  }
+  const view = element.ownerDocument.defaultView
+  const FileCtor = view?.File ?? (typeof File !== 'undefined' ? File : undefined)
+  if (!FileCtor) {
+    throw new Error('File constructor unavailable in this environment')
+  }
+  const fileObjects = files.map(
+    (file) => new FileCtor([file.text ?? ''], file.name, file.type ? { type: file.type } : undefined)
+  )
+  assignInputFiles(element, view, fileObjects)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function assignInputFiles(
+  input: HTMLInputElement,
+  view: (Window & typeof globalThis) | null,
+  files: File[]
+): void {
+  const DataTransferCtor = view?.DataTransfer ?? (typeof DataTransfer !== 'undefined' ? DataTransfer : undefined)
+  if (DataTransferCtor) {
+    try {
+      const transfer = new DataTransferCtor()
+      for (const file of files) {
+        transfer.items.add(file)
+      }
+      input.files = transfer.files
+      return
+    } catch {
+      // Fall through to the shadow-property path (e.g. jsdom without a writable
+      // files setter).
+    }
+  }
+  Object.defineProperty(input, 'files', { configurable: true, value: makeFileList(files) })
+}
+
+function makeFileList(files: File[]): FileList {
+  const list = {
+    length: files.length,
+    item: (index: number): File | null => files[index] ?? null,
+    [Symbol.iterator]: (): IterableIterator<File> => files[Symbol.iterator]()
+  } as unknown as FileList & Record<number, File>
+  files.forEach((file, index) => {
+    list[index] = file
+  })
+  return list
+}
+
 export function selectRef(ref: string, value?: string): void {
   const element = resolveRef(ref)
   if (element instanceof HTMLOptionElement) {

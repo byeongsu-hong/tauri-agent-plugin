@@ -13,8 +13,8 @@ use crate::models::{
     AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
     AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
     AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
-    AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend, WindowAction,
-    WindowInfo,
+    AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend,
+    WindowAction, WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -138,6 +138,16 @@ pub async fn agent_check<R: Runtime>(
     request: AgentCheckRequest,
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "check", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_upload<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentUploadRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "upload", &request)?;
     Ok(())
 }
 

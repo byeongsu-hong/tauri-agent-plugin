@@ -154,6 +154,9 @@ async function executeTool(
     case 'tauri_check':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('check', pick(args, ['window', 'ref', 'checked']))
+    case 'tauri_upload':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('upload', pick(args, ['window', 'ref', 'files']))
     case 'tauri_inspect':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('inspect', pick(args, ['window', 'ref']))
@@ -344,6 +347,19 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   },
   present: { type: 'boolean', description: 'expect: whether the target must exist (default true).' },
   hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' },
+  files: {
+    type: 'array',
+    description: 'upload: synthetic files to set on a file input.',
+    items: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'File name.' },
+        type: { type: 'string', description: 'MIME type (optional).' },
+        text: { type: 'string', description: 'Text content of the file (optional).' }
+      },
+      required: ['name']
+    }
+  },
   fn: { type: 'string', description: 'wait: JS expression polled until it evaluates truthy (waitForFunction).' },
   networkIdle: { type: 'boolean', description: 'wait: resolve once no fetch/XHR request is in flight for idleMs.' },
   idleMs: { type: 'number', description: 'wait: quiet window for networkIdle in milliseconds (default 500).' }
@@ -365,6 +381,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_type', 'Type', 'Type text into a snapshot-local ref with realistic per-key events.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
+  tool('tauri_upload', 'Upload', 'Set synthetic files on a snapshot-local file input ref.', schema(['window', 'scope', 'ref', 'files'], ['ref', 'files'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),

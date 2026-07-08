@@ -15,6 +15,7 @@ permissions = [
   "allow-agent-type",
   "allow-agent-select",
   "allow-agent-check",
+  "allow-agent-upload",
   "allow-agent-hover",
   "allow-agent-focus",
   "allow-agent-blur",

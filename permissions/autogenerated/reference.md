@@ -13,6 +13,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-type`
 - `allow-agent-select`
 - `allow-agent-check`
+- `allow-agent-upload`
 - `allow-agent-hover`
 - `allow-agent-focus`
 - `allow-agent-blur`
@@ -741,6 +742,32 @@ Enables the agent_type command without any pre-configured scope.
 <td>
 
 Denies the agent_type command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-upload`
+
+</td>
+<td>
+
+Enables the agent_upload command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-upload`
+
+</td>
+<td>
+
+Denies the agent_upload command without any pre-configured scope.
 
 </td>
 </tr>

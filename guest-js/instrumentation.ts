@@ -18,10 +18,12 @@ import {
   selectRef,
   snapshotDocument,
   typeRef,
+  uploadRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions,
-  type SnapshotResult
+  type SnapshotResult,
+  type UploadFile
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult, evalResultAsync } from './evaluate'
@@ -80,9 +82,22 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'drag' | 'fill' | 'type' | 'press' | 'select' | 'check'
+  action:
+    | 'click'
+    | 'hover'
+    | 'focus'
+    | 'blur'
+    | 'scroll'
+    | 'drag'
+    | 'fill'
+    | 'type'
+    | 'press'
+    | 'select'
+    | 'check'
+    | 'upload'
   ref?: string
   toRef?: string
+  files?: UploadFile[]
   /**
    * Internal payload slot. `serializableAction` maps it onto the canonical wire
    * param for the method: `text` for fill/type, `key` for press, `value` for
@@ -385,6 +400,14 @@ export class WebviewAgentInstrumentation {
     return { ok: true }
   }
 
+  upload(ref: string, files: UploadFile[]): { ok: true } {
+    uploadRef(ref, files)
+    const action: InstrumentedAction = { action: 'upload', ref, files }
+    this.pushEvent('upload', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
   type(ref: string, text: string): { ok: true } {
     typeRef(ref, text)
     const action: InstrumentedAction = { action: 'type', ref, value: text }
@@ -663,6 +686,8 @@ export class WebviewAgentInstrumentation {
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
       case 'check':
         return this.check(requiredStringParam(params, 'ref'), booleanParam(params, 'checked') ?? true)
+      case 'upload':
+        return this.upload(requiredStringParam(params, 'ref'), uploadFilesParam(params))
       case 'inspect':
         return this.inspect(requiredStringParam(params, 'ref'))
       case 'eval':
@@ -1002,6 +1027,7 @@ function serializableAction(action: InstrumentedAction): Record<string, unknown>
     params[canonicalPayloadKey(action.action)] = action.value
   }
   if (action.checked !== undefined) params.checked = action.checked
+  if (action.files) params.files = action.files
   if (action.modifiers?.length) params.modifiers = action.modifiers
   if (action.x !== undefined) params.x = action.x
   if (action.y !== undefined) params.y = action.y
@@ -1036,6 +1062,27 @@ function requiredStringParam(params: Record<string, unknown>, key: string): stri
     throw new Error(`missing required param: ${key}`)
   }
   return value
+}
+
+function uploadFilesParam(params: Record<string, unknown>): UploadFile[] {
+  const raw = params.files
+  if (!Array.isArray(raw)) {
+    throw new Error('upload requires a files array')
+  }
+  return raw.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('each upload file must be an object with a name')
+    }
+    const record = entry as Record<string, unknown>
+    if (typeof record.name !== 'string' || record.name.length === 0) {
+      throw new Error('each upload file requires a name')
+    }
+    return {
+      name: record.name,
+      type: typeof record.type === 'string' ? record.type : undefined,
+      text: typeof record.text === 'string' ? record.text : undefined
+    }
+  })
 }
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {

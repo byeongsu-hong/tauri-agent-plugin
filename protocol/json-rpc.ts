@@ -15,6 +15,7 @@ export const AGENT_METHODS = [
   'fill',
   'select',
   'check',
+  'upload',
   'inspect',
   'eval',
   'press',
@@ -59,7 +60,8 @@ export const RECORDABLE_METHODS = [
   'type',
   'press',
   'select',
-  'check'
+  'check',
+  'upload'
 ] as const satisfies readonly AgentMethod[]
 
 const RECORDABLE_METHOD_SET = new Set<string>(RECORDABLE_METHODS)

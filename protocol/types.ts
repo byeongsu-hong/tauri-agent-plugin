@@ -15,6 +15,7 @@ export type AgentMethod =
   | 'fill'
   | 'select'
   | 'check'
+  | 'upload'
   | 'inspect'
   | 'eval'
   | 'press'
@@ -126,6 +127,18 @@ export interface SelectParams extends RefActionParams {
 /** Toggle a checkbox/radio. Canonical payload param is `checked`. */
 export interface CheckParams extends RefActionParams {
   checked?: boolean
+}
+
+/** A synthetic file for {@link UploadParams}. Only text content is supported. */
+export interface UploadFileDescriptor {
+  name: string
+  type?: string
+  text?: string
+}
+
+/** Set files on an `<input type="file">` ref and fire input/change. */
+export interface UploadParams extends RefActionParams {
+  files: UploadFileDescriptor[]
 }
 
 export interface FocusParams extends RefActionParams {}

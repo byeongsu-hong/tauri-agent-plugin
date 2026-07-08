@@ -398,6 +398,23 @@ program
   })
 
 program
+  .command('upload')
+  .description('Set synthetic files on a snapshot-local file input ref.')
+  .argument('<ref>', 'snapshot-local file input ref, for example @2')
+  .argument('<files...>', 'file specs as name or name=text')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+  .action(async (ref: string, files: string[], options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', treeParams(options))
+    printJson(await client.call('upload', refActionParams(options, ref, { files: parseUploadFiles(files) })))
+  })
+
+program
   .command('inspect')
   .description('Inspect a snapshot-local ref.')
   .argument('<ref>', 'snapshot-local ref, for example @4')
@@ -906,6 +923,15 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
+}
+
+function parseUploadFiles(specs: string[]): Array<{ name: string; text?: string }> {
+  return specs.map((spec) => {
+    const separator = spec.indexOf('=')
+    return separator === -1
+      ? { name: spec }
+      : { name: spec.slice(0, separator), text: spec.slice(separator + 1) }
+  })
 }
 
 function parseBoolean(value: string): boolean {
