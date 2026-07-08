@@ -196,6 +196,37 @@ pub struct AgentCheckRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentUploadFile {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUploadRequest {
+    pub window: Option<String>,
+    #[serde(rename = "ref")]
+    pub ref_id: String,
+    pub files: Vec<AgentUploadFile>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDialogRequest {
+    pub window: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accept: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_text: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentHoverRequest {
     pub window: Option<String>,
     #[serde(rename = "ref")]
@@ -260,6 +291,8 @@ pub struct AgentScreenshotRequest {
     pub window: Option<String>,
     pub path: Option<String>,
     pub backend: Option<ScreenshotBackend>,
+    #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
+    pub ref_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -467,6 +500,12 @@ pub struct AgentWaitRequest {
     pub name: Option<String>,
     pub timeout_ms: Option<u64>,
     pub state: Option<String>,
+    #[serde(rename = "fn", default, skip_serializing_if = "Option::is_none")]
+    pub wait_fn: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_idle: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -687,6 +726,9 @@ mod tests {
             name: None,
             timeout_ms: Some(250),
             state: None,
+            wait_fn: None,
+            network_idle: None,
+            idle_ms: None,
         };
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
@@ -709,6 +751,9 @@ mod tests {
             name: Some("Forge".into()),
             timeout_ms: Some(250),
             state: Some("absent".into()),
+            wait_fn: None,
+            network_idle: None,
+            idle_ms: None,
         };
         assert_eq!(
             serde_json::to_value(semantic_wait).unwrap(),
@@ -1068,6 +1113,7 @@ mod tests {
             window: Some("main".into()),
             path: Some("/tmp/app.png".into()),
             backend: Some(ScreenshotBackend::Native),
+            ref_id: None,
         };
         assert_eq!(
             serde_json::to_value(screenshot).unwrap(),

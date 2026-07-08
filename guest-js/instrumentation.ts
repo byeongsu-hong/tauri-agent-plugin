@@ -13,23 +13,27 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resolveRef,
   scrollRef,
   selectRef,
   snapshotDocument,
   typeRef,
+  uploadRef,
   type DragOptions,
   type ScrollOptions,
   type SnapshotOptions,
-  type SnapshotResult
+  type SnapshotResult,
+  type UploadFile
 } from './semantic-tree'
 import { screenshotDocument, type ScreenshotOptions } from './screenshot'
-import { evalResultAsync } from './evaluate'
+import { evalResult, evalResultAsync } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
 import { SemanticStream } from './semantic-stream'
 import {
   applyCookieAction,
   applyStorageAction,
   cookieResult,
+  DialogController,
   errorLikeMessage,
   hasSemanticWaitFilter,
   locationResult,
@@ -39,13 +43,16 @@ import {
   storageArea,
   storageResult,
   waitEventDetail,
-  waitTimeoutMessage
+  waitTimeoutMessage,
+  type DialogWindow
 } from './dom-actions'
 import type {
   AgentEvent,
   AgentMethod,
   CookieParams,
   CookieResult,
+  DialogParams,
+  DialogResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -79,9 +86,27 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'drag' | 'fill' | 'press' | 'select' | 'check'
+  action:
+    | 'click'
+    | 'hover'
+    | 'focus'
+    | 'blur'
+    | 'scroll'
+    | 'drag'
+    | 'fill'
+    | 'type'
+    | 'press'
+    | 'select'
+    | 'check'
+    | 'upload'
   ref?: string
   toRef?: string
+  files?: UploadFile[]
+  /**
+   * Internal payload slot. `serializableAction` maps it onto the canonical wire
+   * param for the method: `text` for fill/type, `key` for press, `value` for
+   * select — so recorded entries replay unchanged on any surface.
+   */
   value?: string
   checked?: boolean
   modifiers?: KeyModifier[]
@@ -150,7 +175,15 @@ export class WebviewAgentInstrumentation {
   private recordingEntries: RecordingEntry[] = []
   private readonly originalConsole = new Map<ConsoleMethod, typeof console.info>()
   private originalFetch?: typeof window.fetch
+  private originalXhrOpen?: XMLHttpRequest['open']
+  private originalXhrSend?: XMLHttpRequest['send']
+  private originalWebSocket?: typeof WebSocket
   private networkEntryId = 0
+  /** In-flight fetch/XHR count, used by `wait({ networkIdle: true })`. */
+  private inFlightRequests = 0
+  private readonly dialogController = new DialogController((entry) =>
+    this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
+  )
   private semanticStream?: SemanticStream
   private streamObserver?: MutationObserver
   private readonly handleRuntimeError = (event: ErrorEvent): void => {
@@ -175,7 +208,10 @@ export class WebviewAgentInstrumentation {
       }
     }
     this.installNetworkCapture()
+    this.installXhrCapture()
+    this.installWebSocketCapture()
     this.installIpcCapture()
+    this.dialogController.install(window as unknown as DialogWindow)
     this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
     window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
@@ -192,11 +228,22 @@ export class WebviewAgentInstrumentation {
       window.fetch = this.originalFetch
       this.originalFetch = undefined
     }
+    if (this.originalXhrOpen && this.originalXhrSend && typeof window.XMLHttpRequest === 'function') {
+      window.XMLHttpRequest.prototype.open = this.originalXhrOpen
+      window.XMLHttpRequest.prototype.send = this.originalXhrSend
+      this.originalXhrOpen = undefined
+      this.originalXhrSend = undefined
+    }
+    if (this.originalWebSocket) {
+      window.WebSocket = this.originalWebSocket
+      this.originalWebSocket = undefined
+    }
     if (this.ipcTarget && this.originalInvoke) {
       this.ipcTarget.invoke = this.originalInvoke
       this.ipcTarget = undefined
       this.originalInvoke = undefined
     }
+    this.dialogController.dispose(window as unknown as DialogWindow)
     window.removeEventListener('error', this.handleRuntimeError, { capture: true })
     window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     this.streamObserver?.disconnect()
@@ -362,9 +409,19 @@ export class WebviewAgentInstrumentation {
     return { ok: true }
   }
 
+  upload(ref: string, files: UploadFile[]): { ok: true } {
+    uploadRef(ref, files)
+    const action: InstrumentedAction = { action: 'upload', ref, files }
+    this.pushEvent('upload', serializableAction(action))
+    this.recordAction(action)
+    return { ok: true }
+  }
+
   type(ref: string, text: string): { ok: true } {
     typeRef(ref, text)
-    this.pushEvent('type', { ref, text })
+    const action: InstrumentedAction = { action: 'type', ref, value: text }
+    this.pushEvent('type', serializableAction(action))
+    this.recordAction(action)
     return { ok: true }
   }
 
@@ -377,8 +434,14 @@ export class WebviewAgentInstrumentation {
     const timeoutMs = options.timeoutMs ?? 1000
     const wantAbsent = options.state === 'absent'
     const semantic = hasSemanticWaitFilter(options)
+    if (options.networkIdle) {
+      return this.waitForNetworkIdle(options, startedAt, timeoutMs)
+    }
+    if (options.fn) {
+      return this.waitForFunction(options.fn, startedAt, timeoutMs)
+    }
     if (!semantic && !options.text) {
-      throw new Error('wait requires text or semantic filter')
+      throw new Error('wait requires text, a semantic filter, fn, or networkIdle')
     }
 
     while (Date.now() - startedAt <= timeoutMs) {
@@ -399,6 +462,43 @@ export class WebviewAgentInstrumentation {
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
     throw new Error(waitTimeoutMessage(options, wantAbsent, semantic))
+  }
+
+  private async waitForFunction(fn: string, startedAt: number, timeoutMs: number): Promise<WaitResult> {
+    while (Date.now() - startedAt <= timeoutMs) {
+      let raw: unknown = window.eval(fn)
+      if (raw && typeof (raw as { then?: unknown }).then === 'function') {
+        raw = await (raw as PromiseLike<unknown>)
+      }
+      if (raw) {
+        this.pushEvent('wait', { fn })
+        return { matched: true, text: evalResult(raw).text }
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error(`wait timed out for function: ${fn}`)
+  }
+
+  private async waitForNetworkIdle(
+    options: WaitParams,
+    startedAt: number,
+    timeoutMs: number
+  ): Promise<WaitResult> {
+    const idleMs = options.idleMs ?? 500
+    let idleSince: number | undefined = this.inFlightRequests === 0 ? startedAt : undefined
+    while (Date.now() - startedAt <= timeoutMs) {
+      if (this.inFlightRequests === 0) {
+        idleSince ??= Date.now()
+        if (Date.now() - idleSince >= idleMs) {
+          this.pushEvent('wait', { networkIdle: true })
+          return { matched: true, text: '' }
+        }
+      } else {
+        idleSince = undefined
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error('wait timed out: network did not become idle')
   }
 
   state(key?: string): unknown {
@@ -426,6 +526,9 @@ export class WebviewAgentInstrumentation {
   }
 
   screenshot(options: ScreenshotOptions = {}): ScreenshotResult {
+    if (options.ref) {
+      return screenshotDocument(document, { ...options, element: resolveRef(options.ref) })
+    }
     return screenshotDocument(document, options)
   }
 
@@ -592,6 +695,8 @@ export class WebviewAgentInstrumentation {
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
       case 'check':
         return this.check(requiredStringParam(params, 'ref'), booleanParam(params, 'checked') ?? true)
+      case 'upload':
+        return this.upload(requiredStringParam(params, 'ref'), uploadFilesParam(params))
       case 'inspect':
         return this.inspect(requiredStringParam(params, 'ref'))
       case 'eval':
@@ -604,7 +709,7 @@ export class WebviewAgentInstrumentation {
           modifiers: modifierListParam(params, 'modifiers')
         })
       case 'shot':
-        return this.screenshot({ path: stringParam(params, 'path') })
+        return this.screenshot({ path: stringParam(params, 'path'), ref: stringParam(params, 'ref') })
       case 'logs':
         return this.logs({ clear: booleanParam(params, 'clear') ?? false })
       case 'events':
@@ -638,7 +743,10 @@ export class WebviewAgentInstrumentation {
           role: stringParam(params, 'role'),
           name: stringParam(params, 'name'),
           timeoutMs: numberParam(params, 'timeoutMs'),
-          state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined
+          state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined,
+          fn: stringParam(params, 'fn'),
+          networkIdle: booleanParam(params, 'networkIdle'),
+          idleMs: numberParam(params, 'idleMs')
         })
       case 'expect':
         return this.expect({
@@ -652,6 +760,12 @@ export class WebviewAgentInstrumentation {
         })
       case 'state':
         return this.state(stringParam(params, 'key'))
+      case 'dialog':
+        return this.dialog({
+          action: dialogActionParam(params),
+          accept: booleanParam(params, 'accept'),
+          promptText: stringParam(params, 'promptText')
+        })
       case 'record':
         return this.record(recordActionParam(params))
       case 'stream':
@@ -705,6 +819,7 @@ export class WebviewAgentInstrumentation {
         entry.requestBodySize = requestBodySize
       }
       pushCapped(this.capturedNetwork, entry)
+      this.inFlightRequests++
 
       try {
         const response = await originalFetch.call(window, input, init)
@@ -720,8 +835,143 @@ export class WebviewAgentInstrumentation {
         entry.error = error instanceof Error ? error.message : String(error)
         finishNetworkEntry(entry, startedAtMs)
         throw error
+      } finally {
+        this.inFlightRequests = Math.max(0, this.inFlightRequests - 1)
       }
     }
+  }
+
+  private installXhrCapture(): void {
+    const XHR = window.XMLHttpRequest
+    if (typeof XHR !== 'function' || this.originalXhrOpen) {
+      return
+    }
+    const capture = this
+    const openImpl = XHR.prototype.open
+    const sendImpl = XHR.prototype.send
+    this.originalXhrOpen = openImpl
+    this.originalXhrSend = sendImpl
+
+    XHR.prototype.open = function (
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      method: string,
+      url: string | URL,
+      ...rest: unknown[]
+    ) {
+      this.__agentNet = { method: String(method ?? 'GET').toUpperCase(), url: resolveUrl(String(url)) }
+      // eslint-disable-next-line prefer-rest-params
+      return (openImpl as (...args: unknown[]) => void).apply(this, [method, url, ...rest])
+    } as XMLHttpRequest['open']
+
+    XHR.prototype.send = function (
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      body?: Document | XMLHttpRequestBodyInit | null
+    ) {
+      const meta = this.__agentNet
+      if (meta && !isTauriIpcUrl(meta.url)) {
+        const startedAtMs = Date.now()
+        const entry: NetworkEntry = {
+          id: `xhr-${++capture.networkEntryId}`,
+          type: 'xhr',
+          method: meta.method,
+          url: meta.url,
+          startedAt: new Date(startedAtMs).toISOString()
+        }
+        const requestBodySize = bodySize(body as BodyInit | null | undefined)
+        if (requestBodySize !== undefined) {
+          entry.requestBodySize = requestBodySize
+        }
+        pushCapped(capture.capturedNetwork, entry)
+        capture.inFlightRequests++
+        let settled = false
+        const settle = (): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          capture.inFlightRequests = Math.max(0, capture.inFlightRequests - 1)
+        }
+        this.addEventListener('loadend', () => {
+          entry.status = this.status
+          entry.ok = this.status >= 200 && this.status < 400
+          const responseBodySize = xhrResponseSize(this)
+          if (responseBodySize !== undefined) {
+            entry.responseBodySize = responseBodySize
+          }
+          finishNetworkEntry(entry, startedAtMs)
+          settle()
+        })
+        this.addEventListener('error', () => {
+          entry.error = 'XHR network error'
+          finishNetworkEntry(entry, startedAtMs)
+          settle()
+        })
+      }
+      return (sendImpl as (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) => void).call(
+        this,
+        body
+      )
+    } as XMLHttpRequest['send']
+  }
+
+  private installWebSocketCapture(): void {
+    const OriginalWebSocket = window.WebSocket
+    if (typeof OriginalWebSocket !== 'function' || this.originalWebSocket) {
+      return
+    }
+    const capture = this
+    this.originalWebSocket = OriginalWebSocket
+
+    const Wrapped = function (this: unknown, url: string | URL, protocols?: string | string[]): WebSocket {
+      const socket =
+        protocols === undefined ? new OriginalWebSocket(url) : new OriginalWebSocket(url, protocols)
+      const startedAtMs = Date.now()
+      const entry: NetworkEntry = {
+        id: `ws-${++capture.networkEntryId}`,
+        type: 'websocket',
+        method: 'GET',
+        url: resolveUrl(typeof url === 'string' ? url : url.href),
+        startedAt: new Date(startedAtMs).toISOString()
+      }
+      let sent = 0
+      let received = 0
+      pushCapped(capture.capturedNetwork, entry)
+      socket.addEventListener('open', () => {
+        entry.status = 101
+        entry.ok = true
+      })
+      socket.addEventListener('message', (event: MessageEvent) => {
+        received += messageSize(event.data)
+        entry.responseBodySize = received
+      })
+      socket.addEventListener('error', () => {
+        entry.error = 'WebSocket error'
+        finishNetworkEntry(entry, startedAtMs)
+      })
+      socket.addEventListener('close', () => {
+        finishNetworkEntry(entry, startedAtMs)
+      })
+      const originalSend = socket.send.bind(socket)
+      socket.send = (data: string | ArrayBufferLike | Blob | ArrayBufferView): void => {
+        sent += messageSize(data)
+        entry.requestBodySize = sent
+        originalSend(data)
+      }
+      return socket
+    } as unknown as typeof WebSocket
+    // Preserve the readyState constants and prototype so `instanceof` and
+    // `WebSocket.OPEN` keep working through the wrapper.
+    Wrapped.prototype = OriginalWebSocket.prototype
+    const statics = Wrapped as unknown as Record<'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED', number>
+    statics.CONNECTING = OriginalWebSocket.CONNECTING
+    statics.OPEN = OriginalWebSocket.OPEN
+    statics.CLOSING = OriginalWebSocket.CLOSING
+    statics.CLOSED = OriginalWebSocket.CLOSED
+    window.WebSocket = Wrapped
+  }
+
+  dialog(params: DialogParams = {}): DialogResult {
+    return this.dialogController.handle(params)
   }
 
   private installIpcCapture(): void {
@@ -789,12 +1039,30 @@ function serializableAction(action: InstrumentedAction): Record<string, unknown>
   const params: Record<string, unknown> = {}
   if (action.ref) params.ref = action.ref
   if (action.toRef) params.toRef = action.toRef
-  if (action.value) params.value = action.value
+  if (action.value !== undefined && action.value.length > 0) {
+    // Emit the canonical wire param for this method rather than the internal
+    // `value` slot, so recordings replay through the daemon/protocol executors
+    // (which read `text`/`key`/`value` per method) without translation.
+    params[canonicalPayloadKey(action.action)] = action.value
+  }
   if (action.checked !== undefined) params.checked = action.checked
+  if (action.files) params.files = action.files
   if (action.modifiers?.length) params.modifiers = action.modifiers
   if (action.x !== undefined) params.x = action.x
   if (action.y !== undefined) params.y = action.y
   return params
+}
+
+function canonicalPayloadKey(action: InstrumentedAction['action']): 'text' | 'key' | 'value' {
+  switch (action) {
+    case 'fill':
+    case 'type':
+      return 'text'
+    case 'press':
+      return 'key'
+    default:
+      return 'value'
+  }
 }
 
 function controlName(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {
@@ -813,6 +1081,27 @@ function requiredStringParam(params: Record<string, unknown>, key: string): stri
     throw new Error(`missing required param: ${key}`)
   }
   return value
+}
+
+function uploadFilesParam(params: Record<string, unknown>): UploadFile[] {
+  const raw = params.files
+  if (!Array.isArray(raw)) {
+    throw new Error('upload requires a files array')
+  }
+  return raw.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('each upload file must be an object with a name')
+    }
+    const record = entry as Record<string, unknown>
+    if (typeof record.name !== 'string' || record.name.length === 0) {
+      throw new Error('each upload file requires a name')
+    }
+    return {
+      name: record.name,
+      type: typeof record.type === 'string' ? record.type : undefined,
+      text: typeof record.text === 'string' ? record.text : undefined
+    }
+  })
 }
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
@@ -856,6 +1145,11 @@ function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | u
 function recordActionParam(params: Record<string, unknown>): 'start' | 'stop' | 'get' | 'clear' {
   const action = params.action
   return action === 'start' || action === 'stop' || action === 'clear' ? action : 'get'
+}
+
+function dialogActionParam(params: Record<string, unknown>): 'get' | 'set' | 'clear' {
+  const action = params.action
+  return action === 'set' || action === 'clear' ? action : 'get'
 }
 
 function fetchMethod(input: RequestInfo | URL, init?: RequestInit): string {
@@ -903,6 +1197,51 @@ function bodySize(body: BodyInit | ReadableStream<Uint8Array> | null | undefined
     return body.size
   }
   return undefined
+}
+
+function resolveUrl(url: string): string {
+  try {
+    return new URL(url, window.location.href).href
+  } catch {
+    return url
+  }
+}
+
+function xhrResponseSize(xhr: XMLHttpRequest): number | undefined {
+  try {
+    if (typeof xhr.responseText === 'string') {
+      return new TextEncoder().encode(xhr.responseText).byteLength
+    }
+  } catch {
+    // responseText throws for non-text responseTypes; fall through.
+  }
+  const response: unknown = xhr.response
+  if (typeof response === 'string') {
+    return new TextEncoder().encode(response).byteLength
+  }
+  if (response instanceof ArrayBuffer) {
+    return response.byteLength
+  }
+  if (typeof Blob !== 'undefined' && response instanceof Blob) {
+    return response.size
+  }
+  return undefined
+}
+
+function messageSize(data: unknown): number {
+  if (typeof data === 'string') {
+    return new TextEncoder().encode(data).byteLength
+  }
+  if (data instanceof ArrayBuffer) {
+    return data.byteLength
+  }
+  if (ArrayBuffer.isView(data)) {
+    return data.byteLength
+  }
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return data.size
+  }
+  return 0
 }
 
 async function clonedResponseBodySize(response: Response): Promise<number | undefined> {

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-dialog"
+description = "Enables the agent_dialog command without any pre-configured scope."
+commands.allow = ["agent_dialog"]
+
+[[permission]]
+identifier = "deny-agent-dialog"
+description = "Denies the agent_dialog command without any pre-configured scope."
+commands.deny = ["agent_dialog"]

@@ -29,6 +29,7 @@ interface RenderState {
   nextRef: number
   refs: Map<string, Element>
   lines: string[]
+  verbose: boolean
 }
 
 let currentRefs = new Map<string, Element>()
@@ -66,14 +67,15 @@ const STRUCTURAL_ROLES = new Set([
 export function snapshotDocument(root: ParentNode = document, options: SnapshotOptions = {}): SnapshotResult {
   const target = options.scope ? root.querySelector(options.scope) : root
   if (!target) {
-    return finish({ nextRef: 1, refs: new Map(), lines: [] })
+    return finish({ nextRef: 1, refs: new Map(), lines: [], verbose: options.mode === 'verbose' })
   }
 
   const start = target instanceof Document ? target.body : target
   const state: RenderState = {
     nextRef: 1,
     refs: new Map(),
-    lines: []
+    lines: [],
+    verbose: options.mode === 'verbose'
   }
 
   if (start instanceof Element) {
@@ -288,6 +290,68 @@ export function typeRef(ref: string, text: string): void {
   element.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+export interface UploadFile {
+  name: string
+  type?: string
+  /** Text content of the synthetic file (base64 is out of scope; agents upload small fixtures). */
+  text?: string
+}
+
+export function uploadRef(ref: string, files: UploadFile[]): void {
+  const element = resolveRef(ref)
+  if (!(element instanceof HTMLInputElement) || element.type !== 'file') {
+    throw new Error(`${normalizeRef(ref)} is not a file input`)
+  }
+  if (files.length === 0) {
+    throw new Error('upload requires at least one file')
+  }
+  const view = element.ownerDocument.defaultView
+  const FileCtor = view?.File ?? (typeof File !== 'undefined' ? File : undefined)
+  if (!FileCtor) {
+    throw new Error('File constructor unavailable in this environment')
+  }
+  const fileObjects = files.map(
+    (file) => new FileCtor([file.text ?? ''], file.name, file.type ? { type: file.type } : undefined)
+  )
+  assignInputFiles(element, view, fileObjects)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function assignInputFiles(
+  input: HTMLInputElement,
+  view: (Window & typeof globalThis) | null,
+  files: File[]
+): void {
+  const DataTransferCtor = view?.DataTransfer ?? (typeof DataTransfer !== 'undefined' ? DataTransfer : undefined)
+  if (DataTransferCtor) {
+    try {
+      const transfer = new DataTransferCtor()
+      for (const file of files) {
+        transfer.items.add(file)
+      }
+      input.files = transfer.files
+      return
+    } catch {
+      // Fall through to the shadow-property path (e.g. jsdom without a writable
+      // files setter).
+    }
+  }
+  Object.defineProperty(input, 'files', { configurable: true, value: makeFileList(files) })
+}
+
+function makeFileList(files: File[]): FileList {
+  const list = {
+    length: files.length,
+    item: (index: number): File | null => files[index] ?? null,
+    [Symbol.iterator]: (): IterableIterator<File> => files[Symbol.iterator]()
+  } as unknown as FileList & Record<number, File>
+  files.forEach((file, index) => {
+    list[index] = file
+  })
+  return list
+}
+
 export function selectRef(ref: string, value?: string): void {
   const element = resolveRef(ref)
   if (element instanceof HTMLOptionElement) {
@@ -405,10 +469,40 @@ function appendLine(element: Element, role: string, depth: number, state: Render
     role,
     name ? `"${escapeName(name)}"` : null,
     count == null ? null : String(count),
-    ...flags
+    ...flags,
+    ...(state.verbose ? verboseAnnotations(element) : [])
   ].filter(Boolean)
 
   state.lines.push(`${'  '.repeat(depth)}${parts.join(' ')}`)
+}
+
+// Extra per-line detail rendered only in `verbose` mode. These are pure
+// annotations on the same lines the compact tree emits, so ref numbering and
+// tree shape stay identical between modes — a `@3` means the same element either
+// way, and a caller can switch modes without invalidating refs.
+function verboseAnnotations(element: Element): string[] {
+  const extra: string[] = []
+  const value = controlValue(element).value
+  if (value !== undefined && value.length > 0) {
+    extra.push(`value="${escapeName(truncate(value, 80))}"`)
+  }
+  const id = element.getAttribute('id')
+  if (id) {
+    extra.push(`#${id}`)
+  }
+  const testid = element.getAttribute('data-testid') ?? element.getAttribute('data-test-id')
+  if (testid) {
+    extra.push(`[testid=${testid}]`)
+  }
+  const type = element.getAttribute('type')
+  if (type) {
+    extra.push(`type=${type}`)
+  }
+  return extra
+}
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max - 1)}…`
 }
 
 function assignRef(element: Element, state: RenderState): string {

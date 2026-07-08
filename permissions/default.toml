@@ -15,6 +15,7 @@ permissions = [
   "allow-agent-type",
   "allow-agent-select",
   "allow-agent-check",
+  "allow-agent-upload",
   "allow-agent-hover",
   "allow-agent-focus",
   "allow-agent-blur",
@@ -33,6 +34,7 @@ permissions = [
   "allow-agent-wait",
   "allow-agent-expect",
   "allow-agent-state",
+  "allow-agent-dialog",
   "allow-agent-record",
   "allow-agent-stream",
 ]

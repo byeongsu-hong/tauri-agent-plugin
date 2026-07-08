@@ -15,6 +15,7 @@ export const AGENT_METHODS = [
   'fill',
   'select',
   'check',
+  'upload',
   'inspect',
   'eval',
   'press',
@@ -31,13 +32,43 @@ export const AGENT_METHODS = [
   'expect',
   'state',
   'record',
-  'stream'
+  'stream',
+  'dialog'
 ] as const satisfies readonly AgentMethod[]
 
 const AGENT_METHOD_SET = new Set<string>(AGENT_METHODS)
 
 export function isAgentMethod(method: string): method is AgentMethod {
   return AGENT_METHOD_SET.has(method)
+}
+
+/**
+ * Mutating/interaction methods captured into a recording so a session can be
+ * replayed. Single-sourced here so the guest instrumentation and the daemon
+ * session record exactly the same set — they had drifted (the daemon omitted
+ * `type`/`select`/`check`). Recorded params use the canonical wire names
+ * (`text` for fill/type, `key` for press, `value` for select) so a recording
+ * captured on one surface replays on any other.
+ */
+export const RECORDABLE_METHODS = [
+  'click',
+  'hover',
+  'focus',
+  'blur',
+  'scroll',
+  'drag',
+  'fill',
+  'type',
+  'press',
+  'select',
+  'check',
+  'upload'
+] as const satisfies readonly AgentMethod[]
+
+const RECORDABLE_METHOD_SET = new Set<string>(RECORDABLE_METHODS)
+
+export function isRecordableMethod(method: string): method is (typeof RECORDABLE_METHODS)[number] {
+  return RECORDABLE_METHOD_SET.has(method)
 }
 
 export function createRequest<TParams>(

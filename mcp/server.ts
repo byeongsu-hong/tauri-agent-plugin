@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
-import { DebuggerClient, SocketTransport } from '../daemon/client'
-import { readEndpointRegistry } from '../daemon/endpoint'
-import { createDebuggerRpcHandler, InProcessTransport } from '../daemon/server'
-import { DebuggerSession } from '../daemon/session'
-import { StaticHtmlAppAdapter } from '../daemon/static-app'
+import type { DebuggerClient } from '../daemon/client'
+import { connectDebuggerClient, pollFollow } from '../daemon/connect'
 import type { AgentMethod } from '../protocol/types'
 
 const MCP_PROTOCOL_VERSION = '2025-11-25'
@@ -154,6 +151,9 @@ async function executeTool(
     case 'tauri_check':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('check', pick(args, ['window', 'ref', 'checked']))
+    case 'tauri_upload':
+      await client.call('tree', pick(args, ['window', 'scope']))
+      return client.call('upload', pick(args, ['window', 'ref', 'files']))
     case 'tauri_inspect':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('inspect', pick(args, ['window', 'ref']))
@@ -165,7 +165,7 @@ async function executeTool(
       }
       return client.call('press', { ...pick(args, ['window', 'ref', 'modifiers']), key: stringField(args, 'key') })
     case 'tauri_shot':
-      return client.call('shot', pick(args, ['window', 'path', 'backend']))
+      return client.call('shot', pick(args, ['window', 'path', 'backend', 'ref']))
     case 'tauri_logs':
       return callFollowableEntries(client, 'logs', args)
     case 'tauri_events':
@@ -183,7 +183,18 @@ async function executeTool(
     case 'tauri_wait':
       return client.call(
         'wait',
-        pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])
+        pick(args, [
+          'window',
+          'text',
+          'scope',
+          'role',
+          'name',
+          'timeoutMs',
+          'state',
+          'fn',
+          'networkIdle',
+          'idleMs'
+        ])
       )
     case 'tauri_expect':
       return client.call(
@@ -192,6 +203,8 @@ async function executeTool(
       )
     case 'tauri_state':
       return client.call('state', pick(args, ['window', 'key']))
+    case 'tauri_dialog':
+      return client.call('dialog', pick(args, ['window', 'action', 'accept', 'promptText']))
     case 'tauri_record':
       return client.call('record', pick(args, ['window', 'action']))
     case 'tauri_stream':
@@ -210,56 +223,24 @@ async function callFollowableEntries(
     return client.call(method, pick(args, ['window', 'follow', 'clear']))
   }
 
-  const pollMs = Math.max(1, numberField(args, 'pollMs') ?? 250)
-  const timeoutMs = Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
-  const startedAt = Date.now()
   const entries: unknown[] = []
-  let emitted = 0
-
-  while (true) {
-    const result = await client.call(method, { ...windowParams(args), follow: true })
-    if (!Array.isArray(result)) {
-      throw new Error(`${method} follow expected an array result`)
-    }
-
-    const start = result.length < emitted ? 0 : emitted
-    entries.push(...result.slice(start))
-    emitted = result.length
-
-    if (Date.now() - startedAt >= timeoutMs) {
-      return entries
-    }
-    await sleep(nextPollDelay(startedAt, pollMs, timeoutMs))
+  const poll = pollFollow(client, method, windowParams(args), {
+    pollMs: numberField(args, 'pollMs') ?? 250,
+    timeoutMs: Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
+  })
+  for await (const fresh of poll) {
+    entries.push(...fresh)
   }
+  return entries
 }
 
 async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
-  const port = numberField(args, 'port')
-  if (port !== undefined) {
-    return new DebuggerClient(
-      new SocketTransport({ port, host: stringField(args, 'host', '127.0.0.1') })
-    )
-  }
-
-  const app = stringField(args, 'app')
-  if (app) {
-    const endpoint = await readEndpointRegistry(app)
-    if (!isProcessAlive(endpoint.pid)) {
-      throw new Error(`debugger endpoint for app ${app} is stale: pid ${endpoint.pid} is not running`)
-    }
-    return new DebuggerClient(
-      new SocketTransport(
-        endpoint.transport === 'tcp'
-          ? { port: endpoint.port, host: endpoint.host }
-          : { path: endpoint.path }
-      ),
-      endpoint.token
-    )
-  }
-
-  const html = await htmlFromArgs(args)
-  const session = new DebuggerSession(new StaticHtmlAppAdapter({ html }))
-  return new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
+  return connectDebuggerClient({
+    port: numberField(args, 'port'),
+    host: stringField(args, 'host', '127.0.0.1'),
+    app: stringField(args, 'app'),
+    resolveHtml: () => htmlFromArgs(args)
+  })
 }
 
 async function htmlFromArgs(args: ToolCallArgs): Promise<string> {
@@ -332,7 +313,25 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
     description: 'wait target state: present (default, appear) or absent (disappear).'
   },
   present: { type: 'boolean', description: 'expect: whether the target must exist (default true).' },
-  hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' }
+  accept: { type: 'boolean', description: 'dialog: whether confirm/prompt are accepted (default true).' },
+  promptText: { type: 'string', description: 'dialog: text returned by accepted prompt dialogs.' },
+  hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' },
+  files: {
+    type: 'array',
+    description: 'upload: synthetic files to set on a file input.',
+    items: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'File name.' },
+        type: { type: 'string', description: 'MIME type (optional).' },
+        text: { type: 'string', description: 'Text content of the file (optional).' }
+      },
+      required: ['name']
+    }
+  },
+  fn: { type: 'string', description: 'wait: JS expression polled until it evaluates truthy (waitForFunction).' },
+  networkIdle: { type: 'boolean', description: 'wait: resolve once no fetch/XHR request is in flight for idleMs.' },
+  idleMs: { type: 'number', description: 'wait: quiet window for networkIdle in milliseconds (default 500).' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -351,10 +350,11 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_type', 'Type', 'Type text into a snapshot-local ref with realistic per-key events.', schema(['window', 'scope', 'ref', 'text'], ['ref', 'text'])),
   tool('tauri_select', 'Select', 'Select an option in a snapshot-local select control.', schema(['window', 'scope', 'ref', 'value'], ['ref'])),
   tool('tauri_check', 'Check', 'Set checked state on a snapshot-local checkbox or radio ref.', schema(['window', 'scope', 'ref', 'checked'], ['ref'])),
+  tool('tauri_upload', 'Upload', 'Set synthetic files on a snapshot-local file input ref.', schema(['window', 'scope', 'ref', 'files'], ['ref', 'files'])),
   tool('tauri_inspect', 'Inspect', 'Inspect a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
-  tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot.', schema(['window', 'path', 'backend'])),
+  tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).', schema(['window', 'path', 'backend', 'ref'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
@@ -362,9 +362,10 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
-  tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear, or disappear with state=absent.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])),
+  tool('tauri_wait', 'Wait', 'Wait for text/a semantic element to appear (or disappear with state=absent), a JS expression to become truthy (fn), or the network to go idle (networkIdle).', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state', 'fn', 'networkIdle', 'idleMs'])),
   tool('tauri_expect', 'Expect', 'Assert a semantic target exists (or is absent) and matches value/state; errors on mismatch.', schema(['window', 'scope', 'role', 'name', 'text', 'present', 'value', 'hasState'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
+  tool('tauri_dialog', 'Dialog', 'Auto-handle alert/confirm/prompt: set accept/promptText policy up front, then read what fired.', dialogSchema()),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
   tool(
     'tauri_stream',
@@ -410,6 +411,16 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
 function storageSchema(): JsonSchema {
   const inputSchema = schema(['window', 'area', 'key', 'value'])
   inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  return inputSchema
+}
+
+function dialogSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'accept', 'promptText'])
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['get', 'set', 'clear'],
+    description: 'get (default) reads state; set updates the policy; clear empties the log.'
+  }
   return inputSchema
 }
 
@@ -514,14 +525,6 @@ function numberField(value: Record<string, unknown>, field: string): number | un
   return typeof fieldValue === 'number' ? fieldValue : undefined
 }
 
-function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number): number {
-  return Math.max(0, Math.min(pollMs, timeoutMs - (Date.now() - startedAt)))
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function jsonRpcResult(id: string | number, result: unknown): string {
   return JSON.stringify({ jsonrpc: '2.0', id, result })
 }
@@ -536,13 +539,4 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
-  }
 }

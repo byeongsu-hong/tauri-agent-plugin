@@ -65,8 +65,12 @@ fn capture_native_screenshot_impl<R: Runtime>(
     _window: &WebviewWindow<R>,
     _path: Option<&str>,
 ) -> Result<Value> {
+    // The native pixel backend is macOS-only today (see the support matrix in
+    // docs/architecture.md). Use backend "dom" for a portable SVG capture, or
+    // "auto" to try native first and fall back to dom automatically.
     Err(Error::UnsupportedPlatform(
-        "native screenshot backend is only implemented on macOS".into(),
+        "native screenshot backend is only implemented on macOS; use backend \"dom\" or \"auto\""
+            .into(),
     ))
 }
 

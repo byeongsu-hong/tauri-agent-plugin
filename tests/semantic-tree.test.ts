@@ -63,6 +63,28 @@ describe('snapshotDocument', () => {
     expect([...snapshot.refs.keys()]).toEqual(['@1', '@2', '@3', '@4', '@5', '@6', '@7', '@8'])
   })
 
+  it('annotates lines in verbose mode without changing tree shape or refs', () => {
+    document.body.innerHTML = `
+      <main aria-label="Ducktape">
+        <input id="agent-name" data-testid="name" type="text" value="local-worker" aria-label="Agent name" />
+        <button>Forge</button>
+      </main>
+    `
+
+    const compact = snapshotDocument(document, { mode: 'compact' })
+    const verbose = snapshotDocument(document, { mode: 'verbose' })
+
+    // Same elements, same refs — verbose only adds detail to existing lines.
+    expect([...verbose.refs.keys()]).toEqual([...compact.refs.keys()])
+    expect(verbose.text).toBe(
+      [
+        'main "Ducktape"',
+        '@1 textbox "Agent name" value="local-worker" #agent-name [testid=name] type=text',
+        '@2 button "Forge"'
+      ].join('\n')
+    )
+  })
+
   it('scopes snapshots and fails stale refs clearly', () => {
     document.body.innerHTML = `
       <main>

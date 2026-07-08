@@ -1,6 +1,9 @@
 import type {
   CookieParams,
   CookieResult,
+  DialogEntry,
+  DialogParams,
+  DialogResult,
   InspectResult,
   LocationResult,
   StorageParams,
@@ -219,6 +222,98 @@ export function waitTimeoutMessage(options: WaitParams, wantAbsent: boolean, sem
       : `wait timed out: text still present: ${options.text}`
   }
   return semantic ? 'wait timed out for semantic target' : `wait timed out for text: ${options.text}`
+}
+
+/** A window-like target whose native dialog functions can be swapped. */
+export interface DialogWindow {
+  alert: (message?: string) => void
+  confirm: (message?: string) => boolean
+  prompt: (message?: string, defaultValue?: string) => string | null
+}
+
+/**
+ * Non-blocking replacement for native `alert`/`confirm`/`prompt`, shared by the
+ * guest instrumentation and the static jsdom adapter so both auto-handle dialogs
+ * identically. Records what fired and answers per a configurable policy; the
+ * originals are restored on {@link dispose}.
+ */
+export class DialogController {
+  private dialogs: DialogEntry[] = []
+  private policy: { accept: boolean; promptText?: string } = { accept: true }
+  private originals?: Pick<DialogWindow, 'alert' | 'confirm' | 'prompt'>
+
+  constructor(private readonly onEvent?: (entry: DialogEntry) => void) {}
+
+  install(win: DialogWindow): void {
+    if (this.originals) {
+      return
+    }
+    this.originals = { alert: win.alert, confirm: win.confirm, prompt: win.prompt }
+    win.alert = (message?: string): void => {
+      this.record('alert', message, undefined, true)
+    }
+    win.confirm = (message?: string): boolean => {
+      const accepted = this.policy.accept
+      this.record('confirm', message, undefined, accepted)
+      return accepted
+    }
+    win.prompt = (message?: string, defaultValue?: string): string | null => {
+      const fallback = typeof defaultValue === 'string' ? defaultValue : undefined
+      const response = this.policy.accept ? this.policy.promptText ?? fallback ?? '' : null
+      this.record('prompt', message, fallback, response)
+      return response
+    }
+  }
+
+  dispose(win: DialogWindow): void {
+    if (!this.originals) {
+      return
+    }
+    win.alert = this.originals.alert
+    win.confirm = this.originals.confirm
+    win.prompt = this.originals.prompt
+    this.originals = undefined
+  }
+
+  handle(params: DialogParams = {}): DialogResult {
+    const action = params.action ?? 'get'
+    if (action === 'set') {
+      if (params.accept !== undefined) {
+        this.policy.accept = params.accept
+      }
+      if (params.promptText !== undefined) {
+        this.policy.promptText = params.promptText
+      }
+    } else if (action === 'clear') {
+      this.dialogs = []
+    }
+    return {
+      policy: { ...this.policy },
+      dialogs: this.dialogs.map((entry) => ({ ...entry }))
+    }
+  }
+
+  private record(
+    type: DialogEntry['type'],
+    message: unknown,
+    defaultValue: string | undefined,
+    response: string | boolean | null
+  ): void {
+    const entry: DialogEntry = {
+      type,
+      message: typeof message === 'string' ? message : String(message ?? ''),
+      response,
+      timestamp: new Date().toISOString()
+    }
+    if (defaultValue !== undefined) {
+      entry.defaultValue = defaultValue
+    }
+    if (this.dialogs.length >= 1000) {
+      this.dialogs.shift()
+    }
+    this.dialogs.push(entry)
+    this.onEvent?.(entry)
+  }
 }
 
 export function waitEventDetail(options: WaitParams, match: InspectResult): Record<string, unknown> {

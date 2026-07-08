@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { JSDOM } from 'jsdom'
+// `jsdom` is an optional peer, loaded lazily so merely importing this module
+// (e.g. for the client transports it lives beside) never requires it. Only the
+// static `--from-html` adapter needs it, and only when actually instantiated.
+import type { JSDOM } from 'jsdom'
 
 import {
   assertExpectation,
@@ -15,21 +18,25 @@ import {
   hoverRef,
   inspectRef,
   pressKey,
+  resolveRef,
   scrollRef,
   selectRef,
   snapshotDocument,
   typeRef,
+  uploadRef,
   type DragOptions,
   type ScrollOptions,
+  type UploadFile,
   type SnapshotOptions
 } from '../guest-js/semantic-tree'
 import { screenshotDocument } from '../guest-js/screenshot'
-import { evalResultAsync } from '../guest-js/evaluate'
+import { evalResult, evalResultAsync } from '../guest-js/evaluate'
 import { SemanticStream } from '../guest-js/semantic-stream'
 import {
   applyCookieAction,
   applyStorageAction,
   cookieResult,
+  DialogController,
   errorLikeMessage,
   hasSemanticWaitFilter,
   locationResult,
@@ -39,13 +46,16 @@ import {
   storageArea,
   storageResult,
   waitEventDetail,
-  waitTimeoutMessage
+  waitTimeoutMessage,
+  type DialogWindow
 } from '../guest-js/dom-actions'
 import type {
   AgentEvent,
   AgentWindow,
   CookieParams,
   CookieResult,
+  DialogParams,
+  DialogResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -85,6 +95,9 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private readonly dialogController = new DialogController((entry) =>
+    this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
+  )
   private semanticStream: SemanticStream
   private streamObserver?: MutationObserver
   private windowState: AgentWindow
@@ -93,23 +106,42 @@ export class StaticHtmlAppAdapter {
     session: createMemoryStorage()
   }
 
-  constructor(options: StaticHtmlAppOptions) {
+  private constructor(dom: JSDOM, options: StaticHtmlAppOptions) {
     this.label = options.window ?? 'main'
     this.title = options.title ?? 'Tauri App'
     this.url = options.url ?? 'tauri-agent://static'
-    this.dom = new JSDOM(options.html, {
-      pretendToBeVisual: true,
-      runScripts: 'outside-only',
-      url: this.url
-    })
+    this.dom = dom
     this.windowState = this.createInitialWindowState()
     this.bindGlobals()
+    this.dialogController.install(this.dom.window as unknown as DialogWindow)
     this.installRuntimeLogCapture()
     this.semanticStream = new SemanticStream({
       capture: () => snapshotDocument(this.dom.window.document).text
     })
     this.semanticStream.prime()
     this.installSemanticStream()
+  }
+
+  /**
+   * Build a static adapter, lazily loading the optional `jsdom` peer. Throws a
+   * clear, actionable error if it is not installed rather than a bare module
+   * resolution failure.
+   */
+  static async create(options: StaticHtmlAppOptions): Promise<StaticHtmlAppAdapter> {
+    let JSDOMCtor: typeof JSDOM
+    try {
+      ;({ JSDOM: JSDOMCtor } = await import('jsdom'))
+    } catch {
+      throw new Error(
+        "the static HTML adapter (--from-html / html:) requires the optional 'jsdom' package; install it with `npm install jsdom`"
+      )
+    }
+    const dom = new JSDOMCtor(options.html, {
+      pretendToBeVisual: true,
+      runScripts: 'outside-only',
+      url: options.url ?? 'tauri-agent://static'
+    })
+    return new StaticHtmlAppAdapter(dom, options)
   }
 
   async stream(params: StreamParams = {}): Promise<StreamResult> {
@@ -328,6 +360,13 @@ export class StaticHtmlAppAdapter {
     return { ok: true }
   }
 
+  async upload(ref: string, files: UploadFile[]): Promise<{ ok: true }> {
+    this.bindGlobals()
+    uploadRef(ref, files)
+    this.pushEvent('upload', { ref, files })
+    return { ok: true }
+  }
+
   async inspect(ref: string): Promise<InspectResult> {
     this.bindGlobals()
     return inspectRef(ref)
@@ -355,7 +394,10 @@ export class StaticHtmlAppAdapter {
       throw new Error('native screenshot backend requires a live Tauri window')
     }
     const path = options.path
-    const screenshot = screenshotDocument(this.dom.window.document, { path })
+    const element = options.ref
+      ? resolveRef(options.ref, snapshotDocument(this.dom.window.document).refs)
+      : undefined
+    const screenshot = screenshotDocument(this.dom.window.document, { path, element })
     const result = path
       ? { path, mime: screenshot.mime, width: screenshot.width, height: screenshot.height }
       : screenshot
@@ -386,13 +428,25 @@ export class StaticHtmlAppAdapter {
     return stateValue(state, key)
   }
 
+  async dialog(params: DialogParams = {}): Promise<DialogResult> {
+    return this.dialogController.handle(params)
+  }
+
   async wait(options: WaitParams = {}): Promise<WaitResult> {
     const startedAt = Date.now()
     const timeoutMs = options.timeoutMs ?? 1000
     const wantAbsent = options.state === 'absent'
     const semantic = hasSemanticWaitFilter(options)
+    if (options.networkIdle) {
+      // The static jsdom adapter has no live request model, so it is always idle.
+      this.pushEvent('wait', { networkIdle: true })
+      return { matched: true, text: '' }
+    }
+    if (options.fn) {
+      return this.waitForFunction(options.fn, startedAt, timeoutMs)
+    }
     if (!semantic && !options.text) {
-      throw new Error('wait requires text or semantic filter')
+      throw new Error('wait requires text, a semantic filter, fn, or networkIdle')
     }
 
     while (Date.now() - startedAt <= timeoutMs) {
@@ -419,6 +473,22 @@ export class StaticHtmlAppAdapter {
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
     throw new Error(waitTimeoutMessage(options, wantAbsent, semantic))
+  }
+
+  private async waitForFunction(fn: string, startedAt: number, timeoutMs: number): Promise<WaitResult> {
+    while (Date.now() - startedAt <= timeoutMs) {
+      this.bindGlobals()
+      let raw: unknown = this.dom.window.eval(fn)
+      if (raw && typeof (raw as { then?: unknown }).then === 'function') {
+        raw = await (raw as PromiseLike<unknown>)
+      }
+      if (raw) {
+        this.pushEvent('wait', { fn })
+        return { matched: true, text: evalResult(raw).text }
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
+    }
+    throw new Error(`wait timed out for function: ${fn}`)
   }
 
   getLogs(clear = false): LogEntry[] {

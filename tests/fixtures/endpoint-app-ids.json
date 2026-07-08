@@ -1,0 +1,14 @@
+{
+  "comment": "Golden cases for endpoint app-id sanitization. Asserted by BOTH tests/endpoint.test.ts (daemon/endpoint.ts safeAppId) and tests/rust_endpoint.rs (src/endpoint.rs safe_app_id) so the dual implementations cannot drift. `safeAppId` is the trailing path component of the runtime dir.",
+  "cases": [
+    { "appId": "dev.byeongsu.fixture", "safeAppId": "dev.byeongsu.fixture" },
+    { "appId": "a-b_c.d", "safeAppId": "a-b_c.d" },
+    { "appId": "com.example/../secret", "safeAppId": "com.example_.._secret" },
+    { "appId": "a b!c", "safeAppId": "a_b_c" },
+    { "appId": "Weird™Name", "safeAppId": "Weird_Name" },
+    { "appId": "", "safeAppId": "_" },
+    { "appId": ".", "safeAppId": "_" },
+    { "appId": "..", "safeAppId": "__" },
+    { "appId": "...", "safeAppId": "___" }
+  ]
+}

@@ -140,8 +140,8 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'blur', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
-        expect.objectContaining({ kind: 'fill', detail: { ref: '@2', value: 'worker-a' } }),
-        expect.objectContaining({ kind: 'press', detail: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }),
+        expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
+        expect.objectContaining({ kind: 'press', detail: { key: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }),
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
       ])
     )
@@ -247,10 +247,10 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ method: 'blur', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
-        expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
+        expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
-        expect.objectContaining({ method: 'press', params: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } })
+        expect.objectContaining({ method: 'press', params: { key: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]
     })
     expect((window as typeof window & { __lastShortcut?: string }).__lastShortcut).toBe('Enter:true:true:Agent name')
@@ -322,6 +322,190 @@ describe('WebviewAgentInstrumentation', () => {
     } finally {
       instrumentation.dispose()
       delete withInternals.__TAURI_INTERNALS__
+    }
+  })
+
+  it('auto-handles alert/confirm/prompt per policy and records them', () => {
+    document.body.innerHTML = '<main></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      // Default policy accepts confirm and returns the prompt default.
+      expect(window.confirm('proceed?')).toBe(true)
+      expect(window.prompt('name?', 'default')).toBe('default')
+      window.alert('done')
+
+      let result = instrumentation.dialog()
+      expect(result.dialogs.map((entry) => entry.type)).toEqual(['confirm', 'prompt', 'alert'])
+      expect(result.policy).toEqual({ accept: true })
+
+      // Dismiss policy: confirm is false, prompt is null.
+      instrumentation.dialog({ action: 'set', accept: false, promptText: 'forced' })
+      expect(window.confirm('again?')).toBe(false)
+      expect(window.prompt('again?')).toBeNull()
+
+      // Accept again: prompt returns the configured promptText over the default.
+      instrumentation.dialog({ action: 'set', accept: true })
+      expect(window.prompt('q', 'ignored-default')).toBe('forced')
+
+      result = instrumentation.dialog({ action: 'clear' })
+      expect(result.dialogs).toEqual([])
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('sets synthetic files on a file input ref', () => {
+    document.body.innerHTML = '<main><input type="file" aria-label="Attachment" /></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const snapshot = instrumentation.snapshot()
+      const ref = [...snapshot.refs.keys()][0]
+      let changes = 0
+      document.querySelector('input')?.addEventListener('change', () => {
+        changes++
+      })
+      instrumentation.upload(ref, [{ name: 'notes.txt', text: 'hello' }])
+      const input = document.querySelector('input') as HTMLInputElement
+      expect(input.files?.length).toBe(1)
+      expect(input.files?.[0]?.name).toBe('notes.txt')
+      expect(changes).toBe(1)
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('scopes a screenshot to a single element ref', () => {
+    document.body.innerHTML = '<main><button>Keep me</button><p>excluded paragraph</p></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const snapshot = instrumentation.snapshot()
+      const ref = [...snapshot.refs.keys()][0]
+      const scoped = instrumentation.screenshot({ ref })
+      expect(scoped.mime).toBe('image/svg+xml')
+      const decoded = Buffer.from(scoped.dataUrl!.split(',')[1], 'base64').toString('utf8')
+      expect(decoded).toContain('Keep me')
+      expect(decoded).not.toContain('excluded paragraph')
+
+      // A full-page capture still includes everything.
+      const full = instrumentation.screenshot()
+      const fullDecoded = Buffer.from(full.dataUrl!.split(',')[1], 'base64').toString('utf8')
+      expect(fullDecoded).toContain('excluded paragraph')
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('waits for a JS predicate and for the network to go idle', async () => {
+    document.body.innerHTML = '<main><p>loading</p></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const flagged = window as typeof window & { __ready?: boolean }
+      flagged.__ready = false
+      setTimeout(() => {
+        flagged.__ready = true
+      }, 5)
+      await expect(instrumentation.wait({ fn: 'window.__ready === true', timeoutMs: 500 })).resolves.toEqual({
+        matched: true,
+        text: 'true'
+      })
+
+      // No requests are in flight, so networkIdle resolves after the quiet window.
+      await expect(
+        instrumentation.wait({ networkIdle: true, idleMs: 5, timeoutMs: 500 })
+      ).resolves.toEqual({ matched: true, text: '' })
+
+      await expect(instrumentation.wait({ fn: 'false', timeoutMs: 20 })).rejects.toThrow(
+        'wait timed out for function'
+      )
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
+  it('captures XHR and WebSocket activity alongside fetch', () => {
+    class FakeXHR {
+      status = 0
+      responseText = ''
+      private readonly listeners: Record<string, Array<() => void>> = {}
+      open(_method: string, _url: string): void {}
+      send(_body?: unknown): void {}
+      addEventListener(type: string, cb: () => void): void {
+        ;(this.listeners[type] ??= []).push(cb)
+      }
+      emit(type: string): void {
+        for (const cb of this.listeners[type] ?? []) cb()
+      }
+    }
+
+    class FakeWebSocket {
+      static readonly CONNECTING = 0
+      static readonly OPEN = 1
+      static readonly CLOSING = 2
+      static readonly CLOSED = 3
+      readonly sent: unknown[] = []
+      private readonly listeners: Record<string, Array<(event: unknown) => void>> = {}
+      constructor(readonly url: string) {}
+      addEventListener(type: string, cb: (event: unknown) => void): void {
+        ;(this.listeners[type] ??= []).push(cb)
+      }
+      send(data: unknown): void {
+        this.sent.push(data)
+      }
+      emit(type: string, event?: unknown): void {
+        for (const cb of this.listeners[type] ?? []) cb(event)
+      }
+    }
+
+    const realXHR = window.XMLHttpRequest
+    const realWS = window.WebSocket
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const xhr = new window.XMLHttpRequest() as unknown as FakeXHR
+      xhr.open('GET', 'https://example.test/data')
+      xhr.send()
+      xhr.status = 200
+      xhr.responseText = 'hello'
+      xhr.emit('loadend')
+
+      const socket = new window.WebSocket('wss://example.test/socket') as unknown as FakeWebSocket
+      socket.emit('open')
+      socket.send('ping')
+      socket.emit('message', { data: 'pong-response' })
+      socket.emit('close')
+
+      const network = instrumentation.network()
+      const xhrEntry = network.find((entry) => entry.type === 'xhr')
+      expect(xhrEntry).toMatchObject({
+        method: 'GET',
+        url: 'https://example.test/data',
+        status: 200,
+        ok: true,
+        responseBodySize: 5
+      })
+      expect(xhrEntry?.durationMs).toBeGreaterThanOrEqual(0)
+
+      const wsEntry = network.find((entry) => entry.type === 'websocket')
+      expect(wsEntry).toMatchObject({
+        method: 'GET',
+        url: 'wss://example.test/socket',
+        status: 101,
+        ok: true,
+        requestBodySize: 4,
+        responseBodySize: 'pong-response'.length
+      })
+      // The wrapper still forwards sent frames to the underlying socket.
+      expect(socket.sent).toEqual(['ping'])
+    } finally {
+      instrumentation.dispose()
+      window.XMLHttpRequest = realXHR
+      window.WebSocket = realWS
     }
   })
 

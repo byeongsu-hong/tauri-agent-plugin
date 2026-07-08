@@ -5,16 +5,16 @@ use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State, 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
-    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
-    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentIpcEntry, AgentIpcRequest, AgentLocationRequest,
-    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
-    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
-    AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
-    AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend, WindowAction,
-    WindowInfo,
+    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDialogRequest,
+    AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest,
+    AgentExpectResponse, AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
+    AgentInspectRequest, AgentInspectResponse, AgentIpcEntry, AgentIpcRequest,
+    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
+    AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentStorageRequest, AgentStorageResponse, AgentStreamRequest, AgentStreamResponse,
+    AgentTypeRequest, AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
+    ScreenshotBackend, WindowAction, WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -66,16 +66,24 @@ pub async fn agent_action<R: Runtime>(
     bridge: State<'_, AgentBridge>,
     request: AgentActionRequest,
 ) -> Result<()> {
-    if !matches!(&request.action, AgentAction::Press) {
-        match request.ref_id.as_deref() {
-            Some(ref_id) if ref_id.starts_with('@') => {}
-            Some(ref_id) => return Err(Error::StaleRef(ref_id.to_string())),
-            None => {
-                return Err(Error::BridgeUnavailable(
-                    "agent_action requires ref for click and fill".into(),
-                ))
-            }
+    // A malformed ref (not `@N`) is a caller mistake, not a stale snapshot, so
+    // report InvalidParams rather than StaleRef — the two imply different fixes
+    // (correct the argument vs. re-run tree). `press` may omit the ref entirely,
+    // but if it supplies one it must still be well-formed.
+    let requires_ref = !matches!(&request.action, AgentAction::Press);
+    match request.ref_id.as_deref() {
+        Some(ref_id) if ref_id.starts_with('@') => {}
+        Some(ref_id) => {
+            return Err(Error::InvalidParams(format!(
+                "malformed ref {ref_id:?}; refs look like @3 from a tree/find snapshot"
+            )))
         }
+        None if requires_ref => {
+            return Err(Error::InvalidParams(
+                "click and fill require a ref from a tree/find snapshot".into(),
+            ))
+        }
+        None => {}
     }
     let method = match &request.action {
         AgentAction::Click => "click",
@@ -142,6 +150,25 @@ pub async fn agent_check<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn agent_upload<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentUploadRequest,
+) -> Result<()> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "upload", &request)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_dialog<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentDialogRequest,
+) -> Result<Value> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "dialog", &request)
+}
+
+#[tauri::command]
 pub async fn agent_hover<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
@@ -199,11 +226,23 @@ pub async fn agent_screenshot<R: Runtime>(
 ) -> Result<String> {
     let path = request.path.clone();
     let result = resolve_screenshot(
-        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        effective_screenshot_backend(&request),
         || request_bridge(&bridge, &app, request.window.as_deref(), "shot", &request),
         || capture_native_screenshot_for_request(&app, &request),
     )?;
     screenshot_return_value(result, path.as_deref())
+}
+
+/// Element-scoped captures (`ref`) are a DOM-backend concept — the native
+/// backend grabs whole-window pixels and cannot crop to a semantic ref — so any
+/// request carrying a `ref` is served by the DOM backend regardless of the
+/// requested `backend`.
+pub(crate) fn effective_screenshot_backend(request: &AgentScreenshotRequest) -> ScreenshotBackend {
+    if request.ref_id.is_some() {
+        ScreenshotBackend::Dom
+    } else {
+        request.backend.unwrap_or(ScreenshotBackend::Dom)
+    }
 }
 
 /// Shared Dom/Native/Auto screenshot dispatch for both the direct command and
@@ -451,8 +490,75 @@ pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo>
         .into_values()
         .map(|window| window_info(&window))
         .collect::<Vec<_>>();
+    // Multi-webview (opt-in `unstable-multiwebview`): surface any child webview
+    // that is not itself a webview-window so agents can address it by label.
+    // Without the feature this adds nothing and the listing is unchanged.
+    windows.extend(child_webview_infos(app));
     windows.sort_by(|a, b| a.label.cmp(&b.label));
     windows
+}
+
+/// Resolve the event target for a bridge request. A label matching a
+/// webview-window emits to that window; with `unstable-multiwebview`, a label
+/// matching a bare child webview emits to that webview; no label falls back to
+/// the default window. This is what lets bridge methods address a specific
+/// webview within a window.
+pub(crate) fn resolve_bridge_event_target<R: Runtime>(
+    app: &AppHandle<R>,
+    window: Option<&str>,
+) -> Result<tauri::EventTarget> {
+    if let Some(label) = window {
+        if app.webview_windows().contains_key(label) {
+            return Ok(tauri::EventTarget::window(label));
+        }
+        if child_webview_label_exists(app, label) {
+            return Ok(tauri::EventTarget::webview(label));
+        }
+        return Err(Error::WindowNotFound(label.to_string()));
+    }
+    let target = target_webview_window(app, None)?;
+    Ok(tauri::EventTarget::window(target.label().to_string()))
+}
+
+#[cfg(feature = "unstable-multiwebview")]
+fn child_webview_infos<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
+    use tauri::Manager;
+    let window_labels: std::collections::HashSet<String> =
+        app.webview_windows().keys().cloned().collect();
+    app.webviews()
+        .into_iter()
+        .filter(|(label, _)| !window_labels.contains(label))
+        .map(|(_, webview)| {
+            let window = webview.window();
+            WindowInfo {
+                label: webview.label().to_string(),
+                title: window.title().ok(),
+                focused: window.is_focused().unwrap_or(false),
+                visible: window.is_visible().unwrap_or(false),
+                minimized: None,
+                maximized: None,
+                scale_factor: window.scale_factor().ok(),
+                inner_bounds: None,
+                outer_bounds: None,
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "unstable-multiwebview"))]
+fn child_webview_infos<R: Runtime>(_app: &AppHandle<R>) -> Vec<WindowInfo> {
+    Vec::new()
+}
+
+#[cfg(feature = "unstable-multiwebview")]
+pub(crate) fn child_webview_label_exists<R: Runtime>(app: &AppHandle<R>, label: &str) -> bool {
+    use tauri::Manager;
+    app.webviews().contains_key(label)
+}
+
+#[cfg(not(feature = "unstable-multiwebview"))]
+pub(crate) fn child_webview_label_exists<R: Runtime>(_app: &AppHandle<R>, _label: &str) -> bool {
+    false
 }
 
 pub(crate) fn control_window<R: Runtime>(
@@ -559,7 +665,9 @@ fn window_bounds(
 
 pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {
     if let Some(label) = label {
-        if !app.webview_windows().contains_key(label) {
+        // Accept webview-window labels, plus bare child-webview labels when the
+        // `unstable-multiwebview` feature is enabled.
+        if !app.webview_windows().contains_key(label) && !child_webview_label_exists(app, label) {
             return Err(Error::WindowNotFound(label.to_string()));
         }
     }
@@ -686,6 +794,26 @@ mod tests {
             let app = app_with_windows(&["main"]);
             assert!(matches!(
                 target_webview_window(app.handle(), Some("nope")),
+                Err(Error::WindowNotFound(_))
+            ));
+        }
+
+        #[test]
+        fn resolve_bridge_event_target_uses_the_window_for_a_known_label() {
+            let app = app_with_windows(&["main", "about"]);
+            // A known window label resolves without error; the default (None)
+            // resolves to the preferred `main` window.
+            assert!(resolve_bridge_event_target(app.handle(), Some("about")).is_ok());
+            assert!(resolve_bridge_event_target(app.handle(), None).is_ok());
+        }
+
+        #[test]
+        fn resolve_bridge_event_target_rejects_unknown_labels() {
+            let app = app_with_windows(&["main"]);
+            // Without the `unstable-multiwebview` feature there are no child
+            // webviews, so an unknown label is a hard WindowNotFound.
+            assert!(matches!(
+                resolve_bridge_event_target(app.handle(), Some("ghost")),
                 Err(Error::WindowNotFound(_))
             ));
         }

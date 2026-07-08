@@ -13,6 +13,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-type`
 - `allow-agent-select`
 - `allow-agent-check`
+- `allow-agent-upload`
 - `allow-agent-hover`
 - `allow-agent-focus`
 - `allow-agent-blur`
@@ -31,6 +32,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-wait`
 - `allow-agent-expect`
 - `allow-agent-state`
+- `allow-agent-dialog`
 - `allow-agent-record`
 - `allow-agent-stream`
 
@@ -195,6 +197,32 @@ Enables the agent_cookies command without any pre-configured scope.
 <td>
 
 Denies the agent_cookies command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-dialog`
+
+</td>
+<td>
+
+Enables the agent_dialog command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-dialog`
+
+</td>
+<td>
+
+Denies the agent_dialog command without any pre-configured scope.
 
 </td>
 </tr>
@@ -741,6 +769,32 @@ Enables the agent_type command without any pre-configured scope.
 <td>
 
 Denies the agent_type command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-upload`
+
+</td>
+<td>
+
+Enables the agent_upload command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-upload`
+
+</td>
+<td>
+
+Denies the agent_upload command without any pre-configured scope.
 
 </td>
 </tr>

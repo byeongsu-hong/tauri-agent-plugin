@@ -21,7 +21,7 @@ const html = `
 
 describe('DebuggerSession', () => {
   it('attaches, inspects windows, snapshots trees, performs actions, and records activity', async () => {
-    const adapter = new StaticHtmlAppAdapter({ html, title: 'Ducktape' })
+    const adapter = await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' })
     adapter.addLog('info', 'booted')
     const session = new DebuggerSession(adapter)
 
@@ -252,6 +252,8 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
+        expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
+        expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
         expect.objectContaining({ method: 'press', params: { key: 'Enter' } }),
         expect.objectContaining({ method: 'press', params: { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]
@@ -259,7 +261,7 @@ describe('DebuggerSession', () => {
   })
 
   it('reports stale refs and missing wait text clearly', async () => {
-    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html, title: 'Ducktape' }))
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
 
     await session.execute('tree', {})
 
@@ -270,7 +272,7 @@ describe('DebuggerSession', () => {
   })
 
   it('controls static window state and bounds', async () => {
-    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html, title: 'Ducktape' }))
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
 
     await expect(session.execute('window', { action: 'setSize', width: 800, height: 600 })).resolves.toEqual({
       ...staticWindowInfo('Ducktape'),
@@ -293,7 +295,7 @@ describe('DebuggerSession', () => {
 
   it('removes path-scoped cookies visible on the current route', async () => {
     const session = new DebuggerSession(
-      new StaticHtmlAppAdapter({
+      await StaticHtmlAppAdapter.create({
         html: '<main aria-label="Cookies"></main>',
         url: 'https://app.test/agents/list'
       })
@@ -323,7 +325,7 @@ describe('DebuggerSession', () => {
   })
 
   it('captures static runtime errors and unhandled rejections as logs', async () => {
-    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html, title: 'Ducktape' }))
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
 
     await session.execute('eval', {
       code: [
@@ -357,7 +359,7 @@ describe('DebuggerSession', () => {
 
   it('asserts semantic targets with expect', async () => {
     const session = new DebuggerSession(
-      new StaticHtmlAppAdapter({
+      await StaticHtmlAppAdapter.create({
         html: '<main aria-label="Scene"><button disabled>Save</button><input aria-label="Name" value="ada" /></main>'
       })
     )
@@ -384,7 +386,7 @@ describe('DebuggerSession', () => {
   })
 
   it('waits for text and semantic targets to disappear with state=absent', async () => {
-    const adapter = new StaticHtmlAppAdapter({
+    const adapter = await StaticHtmlAppAdapter.create({
       html: '<main aria-label="Scene"><p>Loading</p><button>Cancel</button></main>'
     })
     const session = new DebuggerSession(adapter)
@@ -406,7 +408,7 @@ describe('DebuggerSession', () => {
   })
 
   it('accepts reload, back, and forward navigation actions', async () => {
-    const session = new DebuggerSession(new StaticHtmlAppAdapter({ html: '<main></main>' }))
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' }))
     for (const action of ['reload', 'back', 'forward'] as const) {
       await expect(session.execute('location', { action })).resolves.toMatchObject({
         href: expect.any(String)
@@ -416,7 +418,7 @@ describe('DebuggerSession', () => {
 
   it('types text into a ref character by character', async () => {
     const session = new DebuggerSession(
-      new StaticHtmlAppAdapter({
+      await StaticHtmlAppAdapter.create({
         html: '<main aria-label="Scene"><input aria-label="Name" value="" /></main>'
       })
     )
@@ -437,7 +439,7 @@ describe('DebuggerSession', () => {
 
   it('streams mutation-driven semantic-tree diffs against a cursor', async () => {
     const session = new DebuggerSession(
-      new StaticHtmlAppAdapter({ html: '<main aria-label="Scene"><button>One</button></main>' })
+      await StaticHtmlAppAdapter.create({ html: '<main aria-label="Scene"><button>One</button></main>' })
     )
 
     const base = (await session.execute('stream', {})) as StreamResult

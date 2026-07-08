@@ -78,6 +78,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_type',
       'tauri_select',
       'tauri_check',
+      'tauri_upload',
       'tauri_inspect',
       'tauri_eval',
       'tauri_press',
@@ -92,6 +93,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_wait',
       'tauri_expect',
       'tauri_state',
+      'tauri_dialog',
       'tauri_record',
       'tauri_stream'
     ])
@@ -106,7 +108,10 @@ describe('tauri-agent MCP server', () => {
       description: 'Keyboard modifiers held while dispatching the key.'
     })
     const shotTool = list.result.tools.find((tool: { name: string }) => tool.name === 'tauri_shot')
-    expect(shotTool.description).toBe('Capture a DOM or native screenshot.')
+    expect(shotTool.description).toBe(
+      'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).'
+    )
+    expect(shotTool.inputSchema.properties.ref).toEqual({ type: 'string', description: 'Snapshot-local ref such as @3.' })
     expect(shotTool.inputSchema.properties.backend).toEqual({
       type: 'string',
       enum: ['dom', 'native', 'auto'],
@@ -504,6 +509,28 @@ describe('tauri-agent MCP server', () => {
 
     expect(checked.result.structuredContent).toEqual({ ok: true })
 
+    const uploaded = JSON.parse(
+      await requiredResponse(
+        handler(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 11,
+            method: 'tools/call',
+            params: {
+              name: 'tauri_upload',
+              arguments: {
+                html: '<main><input type="file" aria-label="Attachment"></main>',
+                ref: '@1',
+                files: [{ name: 'notes.txt', text: 'hello' }]
+              }
+            }
+          })
+        )
+      )
+    )
+
+    expect(uploaded.result.structuredContent).toEqual({ ok: true })
+
     const hovered = JSON.parse(
       await requiredResponse(
         handler(
@@ -797,7 +824,7 @@ describe('tauri-agent MCP server', () => {
     const appId = 'dev.byeongsu.fixture'
     const server = createLineJsonRpcServer(
       new DebuggerSession(
-        new StaticHtmlAppAdapter({
+        await StaticHtmlAppAdapter.create({
           title: 'Ducktape',
           html: '<main aria-label="Ducktape"><label>Agent name<input aria-label="Agent name"></label></main>'
         })

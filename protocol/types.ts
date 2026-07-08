@@ -15,6 +15,7 @@ export type AgentMethod =
   | 'fill'
   | 'select'
   | 'check'
+  | 'upload'
   | 'inspect'
   | 'eval'
   | 'press'
@@ -32,6 +33,7 @@ export type AgentMethod =
   | 'state'
   | 'record'
   | 'stream'
+  | 'dialog'
 
 export interface JsonRpcRequest<TParams = unknown> {
   jsonrpc: '2.0'
@@ -104,20 +106,40 @@ export interface RefActionParams extends WindowTarget {
   ref: string
 }
 
+/**
+ * Set a control's value in one shot. Canonical payload param is `text`; the
+ * guest bridge also accepts a legacy `value` alias, but recordings and all
+ * first-party surfaces emit `text`.
+ */
 export interface FillParams extends RefActionParams {
   text: string
 }
 
+/** Type per-keystroke into a control. Canonical payload param is `text`. */
 export interface TypeParams extends RefActionParams {
   text: string
 }
 
+/** Choose a `<select>` option. Canonical payload param is `value`. */
 export interface SelectParams extends RefActionParams {
   value?: string
 }
 
+/** Toggle a checkbox/radio. Canonical payload param is `checked`. */
 export interface CheckParams extends RefActionParams {
   checked?: boolean
+}
+
+/** A synthetic file for {@link UploadParams}. Only text content is supported. */
+export interface UploadFileDescriptor {
+  name: string
+  type?: string
+  text?: string
+}
+
+/** Set files on an `<input type="file">` ref and fire input/change. */
+export interface UploadParams extends RefActionParams {
+  files: UploadFileDescriptor[]
 }
 
 export interface FocusParams extends RefActionParams {}
@@ -142,6 +164,10 @@ export interface EvalParams extends WindowTarget {
   code: string
 }
 
+/**
+ * Dispatch a keyboard press. Canonical payload param is `key`; the guest bridge
+ * also accepts a legacy `value` alias. `ref` optionally focuses a target first.
+ */
 export interface PressParams extends WindowTarget {
   key: string
   ref?: string
@@ -151,6 +177,12 @@ export interface PressParams extends WindowTarget {
 export interface ShotParams extends WindowTarget {
   path?: string
   backend?: ScreenshotBackend
+  /**
+   * Snapshot-local ref to scope the capture to a single element's subtree.
+   * Element scoping is a DOM-backend concept, so a request that carries `ref`
+   * is served by the DOM backend regardless of the requested `backend`.
+   */
+  ref?: string
 }
 
 export interface LogsParams extends WindowTarget {
@@ -199,6 +231,18 @@ export interface WaitParams extends WindowTarget {
   timeoutMs?: number
   /** `present` (default) waits for appearance; `absent` waits for disappearance. */
   state?: 'present' | 'absent'
+  /**
+   * Poll a JS expression, resolving when it evaluates to a truthy value
+   * (Playwright's `waitForFunction`). Thenable results are awaited each poll.
+   */
+  fn?: string
+  /**
+   * Wait until no fetch/XHR request is in flight for `idleMs` consecutive
+   * milliseconds. WebSockets are excluded (they stay open by design).
+   */
+  networkIdle?: boolean
+  /** Quiet window for `networkIdle`, in ms. Defaults to 500. */
+  idleMs?: number
 }
 
 export interface ExpectParams extends WindowTarget {
@@ -223,6 +267,33 @@ export interface ExpectResult {
 
 export interface StateParams extends WindowTarget {
   key?: string
+}
+
+/**
+ * Control how native dialogs (`alert`/`confirm`/`prompt`) are auto-handled.
+ * They are synchronous and would otherwise block the app unrecoverably, so the
+ * agent sets a policy up front, triggers the action, then reads what fired.
+ */
+export interface DialogParams extends WindowTarget {
+  /** `get` (default) reads state; `set` updates the policy; `clear` empties the log. */
+  action?: 'get' | 'set' | 'clear'
+  /** Whether `confirm`/`prompt` are accepted (default true). `alert` always returns. */
+  accept?: boolean
+  /** Text returned by `prompt` when accepted (falls back to the dialog's default). */
+  promptText?: string
+}
+
+export interface DialogEntry {
+  type: 'alert' | 'confirm' | 'prompt'
+  message: string
+  defaultValue?: string
+  response: string | boolean | null
+  timestamp: string
+}
+
+export interface DialogResult {
+  policy: { accept: boolean; promptText?: string }
+  dialogs: DialogEntry[]
 }
 
 export interface RecordParams extends WindowTarget {
@@ -300,7 +371,8 @@ export interface AgentEvent {
 
 export interface NetworkEntry {
   id: string
-  type: 'fetch'
+  /** Transport that produced the entry. WebSocket entries carry a `101` status on open. */
+  type: 'fetch' | 'xhr' | 'websocket'
   method: string
   url: string
   status?: number

@@ -20,8 +20,8 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 /// natively and are intentionally not listed here.
 pub(crate) const BRIDGE_METHODS: &[&str] = &[
     "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
-    "check", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage", "cookies",
-    "location", "wait", "expect", "state", "record", "stream",
+    "check", "upload", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage",
+    "cookies", "location", "wait", "expect", "state", "dialog", "record", "stream",
 ];
 
 use serde::de::DeserializeOwned;
@@ -32,7 +32,7 @@ use crate::screenshot::write_data_url_to_path;
 use crate::{
     bridge::AgentBridge, commands, write_endpoint_registry, AgentAttachRequest,
     AgentEndpointDescriptor, AgentScreenshotRequest, AgentWindowRequest, EndpointRegistryError,
-    Error, InlineServerConfig, ScreenshotBackend, WindowAction, WindowInfo,
+    Error, InlineServerConfig, WindowAction, WindowInfo,
 };
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -412,7 +412,7 @@ fn handle_window(
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
     commands::resolve_screenshot(
-        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        commands::effective_screenshot_backend(&request),
         || handle_bridge_shot(backend, params.clone()),
         || backend.native_screenshot(request.clone()),
     )
@@ -503,6 +503,51 @@ mod tests {
     /// Dispatch without token enforcement, for tests that exercise routing.
     fn respond(backend: &impl InlineDebuggerBackend, line: &str) -> String {
         respond_to_json_rpc_line(backend, None, line)
+    }
+
+    /// Define a scripted bridge backend with no windows and a canned
+    /// `bridge_call` — collapses ~14 near-identical fakes that differed only in
+    /// the method/params they assert and the value they return.
+    macro_rules! scripted_backend {
+        ($name:ident, |$method:ident, $params:ident| $body:block) => {
+            struct $name;
+            impl InlineDebuggerBackend for $name {
+                fn windows(&self) -> Vec<WindowInfo> {
+                    Vec::new()
+                }
+                fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
+                    Ok(())
+                }
+                fn bridge_call(&self, $method: &str, $params: Value) -> crate::Result<Value> {
+                    $body
+                }
+            }
+        };
+    }
+
+    #[test]
+    fn maps_each_error_variant_to_a_distinct_wire_code() {
+        assert_eq!(error_code(&Error::StaleRef("@1".into())), "STALE_REF");
+        assert_eq!(
+            error_code(&Error::BridgeUnavailable("x".into())),
+            "BRIDGE_UNAVAILABLE"
+        );
+        assert_eq!(
+            error_code(&Error::WindowNotFound("main".into())),
+            "WINDOW_NOT_FOUND"
+        );
+        assert_eq!(
+            error_code(&Error::InvalidParams("x".into())),
+            "INVALID_PARAMS"
+        );
+        assert_eq!(error_code(&Error::Timeout("x".into())), "TIMEOUT");
+        assert_eq!(error_code(&Error::Io("x".into())), "IO_ERROR");
+        // Agents distinguish an unsupported platform (e.g. native screenshot off
+        // macOS) from a transient bridge failure so they don't pointlessly retry.
+        assert_eq!(
+            error_code(&Error::UnsupportedPlatform("x".into())),
+            "UNSUPPORTED_PLATFORM"
+        );
     }
 
     #[test]
@@ -637,324 +682,156 @@ mod tests {
         }
     }
 
-    struct FakeInspectBackend;
+    scripted_backend!(FakeInspectBackend, |method, params| {
+        assert_eq!(method, "inspect");
+        assert_eq!(params["ref"], "@4");
+        Ok(serde_json::json!({
+            "ref": "@4",
+            "role": "textbox",
+            "name": "Agent name",
+            "tagName": "input",
+            "text": "",
+            "value": "worker-a",
+            "attributes": {"aria-label": "Agent name"},
+            "states": []
+        }))
+    });
 
-    impl InlineDebuggerBackend for FakeInspectBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "inspect");
-            assert_eq!(params["ref"], "@4");
-            Ok(serde_json::json!({
-                "ref": "@4",
-                "role": "textbox",
-                "name": "Agent name",
-                "tagName": "input",
-                "text": "",
-                "value": "worker-a",
-                "attributes": {"aria-label": "Agent name"},
+    scripted_backend!(FakeFindBackend, |method, params| {
+        assert_eq!(method, "find");
+        assert_eq!(params["role"], "button");
+        assert_eq!(params["name"], "Forge");
+        assert_eq!(params["limit"], 1);
+        Ok(serde_json::json!({
+            "matches": [{
+                "ref": "@1",
+                "role": "button",
+                "name": "Forge",
+                "tagName": "button",
+                "text": "Forge",
+                "attributes": {},
                 "states": []
-            }))
-        }
-    }
+            }]
+        }))
+    });
 
-    struct FakeFindBackend;
+    scripted_backend!(FakeEvalBackend, |method, params| {
+        assert_eq!(method, "eval");
+        assert_eq!(params["code"], "document.title");
+        Ok(serde_json::json!({
+            "type": "string",
+            "value": "Fixture",
+            "text": "Fixture"
+        }))
+    });
 
-    impl InlineDebuggerBackend for FakeFindBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
+    scripted_backend!(FakeSelectBackend, |method, params| {
+        assert_eq!(method, "select");
+        assert_eq!(params["ref"], "@4");
+        assert_eq!(params["value"], "remote");
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
+    scripted_backend!(FakeCheckBackend, |method, params| {
+        assert_eq!(method, "check");
+        assert_eq!(params["ref"], "@6");
+        assert_eq!(params["checked"], true);
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "find");
-            assert_eq!(params["role"], "button");
-            assert_eq!(params["name"], "Forge");
-            assert_eq!(params["limit"], 1);
-            Ok(serde_json::json!({
-                "matches": [{
-                    "ref": "@1",
-                    "role": "button",
-                    "name": "Forge",
-                    "tagName": "button",
-                    "text": "Forge",
-                    "attributes": {},
-                    "states": []
-                }]
-            }))
-        }
-    }
+    scripted_backend!(FakeHoverBackend, |method, params| {
+        assert_eq!(method, "hover");
+        assert_eq!(params["ref"], "@3");
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-    struct FakeEvalBackend;
+    scripted_backend!(FakeFocusBackend, |method, params| {
+        assert_eq!(method, "focus");
+        assert_eq!(params["ref"], "@4");
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-    impl InlineDebuggerBackend for FakeEvalBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
+    scripted_backend!(FakeBlurBackend, |method, params| {
+        assert_eq!(method, "blur");
+        assert_eq!(params["ref"], "@4");
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
+    scripted_backend!(FakeScrollBackend, |method, params| {
+        assert_eq!(method, "scroll");
+        assert_eq!(params["ref"], "@7");
+        assert_eq!(params["x"], 3.0);
+        assert_eq!(params["y"], 12.0);
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "eval");
-            assert_eq!(params["code"], "document.title");
-            Ok(serde_json::json!({
-                "type": "string",
-                "value": "Fixture",
-                "text": "Fixture"
-            }))
-        }
-    }
+    scripted_backend!(FakeDragBackend, |method, params| {
+        assert_eq!(method, "drag");
+        assert_eq!(params["ref"], "@1");
+        assert_eq!(params["toRef"], "@8");
+        Ok(serde_json::json!({ "ok": true }))
+    });
 
-    struct FakeSelectBackend;
+    scripted_backend!(FakeNetworkBackend, |method, params| {
+        assert_eq!(method, "network");
+        assert_eq!(params["window"], "main");
+        assert_eq!(params["clear"], true);
+        Ok(serde_json::json!([{
+            "id": "fetch-1",
+            "type": "fetch",
+            "method": "GET",
+            "url": "https://example.test/api/agents",
+            "status": 200,
+            "ok": true,
+            "startedAt": "2026-07-07T00:00:00.000Z",
+            "endedAt": "2026-07-07T00:00:00.020Z",
+            "durationMs": 20.0
+        }]))
+    });
 
-    impl InlineDebuggerBackend for FakeSelectBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "select");
-            assert_eq!(params["ref"], "@4");
-            assert_eq!(params["value"], "remote");
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeCheckBackend;
-
-    impl InlineDebuggerBackend for FakeCheckBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "check");
-            assert_eq!(params["ref"], "@6");
-            assert_eq!(params["checked"], true);
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeHoverBackend;
-
-    impl InlineDebuggerBackend for FakeHoverBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "hover");
-            assert_eq!(params["ref"], "@3");
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeFocusBackend;
-
-    impl InlineDebuggerBackend for FakeFocusBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "focus");
-            assert_eq!(params["ref"], "@4");
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeBlurBackend;
-
-    impl InlineDebuggerBackend for FakeBlurBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "blur");
-            assert_eq!(params["ref"], "@4");
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeScrollBackend;
-
-    impl InlineDebuggerBackend for FakeScrollBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "scroll");
-            assert_eq!(params["ref"], "@7");
-            assert_eq!(params["x"], 3.0);
-            assert_eq!(params["y"], 12.0);
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeDragBackend;
-
-    impl InlineDebuggerBackend for FakeDragBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "drag");
-            assert_eq!(params["ref"], "@1");
-            assert_eq!(params["toRef"], "@8");
-            Ok(serde_json::json!({ "ok": true }))
-        }
-    }
-
-    struct FakeNetworkBackend;
-
-    impl InlineDebuggerBackend for FakeNetworkBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "network");
-            assert_eq!(params["window"], "main");
-            assert_eq!(params["clear"], true);
-            Ok(serde_json::json!([{
-                "id": "fetch-1",
-                "type": "fetch",
-                "method": "GET",
-                "url": "https://example.test/api/agents",
-                "status": 200,
-                "ok": true,
-                "startedAt": "2026-07-07T00:00:00.000Z",
-                "endedAt": "2026-07-07T00:00:00.020Z",
-                "durationMs": 20.0
-            }]))
-        }
-    }
-
-    struct FakeStorageBackend;
-
-    impl InlineDebuggerBackend for FakeStorageBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "storage");
-            assert_eq!(params["area"], "session");
-            assert_eq!(params["action"], "set");
-            assert_eq!(params["key"], "agent.route");
-            assert_eq!(params["value"], "/agents");
-            Ok(serde_json::json!({
+    scripted_backend!(FakeStorageBackend, |method, params| {
+        assert_eq!(method, "storage");
+        assert_eq!(params["area"], "session");
+        assert_eq!(params["action"], "set");
+        assert_eq!(params["key"], "agent.route");
+        assert_eq!(params["value"], "/agents");
+        Ok(serde_json::json!({
+            "area": "session",
+            "entries": [{
                 "area": "session",
-                "entries": [{
-                    "area": "session",
-                    "key": "agent.route",
-                    "value": "/agents"
-                }]
-            }))
-        }
-    }
+                "key": "agent.route",
+                "value": "/agents"
+            }]
+        }))
+    });
 
-    struct FakeCookiesBackend;
+    scripted_backend!(FakeCookiesBackend, |method, params| {
+        assert_eq!(method, "cookies");
+        assert_eq!(params["window"], "main");
+        assert_eq!(params["action"], "set");
+        assert_eq!(params["name"], "agent.cookie");
+        assert_eq!(params["value"], "ready");
+        Ok(serde_json::json!({
+            "entries": [{
+                "name": "agent.cookie",
+                "value": "ready"
+            }]
+        }))
+    });
 
-    impl InlineDebuggerBackend for FakeCookiesBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "cookies");
-            assert_eq!(params["window"], "main");
-            assert_eq!(params["action"], "set");
-            assert_eq!(params["name"], "agent.cookie");
-            assert_eq!(params["value"], "ready");
-            Ok(serde_json::json!({
-                "entries": [{
-                    "name": "agent.cookie",
-                    "value": "ready"
-                }]
-            }))
-        }
-    }
-
-    struct FakeLocationBackend;
-
-    impl InlineDebuggerBackend for FakeLocationBackend {
-        fn windows(&self) -> Vec<WindowInfo> {
-            Vec::new()
-        }
-
-        fn ensure_window(&self, _label: Option<&str>) -> crate::Result<()> {
-            Ok(())
-        }
-
-        fn bridge_call(&self, method: &str, params: Value) -> crate::Result<Value> {
-            assert_eq!(method, "location");
-            assert_eq!(params["window"], "main");
-            assert_eq!(params["action"], "push");
-            assert_eq!(params["url"], "/agents?view=debug#roster");
-            Ok(serde_json::json!({
-                "href": "tauri-agent://static/agents?view=debug#roster",
-                "origin": "null",
-                "pathname": "/agents",
-                "search": "?view=debug",
-                "hash": "#roster"
-            }))
-        }
-    }
+    scripted_backend!(FakeLocationBackend, |method, params| {
+        assert_eq!(method, "location");
+        assert_eq!(params["window"], "main");
+        assert_eq!(params["action"], "push");
+        assert_eq!(params["url"], "/agents?view=debug#roster");
+        Ok(serde_json::json!({
+            "href": "tauri-agent://static/agents?view=debug#roster",
+            "origin": "null",
+            "pathname": "/agents",
+            "search": "?view=debug",
+            "hash": "#roster"
+        }))
+    });
 
     #[test]
     fn inline_server_handles_windows_and_attach_json_rpc() {
