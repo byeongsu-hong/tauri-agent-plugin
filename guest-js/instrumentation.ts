@@ -79,9 +79,14 @@ export interface InstrumentationOptions {
 }
 
 export interface InstrumentedAction {
-  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'drag' | 'fill' | 'press' | 'select' | 'check'
+  action: 'click' | 'hover' | 'focus' | 'blur' | 'scroll' | 'drag' | 'fill' | 'type' | 'press' | 'select' | 'check'
   ref?: string
   toRef?: string
+  /**
+   * Internal payload slot. `serializableAction` maps it onto the canonical wire
+   * param for the method: `text` for fill/type, `key` for press, `value` for
+   * select — so recorded entries replay unchanged on any surface.
+   */
   value?: string
   checked?: boolean
   modifiers?: KeyModifier[]
@@ -364,7 +369,9 @@ export class WebviewAgentInstrumentation {
 
   type(ref: string, text: string): { ok: true } {
     typeRef(ref, text)
-    this.pushEvent('type', { ref, text })
+    const action: InstrumentedAction = { action: 'type', ref, value: text }
+    this.pushEvent('type', serializableAction(action))
+    this.recordAction(action)
     return { ok: true }
   }
 
@@ -789,12 +796,29 @@ function serializableAction(action: InstrumentedAction): Record<string, unknown>
   const params: Record<string, unknown> = {}
   if (action.ref) params.ref = action.ref
   if (action.toRef) params.toRef = action.toRef
-  if (action.value) params.value = action.value
+  if (action.value !== undefined && action.value.length > 0) {
+    // Emit the canonical wire param for this method rather than the internal
+    // `value` slot, so recordings replay through the daemon/protocol executors
+    // (which read `text`/`key`/`value` per method) without translation.
+    params[canonicalPayloadKey(action.action)] = action.value
+  }
   if (action.checked !== undefined) params.checked = action.checked
   if (action.modifiers?.length) params.modifiers = action.modifiers
   if (action.x !== undefined) params.x = action.x
   if (action.y !== undefined) params.y = action.y
   return params
+}
+
+function canonicalPayloadKey(action: InstrumentedAction['action']): 'text' | 'key' | 'value' {
+  switch (action) {
+    case 'fill':
+    case 'type':
+      return 'text'
+    case 'press':
+      return 'key'
+    default:
+      return 'value'
+  }
 }
 
 function controlName(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {

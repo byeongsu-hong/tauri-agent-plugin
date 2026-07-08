@@ -140,8 +140,8 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'blur', detail: { ref: '@2' } }),
         expect.objectContaining({ kind: 'scroll', detail: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ kind: 'drag', detail: { ref: '@1', toRef: '@8' } }),
-        expect.objectContaining({ kind: 'fill', detail: { ref: '@2', value: 'worker-a' } }),
-        expect.objectContaining({ kind: 'press', detail: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }),
+        expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
+        expect.objectContaining({ kind: 'press', detail: { key: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } }),
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
       ])
     )
@@ -247,10 +247,10 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ method: 'blur', params: { ref: '@2' } }),
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
-        expect.objectContaining({ method: 'fill', params: { ref: '@2', value: 'worker-a' } }),
+        expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
         expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
-        expect.objectContaining({ method: 'press', params: { value: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } })
+        expect.objectContaining({ method: 'press', params: { key: 'Enter', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]
     })
     expect((window as typeof window & { __lastShortcut?: string }).__lastShortcut).toBe('Enter:true:true:Agent name')

@@ -252,6 +252,8 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ method: 'scroll', params: { ref: '@7', y: 12, x: 3 } }),
         expect.objectContaining({ method: 'drag', params: { ref: '@1', toRef: '@8' } }),
         expect.objectContaining({ method: 'fill', params: { ref: '@2', text: 'worker-a' } }),
+        expect.objectContaining({ method: 'select', params: { ref: '@3', value: 'remote' } }),
+        expect.objectContaining({ method: 'check', params: { ref: '@6', checked: true } }),
         expect.objectContaining({ method: 'press', params: { key: 'Enter' } }),
         expect.objectContaining({ method: 'press', params: { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] } })
       ]

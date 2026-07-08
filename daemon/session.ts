@@ -1,5 +1,6 @@
 import type { StaticHtmlAppAdapter } from './static-app'
 import type { AgentMethod, KeyModifier, RecordingEntry, ScreenshotBackend, WindowAction } from '../protocol/types'
+import { isRecordableMethod } from '../protocol/json-rpc'
 
 export class DebuggerSession {
   private recording = false
@@ -161,7 +162,7 @@ export class DebuggerSession {
     if (!this.recording || method === 'record') {
       return
     }
-    if (!['click', 'hover', 'focus', 'blur', 'scroll', 'drag', 'fill', 'press'].includes(method)) {
+    if (!isRecordableMethod(method)) {
       return
     }
     this.recordingEntries.push({

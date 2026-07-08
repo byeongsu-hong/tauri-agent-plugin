@@ -104,18 +104,26 @@ export interface RefActionParams extends WindowTarget {
   ref: string
 }
 
+/**
+ * Set a control's value in one shot. Canonical payload param is `text`; the
+ * guest bridge also accepts a legacy `value` alias, but recordings and all
+ * first-party surfaces emit `text`.
+ */
 export interface FillParams extends RefActionParams {
   text: string
 }
 
+/** Type per-keystroke into a control. Canonical payload param is `text`. */
 export interface TypeParams extends RefActionParams {
   text: string
 }
 
+/** Choose a `<select>` option. Canonical payload param is `value`. */
 export interface SelectParams extends RefActionParams {
   value?: string
 }
 
+/** Toggle a checkbox/radio. Canonical payload param is `checked`. */
 export interface CheckParams extends RefActionParams {
   checked?: boolean
 }
@@ -142,6 +150,10 @@ export interface EvalParams extends WindowTarget {
   code: string
 }
 
+/**
+ * Dispatch a keyboard press. Canonical payload param is `key`; the guest bridge
+ * also accepts a legacy `value` alias. `ref` optionally focuses a target first.
+ */
 export interface PressParams extends WindowTarget {
   key: string
   ref?: string
