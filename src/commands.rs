@@ -482,8 +482,75 @@ pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo>
         .into_values()
         .map(|window| window_info(&window))
         .collect::<Vec<_>>();
+    // Multi-webview (opt-in `unstable-multiwebview`): surface any child webview
+    // that is not itself a webview-window so agents can address it by label.
+    // Without the feature this adds nothing and the listing is unchanged.
+    windows.extend(child_webview_infos(app));
     windows.sort_by(|a, b| a.label.cmp(&b.label));
     windows
+}
+
+/// Resolve the event target for a bridge request. A label matching a
+/// webview-window emits to that window; with `unstable-multiwebview`, a label
+/// matching a bare child webview emits to that webview; no label falls back to
+/// the default window. This is what lets bridge methods address a specific
+/// webview within a window.
+pub(crate) fn resolve_bridge_event_target<R: Runtime>(
+    app: &AppHandle<R>,
+    window: Option<&str>,
+) -> Result<tauri::EventTarget> {
+    if let Some(label) = window {
+        if app.webview_windows().contains_key(label) {
+            return Ok(tauri::EventTarget::window(label));
+        }
+        if child_webview_label_exists(app, label) {
+            return Ok(tauri::EventTarget::webview(label));
+        }
+        return Err(Error::WindowNotFound(label.to_string()));
+    }
+    let target = target_webview_window(app, None)?;
+    Ok(tauri::EventTarget::window(target.label().to_string()))
+}
+
+#[cfg(feature = "unstable-multiwebview")]
+fn child_webview_infos<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo> {
+    use tauri::Manager;
+    let window_labels: std::collections::HashSet<String> =
+        app.webview_windows().keys().cloned().collect();
+    app.webviews()
+        .into_iter()
+        .filter(|(label, _)| !window_labels.contains(label))
+        .map(|(_, webview)| {
+            let window = webview.window();
+            WindowInfo {
+                label: webview.label().to_string(),
+                title: window.title().ok(),
+                focused: window.is_focused().unwrap_or(false),
+                visible: window.is_visible().unwrap_or(false),
+                minimized: None,
+                maximized: None,
+                scale_factor: window.scale_factor().ok(),
+                inner_bounds: None,
+                outer_bounds: None,
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "unstable-multiwebview"))]
+fn child_webview_infos<R: Runtime>(_app: &AppHandle<R>) -> Vec<WindowInfo> {
+    Vec::new()
+}
+
+#[cfg(feature = "unstable-multiwebview")]
+pub(crate) fn child_webview_label_exists<R: Runtime>(app: &AppHandle<R>, label: &str) -> bool {
+    use tauri::Manager;
+    app.webviews().contains_key(label)
+}
+
+#[cfg(not(feature = "unstable-multiwebview"))]
+pub(crate) fn child_webview_label_exists<R: Runtime>(_app: &AppHandle<R>, _label: &str) -> bool {
+    false
 }
 
 pub(crate) fn control_window<R: Runtime>(
@@ -590,7 +657,9 @@ fn window_bounds(
 
 pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {
     if let Some(label) = label {
-        if !app.webview_windows().contains_key(label) {
+        // Accept webview-window labels, plus bare child-webview labels when the
+        // `unstable-multiwebview` feature is enabled.
+        if !app.webview_windows().contains_key(label) && !child_webview_label_exists(app, label) {
             return Err(Error::WindowNotFound(label.to_string()));
         }
     }
@@ -717,6 +786,26 @@ mod tests {
             let app = app_with_windows(&["main"]);
             assert!(matches!(
                 target_webview_window(app.handle(), Some("nope")),
+                Err(Error::WindowNotFound(_))
+            ));
+        }
+
+        #[test]
+        fn resolve_bridge_event_target_uses_the_window_for_a_known_label() {
+            let app = app_with_windows(&["main", "about"]);
+            // A known window label resolves without error; the default (None)
+            // resolves to the preferred `main` window.
+            assert!(resolve_bridge_event_target(app.handle(), Some("about")).is_ok());
+            assert!(resolve_bridge_event_target(app.handle(), None).is_ok());
+        }
+
+        #[test]
+        fn resolve_bridge_event_target_rejects_unknown_labels() {
+            let app = app_with_windows(&["main"]);
+            // Without the `unstable-multiwebview` feature there are no child
+            // webviews, so an unknown label is a hard WindowNotFound.
+            assert!(matches!(
+                resolve_bridge_event_target(app.handle(), Some("ghost")),
                 Err(Error::WindowNotFound(_))
             ));
         }

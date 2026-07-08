@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, EventTarget, Runtime};
+use tauri::{AppHandle, Emitter, Runtime};
 
 use crate::{commands, Error};
 
@@ -48,9 +48,7 @@ impl AgentBridge {
         method: &str,
         params: serde_json::Value,
     ) -> crate::Result<serde_json::Value> {
-        commands::ensure_window(app, window)?;
-        let target = commands::target_webview_window(app, window)?;
-        let target_label = target.label().to_string();
+        let event_target = commands::resolve_bridge_event_target(app, window)?;
         // The sequence keeps ids readable/ordered; the random suffix makes them
         // unforgeable so one webview cannot spoof another's bridge response.
         let id = format!(
@@ -64,7 +62,7 @@ impl AgentBridge {
         // Remove the pending entry if the emit fails, otherwise the sender leaks
         // for the lifetime of the process.
         if let Err(error) = app.emit_to(
-            EventTarget::window(target_label),
+            event_target,
             BRIDGE_REQUEST_EVENT,
             AgentBridgeRequest {
                 id: id.clone(),
