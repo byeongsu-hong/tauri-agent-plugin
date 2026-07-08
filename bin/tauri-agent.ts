@@ -143,6 +143,35 @@ function registerSimpleRefCommand(name: AgentMethod, description: string, argDes
   })
 }
 
+/**
+ * Register a capture command with the shared `--follow`/`--clear`/`--poll-ms`/
+ * `--timeout-ms` surface — the shape shared by logs/events/network/ipc.
+ */
+function registerFollowCommand(
+  name: 'logs' | 'events' | 'network' | 'ipc',
+  description: string,
+  noun: string
+): void {
+  withConnectionOptions(program.command(name).description(description))
+    .option('--follow', `poll and stream new ${noun} entries as newline-delimited JSON`)
+    .option('--clear', `clear captured ${noun} entries after reading`)
+    .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
+    .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+    .action(async (options: FollowOptions) => {
+      if (options.follow) {
+        await followEntries(options, name)
+        return
+      }
+      printJson(
+        await call(options, name, {
+          ...targetParams(options),
+          follow: options.follow,
+          clear: options.clear
+        })
+      )
+    })
+}
+
 const program = new Command()
 
 program
@@ -169,15 +198,9 @@ program
     printJson({ listening: true, address })
   })
 
-program
-  .command('attach')
-  .description('Attach to a debuggable Tauri app.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .action(async (options: ConnectionOptions) => printJson(await call(options, 'attach', targetParams(options))))
+withConnectionOptions(program.command('attach').description('Attach to a debuggable Tauri app.')).action(
+  async (options: ConnectionOptions) => printJson(await call(options, 'attach', targetParams(options)))
+)
 
 program
   .command('vnc')
@@ -203,14 +226,7 @@ program
   .option('--port <port>', 'debug daemon port', Number)
   .action(async (options: ConnectionOptions) => printJson(await call(options, 'windows')))
 
-program
-  .command('window')
-  .description('Inspect or control a Tauri window.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(program.command('window').description('Inspect or control a Tauri window.'))
   .option('--action <action>', 'window action: get, focus, show, hide, minimize, unminimize, maximize, unmaximize, setSize, or setPosition', parseWindowAction, 'get')
   .option('--x <x>', 'x position for setPosition', parseNumber)
   .option('--y <y>', 'y position for setPosition', parseNumber)
@@ -218,15 +234,7 @@ program
   .option('--height <height>', 'height for setSize', parseNumber)
   .action(async (options: WindowOptions) => printJson(await call(options, 'window', windowParams(options))))
 
-program
-  .command('tree')
-  .description('Print a compact semantic tree.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+withConnectionOptions(program.command('tree').description('Print a compact semantic tree.'), { scope: true })
   .option('--mode <mode>', 'tree output mode: compact or verbose', parseTreeMode)
   .option('--interactive', 'poll and stream changed semantic tree snapshots as newline-delimited JSON')
   .option('--poll-ms <ms>', 'interactive polling interval in milliseconds', parseNumber, 250)
@@ -240,14 +248,11 @@ program
     process.stdout.write(`${result.text}\n`)
   })
 
-program
-  .command('stream')
-  .description('Stream mutation-driven semantic-tree diffs as newline-delimited JSON.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program
+    .command('stream')
+    .description('Stream mutation-driven semantic-tree diffs as newline-delimited JSON.')
+)
   .option('--since <seq>', 'resume from a previous cursor', parseNumber, 0)
   .option('--wait-ms <ms>', 'long-poll budget per request in milliseconds', parseNumber, 1000)
   .option('--timeout-ms <ms>', 'stop streaming after this many milliseconds', parseNumber)
@@ -255,15 +260,10 @@ program
     await streamDiffs(options)
   })
 
-program
-  .command('find')
-  .description('Find current snapshot refs by semantic role, name, or text.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
+withConnectionOptions(
+  program.command('find').description('Find current snapshot refs by semantic role, name, or text.'),
+  { scope: true }
+)
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
   .option('--text <text>', 'visible text substring to match')
@@ -368,29 +368,22 @@ withConnectionOptions(
   printJson(await client.call('upload', refActionParams(options, ref, { files: parseUploadFiles(files) })))
 })
 
-program
-  .command('eval')
-  .description('Evaluate JavaScript in the app webview.')
-  .argument('<code>', 'JavaScript expression or snippet')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .action(async (code: string, options: ConnectionOptions) =>
-    printJson(await call(options, 'eval', { ...targetParams(options), code }))
-  )
+withConnectionOptions(
+  program
+    .command('eval')
+    .description('Evaluate JavaScript in the app webview.')
+    .argument('<code>', 'JavaScript expression or snippet')
+).action(async (code: string, options: ConnectionOptions) =>
+  printJson(await call(options, 'eval', { ...targetParams(options), code }))
+)
 
-program
-  .command('press')
-  .description('Dispatch a keyboard key.')
-  .argument('<key>', 'key name, for example Enter')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+withConnectionOptions(
+  program
+    .command('press')
+    .description('Dispatch a keyboard key.')
+    .argument('<key>', 'key name, for example Enter'),
+  { scope: true }
+)
   .option('--ref <ref>', 'snapshot-local ref to focus before dispatching the key')
   .option('--modifier <modifier>', 'keyboard modifier: Alt, Control, Meta, or Shift', collectModifier, [])
   .action(async (key: string, options: PressOptions) => {
@@ -401,15 +394,12 @@ program
     printJson(await client.call('press', pressParams(options, key)))
   })
 
-program
-  .command('shot')
-  .description('Capture a screenshot through the live Tauri bridge.')
-  .argument('[path]', 'output path')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <htmlPath>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program
+    .command('shot')
+    .description('Capture a screenshot through the live Tauri bridge.')
+    .argument('[path]', 'output path')
+)
   .option('--backend <backend>', 'screenshot backend: dom, native, or auto', parseScreenshotBackend)
   .option('--ref <ref>', 'scope the capture to a single element ref (forces the DOM backend)')
   .action(async (path: string | undefined, options: ShotOptions) =>
@@ -423,94 +413,14 @@ program
     )
   )
 
-program
-  .command('logs')
-  .description('Print captured app logs.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'poll and stream new log entries as newline-delimited JSON')
-  .option('--clear', 'clear captured log entries after reading')
-  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
-  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
-  .action(async (options: FollowOptions) => {
-    if (options.follow) {
-      await followEntries(options, 'logs')
-      return
-    }
-    printJson(await call(options, 'logs', { ...targetParams(options), follow: options.follow, clear: options.clear }))
-  })
+registerFollowCommand('logs', 'Print captured app logs.', 'log')
+registerFollowCommand('events', 'Print captured app events.', 'event')
+registerFollowCommand('network', 'Print captured fetch/XHR/WebSocket network entries.', 'network')
+registerFollowCommand('ipc', 'Print captured Tauri IPC invoke traces.', 'IPC')
 
-program
-  .command('events')
-  .description('Print captured app events.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'poll and stream new event entries as newline-delimited JSON')
-  .option('--clear', 'clear captured event entries after reading')
-  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
-  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
-  .action(async (options: FollowOptions) => {
-    if (options.follow) {
-      await followEntries(options, 'events')
-      return
-    }
-    printJson(await call(options, 'events', { ...targetParams(options), follow: options.follow, clear: options.clear }))
-  })
-
-program
-  .command('network')
-  .description('Print captured fetch network entries.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'poll and stream new network entries as newline-delimited JSON')
-  .option('--clear', 'clear captured network entries after reading')
-  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
-  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
-  .action(async (options: FollowOptions) => {
-    if (options.follow) {
-      await followEntries(options, 'network')
-      return
-    }
-    printJson(await call(options, 'network', { ...targetParams(options), follow: options.follow, clear: options.clear }))
-  })
-
-program
-  .command('ipc')
-  .description('Print captured Tauri IPC invoke traces.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--follow', 'poll and stream new IPC entries as newline-delimited JSON')
-  .option('--clear', 'clear captured IPC entries after reading')
-  .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
-  .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
-  .action(async (options: FollowOptions) => {
-    if (options.follow) {
-      await followEntries(options, 'ipc')
-      return
-    }
-    printJson(await call(options, 'ipc', { ...targetParams(options), follow: options.follow, clear: options.clear }))
-  })
-
-program
-  .command('storage')
-  .description('Inspect or mutate webview localStorage/sessionStorage.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program.command('storage').description('Inspect or mutate webview localStorage/sessionStorage.')
+)
   .option('--area <area>', 'storage area: local or session', parseStorageArea, 'local')
   .option('--action <action>', 'storage action: get, set, remove, or clear', parseStorageAction, 'get')
   .option('--key <key>', 'storage key')
@@ -519,14 +429,9 @@ program
     printJson(await call(options, 'storage', storageParams(options)))
   })
 
-program
-  .command('cookies')
-  .description('Inspect or mutate webview-visible document.cookie entries.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program.command('cookies').description('Inspect or mutate webview-visible document.cookie entries.')
+)
   .option('--action <action>', 'cookie action: get, set, remove, or clear', parseCookieAction, 'get')
   .option('--name <name>', 'cookie name')
   .option('--value <value>', 'cookie value for set')
@@ -534,30 +439,24 @@ program
     printJson(await call(options, 'cookies', cookieParams(options)))
   })
 
-program
-  .command('location')
-  .description('Inspect or update the webview location for SPA-style navigation.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program
+    .command('location')
+    .description('Inspect or update the webview location for SPA-style navigation.')
+)
   .option('--action <action>', 'location action: get, push, replace, reload, back, or forward', parseLocationAction, 'get')
   .option('--url <url>', 'URL or path for push/replace actions')
   .action(async (options: LocationOptions) => {
     printJson(await call(options, 'location', locationParams(options)))
   })
 
-program
-  .command('wait')
-  .description('Wait for text or a semantic element to appear (or disappear with --absent).')
-  .argument('[text]', 'text to wait for')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the semantic wait to a CSS selector')
+withConnectionOptions(
+  program
+    .command('wait')
+    .description('Wait for text or a semantic element to appear (or disappear with --absent).')
+    .argument('[text]', 'text to wait for'),
+  { scope: true }
+)
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
   .option('--absent', 'wait for the target to disappear instead of appear')
@@ -569,15 +468,12 @@ program
     printJson(await call(options, 'wait', waitParams(options, text)))
   )
 
-program
-  .command('expect')
-  .description('Assert a semantic target exists (or is absent) and matches value/state.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the match to a CSS selector')
+withConnectionOptions(
+  program
+    .command('expect')
+    .description('Assert a semantic target exists (or is absent) and matches value/state.'),
+  { scope: true }
+)
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
   .option('--text <text>', 'visible text substring to match')
@@ -599,26 +495,16 @@ program
     )
   )
 
-program
-  .command('state')
-  .description('Print current app state probe values.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(program.command('state').description('Print current app state probe values.'))
   .option('--key <key>', 'return one top-level state field')
   .action(async (options: StateOptions) => printJson(await call(options, 'state', stateParams(options))))
 
-program
-  .command('dialog')
-  .description('Read or set the auto-dialog policy (alert/confirm/prompt) and read the dialog log.')
-  .argument('[action]', 'get (default), set, or clear', parseDialogAction)
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(
+  program
+    .command('dialog')
+    .description('Read or set the auto-dialog policy (alert/confirm/prompt) and read the dialog log.')
+    .argument('[action]', 'get (default), set, or clear', parseDialogAction)
+)
   .option('--accept', 'accept confirm/prompt dialogs (with set)')
   .option('--no-accept', 'dismiss confirm/prompt dialogs (with set)')
   .option('--prompt-text <text>', 'text returned by accepted prompt dialogs (with set)')
@@ -633,14 +519,7 @@ program
     )
   )
 
-program
-  .command('record')
-  .description('Manage action recording.')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
+withConnectionOptions(program.command('record').description('Manage action recording.'))
   .option('--action <action>', 'start, stop, get, or clear')
   .action(async (options: ConnectionOptions & { action?: string }) =>
     printJson(await call(options, 'record', { ...targetParams(options), action: options.action }))
