@@ -31,6 +31,7 @@ permissions = [
   "allow-agent-windows",
   "allow-agent-window",
   "allow-agent-wait",
+  "allow-agent-expect",
   "allow-agent-state",
   "allow-agent-record",
   "allow-agent-stream",
@@ -52,6 +53,7 @@ permissions = [
   "allow-agent-ipc",
   "allow-agent-windows",
   "allow-agent-wait",
+  "allow-agent-expect",
   "allow-agent-state",
   "allow-agent-stream",
 ]

@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
+  assertExpectation,
   blurRef,
   checkRef,
   clickRef,
@@ -31,6 +32,8 @@ import type {
   CookieParams,
   CookieResult,
   EvalResult,
+  ExpectParams,
+  ExpectResult,
   FindParams,
   FindResult,
   InspectResult,
@@ -231,6 +234,15 @@ export class WebviewAgentInstrumentation {
   find(options: FindParams = {}): FindResult {
     const snapshot = this.snapshot({ scope: options.scope })
     return { matches: findRefs(options, snapshot.refs) }
+  }
+
+  expect(options: ExpectParams): ExpectResult {
+    const snapshot = this.snapshot({ scope: options.scope })
+    const match = findRefs(
+      { scope: options.scope, role: options.role, name: options.name, text: options.text, limit: 1 },
+      snapshot.refs
+    )[0]
+    return assertExpectation(match, options)
   }
 
   action(action: InstrumentedAction): { ok: true } {
@@ -612,6 +624,16 @@ export class WebviewAgentInstrumentation {
           name: stringParam(params, 'name'),
           timeoutMs: numberParam(params, 'timeoutMs'),
           state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined
+        })
+      case 'expect':
+        return this.expect({
+          scope: stringParam(params, 'scope'),
+          role: stringParam(params, 'role'),
+          name: stringParam(params, 'name'),
+          text: stringParam(params, 'text'),
+          present: booleanParam(params, 'present'),
+          value: stringParam(params, 'value'),
+          hasState: stringParam(params, 'hasState')
         })
       case 'state':
         return this.state(stringParam(params, 'key'))

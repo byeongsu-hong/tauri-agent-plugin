@@ -28,6 +28,7 @@ export const AGENT_METHODS = [
   'cookies',
   'location',
   'wait',
+  'expect',
   'state',
   'record',
   'stream'

@@ -115,6 +115,16 @@ export class DebuggerSession {
           timeoutMs: numberParam(params.timeoutMs),
           state: params.state === 'absent' ? 'absent' : undefined
         })
+      case 'expect':
+        return this.app.expect({
+          scope: stringParam(params.scope),
+          role: stringParam(params.role),
+          name: stringParam(params.name),
+          text: stringParam(params.text),
+          present: booleanParam(params.present),
+          value: stringParam(params.value),
+          hasState: stringParam(params.hasState)
+        })
       case 'state':
         return this.app.state(stringParam(params.key))
       case 'record':

@@ -25,6 +25,7 @@ const COMMANDS: &[&str] = &[
     "agent_windows",
     "agent_window",
     "agent_wait",
+    "agent_expect",
     "agent_state",
     "agent_record",
     "agent_stream",

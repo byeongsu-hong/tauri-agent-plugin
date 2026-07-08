@@ -185,6 +185,11 @@ async function executeTool(
         'wait',
         pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])
       )
+    case 'tauri_expect':
+      return client.call(
+        'expect',
+        pick(args, ['window', 'scope', 'role', 'name', 'text', 'present', 'value', 'hasState'])
+      )
     case 'tauri_state':
       return client.call('state', pick(args, ['window', 'key']))
     case 'tauri_record':
@@ -325,7 +330,9 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
     type: 'string',
     enum: ['present', 'absent'],
     description: 'wait target state: present (default, appear) or absent (disappear).'
-  }
+  },
+  present: { type: 'boolean', description: 'expect: whether the target must exist (default true).' },
+  hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -356,6 +363,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
   tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear, or disappear with state=absent.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])),
+  tool('tauri_expect', 'Expect', 'Assert a semantic target exists (or is absent) and matches value/state; errors on mismatch.', schema(['window', 'scope', 'role', 'name', 'text', 'present', 'value', 'hasState'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
   tool(

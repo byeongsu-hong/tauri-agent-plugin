@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { JSDOM } from 'jsdom'
 
 import {
+  assertExpectation,
   blurRef,
   checkRef,
   clickRef,
@@ -31,6 +32,8 @@ import type {
   CookieParams,
   CookieResult,
   EvalResult,
+  ExpectParams,
+  ExpectResult,
   FindParams,
   FindResult,
   InspectResult,
@@ -228,6 +231,16 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
     return { matches: findRefs(options, snapshot.refs) }
+  }
+
+  async expect(options: ExpectParams): Promise<ExpectResult> {
+    this.bindGlobals()
+    const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
+    const match = findRefs(
+      { scope: options.scope, role: options.role, name: options.name, text: options.text, limit: 1 },
+      snapshot.refs
+    )[0]
+    return assertExpectation(match, options)
   }
 
   async click(ref: string): Promise<{ ok: true }> {

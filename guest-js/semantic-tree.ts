@@ -1,4 +1,4 @@
-import type { FindParams, InspectResult, KeyModifier } from '../protocol/types'
+import type { ExpectParams, ExpectResult, FindParams, InspectResult, KeyModifier } from '../protocol/types'
 
 export interface SnapshotOptions {
   scope?: string
@@ -137,6 +137,48 @@ export function findRefs(options: FindParams = {}, refs: Map<string, Element> = 
     }
   }
   return matches
+}
+
+/**
+ * Assert an already-located semantic match against the expectation params.
+ * Throws with a specific message on mismatch; returns `{ ok, match }` on success.
+ * Shared by the guest instrumentation and the static adapter.
+ */
+export function assertExpectation(
+  match: InspectResult | undefined,
+  options: ExpectParams
+): ExpectResult {
+  const present = options.present !== false
+  if (!match) {
+    if (present) {
+      throw new Error(`expect: no element matched ${describeExpectLocator(options)}`)
+    }
+    return { ok: true }
+  }
+  if (!present) {
+    throw new Error(`expect: element still present ${describeExpectLocator(options)}`)
+  }
+  if (options.value !== undefined && match.value !== options.value) {
+    throw new Error(
+      `expect: value ${JSON.stringify(match.value ?? null)} != ${JSON.stringify(options.value)}`
+    )
+  }
+  if (options.hasState !== undefined && !match.states.includes(options.hasState)) {
+    throw new Error(
+      `expect: missing state "${options.hasState}"; has [${match.states.join(', ')}]`
+    )
+  }
+  return { ok: true, match }
+}
+
+function describeExpectLocator(options: ExpectParams): string {
+  const parts = [
+    options.role ? `role=${options.role}` : null,
+    options.name ? `name~=${options.name}` : null,
+    options.text ? `text~=${options.text}` : null,
+    options.scope ? `scope=${options.scope}` : null
+  ].filter(Boolean)
+  return parts.length ? parts.join(' ') : '(any)'
 }
 
 export function clickRef(ref: string): void {

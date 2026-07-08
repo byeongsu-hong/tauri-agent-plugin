@@ -29,6 +29,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-windows`
 - `allow-agent-window`
 - `allow-agent-wait`
+- `allow-agent-expect`
 - `allow-agent-state`
 - `allow-agent-record`
 - `allow-agent-stream`
@@ -272,6 +273,32 @@ Enables the agent_events command without any pre-configured scope.
 <td>
 
 Denies the agent_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:allow-agent-expect`
+
+</td>
+<td>
+
+Enables the agent_expect command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-expect`
+
+</td>
+<td>
+
+Denies the agent_expect command without any pre-configured scope.
 
 </td>
 </tr>

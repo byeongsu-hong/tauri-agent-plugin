@@ -480,6 +480,27 @@ pub struct AgentWaitResponse {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentExpectRequest {
+    pub window: Option<String>,
+    pub scope: Option<String>,
+    pub role: Option<String>,
+    pub name: Option<String>,
+    pub text: Option<String>,
+    pub present: Option<bool>,
+    pub value: Option<String>,
+    pub has_state: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentExpectResponse {
+    pub ok: bool,
+    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
+    pub match_entry: Option<AgentInspectResponse>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStateRequest {
     pub window: Option<String>,
     pub key: Option<String>,

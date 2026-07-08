@@ -6,14 +6,15 @@ use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
     AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
-    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentFindRequest, AgentFindResponse,
-    AgentFocusRequest, AgentHoverRequest, AgentInspectRequest, AgentInspectResponse, AgentIpcEntry,
-    AgentIpcRequest, AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest,
-    AgentNetworkEntry, AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse,
-    AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest,
-    AgentStateRequest, AgentStorageRequest, AgentStorageResponse, AgentStreamRequest,
-    AgentStreamResponse, AgentTypeRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
-    ScreenshotBackend, WindowAction, WindowInfo,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
+    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
+    AgentInspectResponse, AgentIpcEntry, AgentIpcRequest, AgentLocationRequest,
+    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
+    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
+    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
+    AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
+    AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend, WindowAction,
+    WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -340,6 +341,16 @@ pub async fn agent_wait<R: Runtime>(
     request: AgentWaitRequest,
 ) -> Result<AgentWaitResponse> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "wait", &request)?;
+    decode_bridge_result(result)
+}
+
+#[tauri::command]
+pub async fn agent_expect<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentExpectRequest,
+) -> Result<AgentExpectResponse> {
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "expect", &request)?;
     decode_bridge_result(result)
 }
 

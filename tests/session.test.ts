@@ -355,6 +355,34 @@ describe('DebuggerSession', () => {
     await expect(session.execute('logs', {})).resolves.toEqual([])
   })
 
+  it('asserts semantic targets with expect', async () => {
+    const session = new DebuggerSession(
+      new StaticHtmlAppAdapter({
+        html: '<main aria-label="Scene"><button disabled>Save</button><input aria-label="Name" value="ada" /></main>'
+      })
+    )
+
+    await expect(
+      session.execute('expect', { role: 'button', name: 'Save', hasState: 'disabled' })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      session.execute('expect', { role: 'textbox', name: 'Name', value: 'ada' })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      session.execute('expect', { role: 'button', name: 'Delete', present: false })
+    ).resolves.toEqual({ ok: true })
+
+    await expect(
+      session.execute('expect', { role: 'textbox', name: 'Name', value: 'bob' })
+    ).rejects.toThrow(/value/)
+    await expect(
+      session.execute('expect', { role: 'button', name: 'Save', hasState: 'checked' })
+    ).rejects.toThrow(/missing state/)
+    await expect(session.execute('expect', { role: 'button', name: 'Delete' })).rejects.toThrow(
+      /no element matched/
+    )
+  })
+
   it('waits for text and semantic targets to disappear with state=absent', async () => {
     const adapter = new StaticHtmlAppAdapter({
       html: '<main aria-label="Scene"><p>Loading</p><button>Cancel</button></main>'
