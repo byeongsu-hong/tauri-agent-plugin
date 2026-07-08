@@ -110,6 +110,39 @@ interface ShotOptions extends ConnectionOptions {
   ref?: string
 }
 
+/**
+ * Attach the connection options shared by every command (`--app`,
+ * `--from-html`, `--host`, `--port`, `--window`, and optionally `--scope`) so
+ * they are declared once instead of ~25 times.
+ */
+function withConnectionOptions(command: Command, options: { scope?: boolean } = {}): Command {
+  command
+    .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+    .option('--from-html <path>', 'prototype against a static HTML file')
+    .option('--host <host>', 'debug daemon host', '127.0.0.1')
+    .option('--port <port>', 'debug daemon port', Number)
+    .option('--window <label>', 'Tauri window label')
+  if (options.scope) {
+    command.option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
+  }
+  return command
+}
+
+/**
+ * Register a ref command whose whole body is "refresh the tree, then run one
+ * ref action" — the shape shared by click/hover/focus/blur/inspect.
+ */
+function registerSimpleRefCommand(name: AgentMethod, description: string, argDescription: string): void {
+  withConnectionOptions(
+    program.command(name).description(description).argument('<ref>', argDescription),
+    { scope: true }
+  ).action(async (ref: string, options: ConnectionOptions) => {
+    const client = await debuggerClient(options)
+    await client.call('tree', treeParams(options))
+    printJson(await client.call(name, refActionParams(options, ref)))
+  })
+}
+
 const program = new Command()
 
 program
@@ -237,205 +270,103 @@ program
   .option('--limit <count>', 'maximum number of matches', parseNumber)
   .action(async (options: FindOptions) => printJson(await call(options, 'find', findParams(options))))
 
-program
-  .command('click')
-  .description('Click a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @3')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
-  .action(async (ref: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('click', refActionParams(options, ref)))
-  })
+registerSimpleRefCommand('click', 'Click a snapshot-local ref.', 'snapshot-local ref, for example @3')
+registerSimpleRefCommand('hover', 'Hover a snapshot-local ref.', 'snapshot-local ref, for example @3')
+registerSimpleRefCommand('focus', 'Focus a snapshot-local ref.', 'snapshot-local ref, for example @4')
+registerSimpleRefCommand('blur', 'Blur a snapshot-local ref.', 'snapshot-local ref, for example @4')
+registerSimpleRefCommand('inspect', 'Inspect a snapshot-local ref.', 'snapshot-local ref, for example @4')
 
-program
-  .command('hover')
-  .description('Hover a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @3')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('hover', refActionParams(options, ref)))
-  })
+withConnectionOptions(
+  program
+    .command('scroll')
+    .description('Scroll a snapshot-local ref by x/y deltas.')
+    .argument('<ref>', 'snapshot-local ref, for example @7')
+    .argument('[y]', 'vertical scroll delta', parseNumber, 0)
+    .argument('[x]', 'horizontal scroll delta', parseNumber, 0),
+  { scope: true }
+).action(async (ref: string, y: number, x: number, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('scroll', refActionParams(options, ref, { y, x })))
+})
 
-program
-  .command('focus')
-  .description('Focus a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @4')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('focus', refActionParams(options, ref)))
-  })
+withConnectionOptions(
+  program
+    .command('drag')
+    .description('Drag a snapshot-local ref to another snapshot-local ref.')
+    .argument('<ref>', 'snapshot-local source ref, for example @3')
+    .argument('[toRef]', 'snapshot-local target ref, for example @8'),
+  { scope: true }
+).action(async (ref: string, toRef: string | undefined, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('drag', refActionParams(options, ref, { toRef })))
+})
 
-program
-  .command('blur')
-  .description('Blur a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @4')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('blur', refActionParams(options, ref)))
-  })
+withConnectionOptions(
+  program
+    .command('fill')
+    .description('Fill a snapshot-local ref.')
+    .argument('<ref>', 'snapshot-local ref, for example @4')
+    .argument('<text>', 'text value'),
+  { scope: true }
+).action(async (ref: string, text: string, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('fill', refActionParams(options, ref, { text })))
+})
 
-program
-  .command('scroll')
-  .description('Scroll a snapshot-local ref by x/y deltas.')
-  .argument('<ref>', 'snapshot-local ref, for example @7')
-  .argument('[y]', 'vertical scroll delta', parseNumber, 0)
-  .argument('[x]', 'horizontal scroll delta', parseNumber, 0)
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, y: number, x: number, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('scroll', refActionParams(options, ref, { y, x })))
-  })
+withConnectionOptions(
+  program
+    .command('type')
+    .description('Type text into a snapshot-local ref with realistic per-key events.')
+    .argument('<ref>', 'snapshot-local ref, for example @4')
+    .argument('<text>', 'text to type'),
+  { scope: true }
+).action(async (ref: string, text: string, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('type', refActionParams(options, ref, { text })))
+})
 
-program
-  .command('drag')
-  .description('Drag a snapshot-local ref to another snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local source ref, for example @3')
-  .argument('[toRef]', 'snapshot-local target ref, for example @8')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, toRef: string | undefined, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('drag', refActionParams(options, ref, { toRef })))
-  })
+withConnectionOptions(
+  program
+    .command('select')
+    .description('Select an option in a snapshot-local select control.')
+    .argument('<ref>', 'snapshot-local select or option ref, for example @4')
+    .argument('[value]', 'option value or visible label'),
+  { scope: true }
+).action(async (ref: string, value: string | undefined, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('select', refActionParams(options, ref, { value })))
+})
 
-program
-  .command('fill')
-  .description('Fill a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @4')
-  .argument('<text>', 'text value')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
-  .action(async (ref: string, text: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('fill', refActionParams(options, ref, { text })))
-  })
+withConnectionOptions(
+  program
+    .command('check')
+    .description('Set checked state on a snapshot-local checkbox or radio ref.')
+    .argument('<ref>', 'snapshot-local checkbox or radio ref, for example @6')
+    .argument('[checked]', 'true or false', parseBoolean),
+  { scope: true }
+).action(async (ref: string, checked: boolean | undefined, options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('check', refActionParams(options, ref, { checked })))
+})
 
-program
-  .command('type')
-  .description('Type text into a snapshot-local ref with realistic per-key events.')
-  .argument('<ref>', 'snapshot-local ref, for example @4')
-  .argument('<text>', 'text to type')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot to a CSS selector')
-  .action(async (ref: string, text: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('type', refActionParams(options, ref, { text })))
-  })
-
-program
-  .command('select')
-  .description('Select an option in a snapshot-local select control.')
-  .argument('<ref>', 'snapshot-local select or option ref, for example @4')
-  .argument('[value]', 'option value or visible label')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, value: string | undefined, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('select', refActionParams(options, ref, { value })))
-  })
-
-program
-  .command('check')
-  .description('Set checked state on a snapshot-local checkbox or radio ref.')
-  .argument('<ref>', 'snapshot-local checkbox or radio ref, for example @6')
-  .argument('[checked]', 'true or false', parseBoolean)
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, checked: boolean | undefined, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('check', refActionParams(options, ref, { checked })))
-  })
-
-program
-  .command('upload')
-  .description('Set synthetic files on a snapshot-local file input ref.')
-  .argument('<ref>', 'snapshot-local file input ref, for example @2')
-  .argument('<files...>', 'file specs as name or name=text')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, files: string[], options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('upload', refActionParams(options, ref, { files: parseUploadFiles(files) })))
-  })
-
-program
-  .command('inspect')
-  .description('Inspect a snapshot-local ref.')
-  .argument('<ref>', 'snapshot-local ref, for example @4')
-  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
-  .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
-  .option('--port <port>', 'debug daemon port', Number)
-  .option('--window <label>', 'Tauri window label')
-  .option('--scope <selector>', 'limit the snapshot ref refresh to a CSS selector')
-  .action(async (ref: string, options: ConnectionOptions) => {
-    const client = await debuggerClient(options)
-    await client.call('tree', treeParams(options))
-    printJson(await client.call('inspect', refActionParams(options, ref)))
-  })
+withConnectionOptions(
+  program
+    .command('upload')
+    .description('Set synthetic files on a snapshot-local file input ref.')
+    .argument('<ref>', 'snapshot-local file input ref, for example @2')
+    .argument('<files...>', 'file specs as name or name=text'),
+  { scope: true }
+).action(async (ref: string, files: string[], options: ConnectionOptions) => {
+  const client = await debuggerClient(options)
+  await client.call('tree', treeParams(options))
+  printJson(await client.call('upload', refActionParams(options, ref, { files: parseUploadFiles(files) })))
+})
 
 program
   .command('eval')
