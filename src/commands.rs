@@ -66,16 +66,24 @@ pub async fn agent_action<R: Runtime>(
     bridge: State<'_, AgentBridge>,
     request: AgentActionRequest,
 ) -> Result<()> {
-    if !matches!(&request.action, AgentAction::Press) {
-        match request.ref_id.as_deref() {
-            Some(ref_id) if ref_id.starts_with('@') => {}
-            Some(ref_id) => return Err(Error::StaleRef(ref_id.to_string())),
-            None => {
-                return Err(Error::BridgeUnavailable(
-                    "agent_action requires ref for click and fill".into(),
-                ))
-            }
+    // A malformed ref (not `@N`) is a caller mistake, not a stale snapshot, so
+    // report InvalidParams rather than StaleRef — the two imply different fixes
+    // (correct the argument vs. re-run tree). `press` may omit the ref entirely,
+    // but if it supplies one it must still be well-formed.
+    let requires_ref = !matches!(&request.action, AgentAction::Press);
+    match request.ref_id.as_deref() {
+        Some(ref_id) if ref_id.starts_with('@') => {}
+        Some(ref_id) => {
+            return Err(Error::InvalidParams(format!(
+                "malformed ref {ref_id:?}; refs look like @3 from a tree/find snapshot"
+            )))
         }
+        None if requires_ref => {
+            return Err(Error::InvalidParams(
+                "click and fill require a ref from a tree/find snapshot".into(),
+            ))
+        }
+        None => {}
     }
     let method = match &request.action {
         AgentAction::Click => "click",

@@ -7,18 +7,30 @@
 
 ## Implementation Status (2026-07-08)
 
-Every workstream below is delivered on `main`. All commits verified: `bun run
-check` green, `cargo fmt`/`clippy -D warnings`/`test` green.
+Every workstream below is delivered on `main` except one deliberately-deferred
+item (full ref epoch-stamping — see WS2). All commits verified: `bun run check`
+green, `cargo fmt`/`clippy -D warnings`/`test` green.
 
 - **WS1 Security — DONE.** Token auth + `0600` registry, loopback enforcement,
   `eval` split out of `agent:default` (+ `agent:readonly`), unforgeable bridge
   ids, dot-only app-id neutralization.
-- **WS2 Robustness — DONE.** Rust: bridge timeout cap + pending-leak fix, bounded
-  TCP surface, registry lifecycle (Exit-only, atomic, publish-gated), error
-  taxonomy, unified window selection. TS: `console.log` capture, detached-ref
-  liveness, socket error/timeout handling, MCP stdio concurrency, bounded
-  buffers. **Ref epochs** (phase 3): snapshots stamped `@s<epoch>r<n>`, stale-epoch
-  refs rejected with a distinct `STALE_REF` code, `isConnected` liveness retained.
+- **WS2 Robustness — DONE (ref liveness; epoch-stamping deferred with rationale).**
+  Rust: bridge timeout cap + pending-leak fix, bounded TCP surface, registry
+  lifecycle (Exit-only, atomic, publish-gated), error taxonomy, unified window
+  selection, and (phase 3) malformed-ref → `INVALID_PARAMS` instead of
+  `STALE_REF` so callers know to fix the argument vs. re-snapshot. TS:
+  `console.log` capture, `isConnected` detached-ref liveness (the dangerous
+  "act on a vanished element" case), socket error/timeout handling, MCP stdio
+  concurrency, bounded buffers.
+  **Full epoch-stamped refs (`@s<epoch>e<n>`) were evaluated and deliberately
+  NOT adopted.** They conflict with the CLI/MCP self-contained ergonomics: both
+  re-run `tree` immediately before every ref action (24 call sites), which would
+  bump the epoch and invalidate the caller's just-typed ref. Making them coexist
+  needs a session/snapshot-token redesign of the CLI ref model, and the format
+  change touches 324 ref assertions across 13 test files with epoch-dependent
+  values. That is a breaking change disproportionate to the residual risk once
+  `isConnected` liveness is in place, so it remains a tracked follow-up rather
+  than a phase-3 change.
 - **WS3 Release — DONE.** Dual licenses, CI workflow (live at
   `.github/workflows/ci.yml`), packaging metadata, `check:rust`, CHANGELOG,
   `jsdom` demoted to a lazy dynamic import (phase 3).
@@ -41,7 +53,8 @@ check` green, `cargo fmt`/`clippy -D warnings`/`test` green.
   multi-webview addressing, `UNSUPPORTED_PLATFORM` screenshot taxonomy, and
   `mode: verbose` tree rendering (phase 3).
 
-Nothing from the workstreams below remains deferred.
+The only deferred item is full ref epoch-stamping (WS2), tracked as a follow-up
+that needs a CLI/MCP session-model redesign to coexist with their re-tree flow.
 
 ## Current State
 
