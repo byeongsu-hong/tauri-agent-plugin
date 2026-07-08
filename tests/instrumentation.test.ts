@@ -325,6 +325,36 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('auto-handles alert/confirm/prompt per policy and records them', () => {
+    document.body.innerHTML = '<main></main>'
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      // Default policy accepts confirm and returns the prompt default.
+      expect(window.confirm('proceed?')).toBe(true)
+      expect(window.prompt('name?', 'default')).toBe('default')
+      window.alert('done')
+
+      let result = instrumentation.dialog()
+      expect(result.dialogs.map((entry) => entry.type)).toEqual(['confirm', 'prompt', 'alert'])
+      expect(result.policy).toEqual({ accept: true })
+
+      // Dismiss policy: confirm is false, prompt is null.
+      instrumentation.dialog({ action: 'set', accept: false, promptText: 'forced' })
+      expect(window.confirm('again?')).toBe(false)
+      expect(window.prompt('again?')).toBeNull()
+
+      // Accept again: prompt returns the configured promptText over the default.
+      instrumentation.dialog({ action: 'set', accept: true })
+      expect(window.prompt('q', 'ignored-default')).toBe('forced')
+
+      result = instrumentation.dialog({ action: 'clear' })
+      expect(result.dialogs).toEqual([])
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('sets synthetic files on a file input ref', () => {
     document.body.innerHTML = '<main><input type="file" aria-label="Attachment" /></main>'
     const instrumentation = new WebviewAgentInstrumentation()

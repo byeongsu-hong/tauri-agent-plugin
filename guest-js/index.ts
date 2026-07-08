@@ -44,6 +44,8 @@ import type {
   AgentEvent,
   CookieParams,
   CookieResult,
+  DialogParams,
+  DialogResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -91,6 +93,8 @@ export {
   type AgentWindow,
   type CookieParams,
   type CookieResult,
+  type DialogParams,
+  type DialogResult,
   type DragOptions,
   type EvalResult,
   type ExpectParams,
@@ -267,6 +271,10 @@ export interface AgentStateRequest {
   key?: string
 }
 
+export interface AgentDialogRequest extends DialogParams {
+  window?: string
+}
+
 export interface AgentRecordRequest {
   window?: string
   action?: 'start' | 'stop' | 'get' | 'clear'
@@ -424,6 +432,11 @@ export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitRes
 /** Assert a locator's presence/absence, value, or state flag in one round trip. */
 export async function agentExpect(request: AgentExpectRequest): Promise<ExpectResult> {
   return invokeAgentCommand('plugin:agent|agent_expect', { request: withCurrentWindow(request) })
+}
+
+/** Read or set the auto-dialog policy (alert/confirm/prompt) and read the dialog log. */
+export async function agentDialog(request: AgentDialogRequest = {}): Promise<DialogResult> {
+  return invokeAgentCommand('plugin:agent|agent_dialog', { request: withCurrentWindow(request) })
 }
 
 /** Read the app's exposed agent state map, or a single key when `key` is set. */

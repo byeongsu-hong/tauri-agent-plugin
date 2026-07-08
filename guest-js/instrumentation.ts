@@ -33,6 +33,7 @@ import {
   applyCookieAction,
   applyStorageAction,
   cookieResult,
+  DialogController,
   errorLikeMessage,
   hasSemanticWaitFilter,
   locationResult,
@@ -42,13 +43,16 @@ import {
   storageArea,
   storageResult,
   waitEventDetail,
-  waitTimeoutMessage
+  waitTimeoutMessage,
+  type DialogWindow
 } from './dom-actions'
 import type {
   AgentEvent,
   AgentMethod,
   CookieParams,
   CookieResult,
+  DialogParams,
+  DialogResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -177,6 +181,9 @@ export class WebviewAgentInstrumentation {
   private networkEntryId = 0
   /** In-flight fetch/XHR count, used by `wait({ networkIdle: true })`. */
   private inFlightRequests = 0
+  private readonly dialogController = new DialogController((entry) =>
+    this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
+  )
   private semanticStream?: SemanticStream
   private streamObserver?: MutationObserver
   private readonly handleRuntimeError = (event: ErrorEvent): void => {
@@ -204,6 +211,7 @@ export class WebviewAgentInstrumentation {
     this.installXhrCapture()
     this.installWebSocketCapture()
     this.installIpcCapture()
+    this.dialogController.install(window as unknown as DialogWindow)
     this.installSemanticStream()
     window.addEventListener('error', this.handleRuntimeError, { capture: true })
     window.addEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
@@ -235,6 +243,7 @@ export class WebviewAgentInstrumentation {
       this.ipcTarget = undefined
       this.originalInvoke = undefined
     }
+    this.dialogController.dispose(window as unknown as DialogWindow)
     window.removeEventListener('error', this.handleRuntimeError, { capture: true })
     window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, { capture: true })
     this.streamObserver?.disconnect()
@@ -751,6 +760,12 @@ export class WebviewAgentInstrumentation {
         })
       case 'state':
         return this.state(stringParam(params, 'key'))
+      case 'dialog':
+        return this.dialog({
+          action: dialogActionParam(params),
+          accept: booleanParam(params, 'accept'),
+          promptText: stringParam(params, 'promptText')
+        })
       case 'record':
         return this.record(recordActionParam(params))
       case 'stream':
@@ -955,6 +970,10 @@ export class WebviewAgentInstrumentation {
     window.WebSocket = Wrapped
   }
 
+  dialog(params: DialogParams = {}): DialogResult {
+    return this.dialogController.handle(params)
+  }
+
   private installIpcCapture(): void {
     const internals = window.__TAURI_INTERNALS__
     if (!internals || typeof internals.invoke !== 'function' || this.originalInvoke) {
@@ -1126,6 +1145,11 @@ function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | u
 function recordActionParam(params: Record<string, unknown>): 'start' | 'stop' | 'get' | 'clear' {
   const action = params.action
   return action === 'start' || action === 'stop' || action === 'clear' ? action : 'get'
+}
+
+function dialogActionParam(params: Record<string, unknown>): 'get' | 'set' | 'clear' {
+  const action = params.action
+  return action === 'set' || action === 'clear' ? action : 'get'
 }
 
 function fetchMethod(input: RequestInfo | URL, init?: RequestInit): string {

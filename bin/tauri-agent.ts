@@ -100,6 +100,11 @@ interface StateOptions extends ConnectionOptions {
   key?: string
 }
 
+interface DialogOptions extends ConnectionOptions {
+  accept?: boolean
+  promptText?: string
+}
+
 interface ShotOptions extends ConnectionOptions {
   backend?: ScreenshotBackend
   ref?: string
@@ -673,6 +678,29 @@ program
   .action(async (options: StateOptions) => printJson(await call(options, 'state', stateParams(options))))
 
 program
+  .command('dialog')
+  .description('Read or set the auto-dialog policy (alert/confirm/prompt) and read the dialog log.')
+  .argument('[action]', 'get (default), set, or clear', parseDialogAction)
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--accept', 'accept confirm/prompt dialogs (with set)')
+  .option('--no-accept', 'dismiss confirm/prompt dialogs (with set)')
+  .option('--prompt-text <text>', 'text returned by accepted prompt dialogs (with set)')
+  .action(async (action: 'get' | 'set' | 'clear' | undefined, options: DialogOptions) =>
+    printJson(
+      await call(options, 'dialog', {
+        ...targetParams(options),
+        action,
+        accept: options.accept,
+        promptText: options.promptText
+      })
+    )
+  )
+
+program
   .command('record')
   .description('Manage action recording.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
@@ -923,6 +951,13 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
+}
+
+function parseDialogAction(value: string): 'get' | 'set' | 'clear' {
+  if (value === 'get' || value === 'set' || value === 'clear') {
+    return value
+  }
+  throw new Error(`invalid dialog action: ${value} (expected get, set, or clear)`)
 }
 
 function parseUploadFiles(specs: string[]): Array<{ name: string; text?: string }> {

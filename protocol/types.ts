@@ -33,6 +33,7 @@ export type AgentMethod =
   | 'state'
   | 'record'
   | 'stream'
+  | 'dialog'
 
 export interface JsonRpcRequest<TParams = unknown> {
   jsonrpc: '2.0'
@@ -266,6 +267,33 @@ export interface ExpectResult {
 
 export interface StateParams extends WindowTarget {
   key?: string
+}
+
+/**
+ * Control how native dialogs (`alert`/`confirm`/`prompt`) are auto-handled.
+ * They are synchronous and would otherwise block the app unrecoverably, so the
+ * agent sets a policy up front, triggers the action, then reads what fired.
+ */
+export interface DialogParams extends WindowTarget {
+  /** `get` (default) reads state; `set` updates the policy; `clear` empties the log. */
+  action?: 'get' | 'set' | 'clear'
+  /** Whether `confirm`/`prompt` are accepted (default true). `alert` always returns. */
+  accept?: boolean
+  /** Text returned by `prompt` when accepted (falls back to the dialog's default). */
+  promptText?: string
+}
+
+export interface DialogEntry {
+  type: 'alert' | 'confirm' | 'prompt'
+  message: string
+  defaultValue?: string
+  response: string | boolean | null
+  timestamp: string
+}
+
+export interface DialogResult {
+  policy: { accept: boolean; promptText?: string }
+  dialogs: DialogEntry[]
 }
 
 export interface RecordParams extends WindowTarget {

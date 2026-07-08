@@ -33,6 +33,7 @@ import {
   applyCookieAction,
   applyStorageAction,
   cookieResult,
+  DialogController,
   errorLikeMessage,
   hasSemanticWaitFilter,
   locationResult,
@@ -42,13 +43,16 @@ import {
   storageArea,
   storageResult,
   waitEventDetail,
-  waitTimeoutMessage
+  waitTimeoutMessage,
+  type DialogWindow
 } from '../guest-js/dom-actions'
 import type {
   AgentEvent,
   AgentWindow,
   CookieParams,
   CookieResult,
+  DialogParams,
+  DialogResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -88,6 +92,9 @@ export class StaticHtmlAppAdapter {
   private logs: LogEntry[] = []
   private events: AgentEvent[] = []
   private network: NetworkEntry[] = []
+  private readonly dialogController = new DialogController((entry) =>
+    this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
+  )
   private semanticStream: SemanticStream
   private streamObserver?: MutationObserver
   private windowState: AgentWindow
@@ -107,6 +114,7 @@ export class StaticHtmlAppAdapter {
     })
     this.windowState = this.createInitialWindowState()
     this.bindGlobals()
+    this.dialogController.install(this.dom.window as unknown as DialogWindow)
     this.installRuntimeLogCapture()
     this.semanticStream = new SemanticStream({
       capture: () => snapshotDocument(this.dom.window.document).text
@@ -397,6 +405,10 @@ export class StaticHtmlAppAdapter {
       values
     }
     return stateValue(state, key)
+  }
+
+  async dialog(params: DialogParams = {}): Promise<DialogResult> {
+    return this.dialogController.handle(params)
   }
 
   async wait(options: WaitParams = {}): Promise<WaitResult> {

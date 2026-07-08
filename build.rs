@@ -28,6 +28,7 @@ const COMMANDS: &[&str] = &[
     "agent_wait",
     "agent_expect",
     "agent_state",
+    "agent_dialog",
     "agent_record",
     "agent_stream",
 ];

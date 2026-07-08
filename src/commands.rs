@@ -5,16 +5,16 @@ use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State, 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
     AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
-    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
-    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentIpcEntry, AgentIpcRequest, AgentLocationRequest,
-    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
-    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
-    AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
-    AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend,
-    WindowAction, WindowInfo,
+    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDialogRequest,
+    AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest,
+    AgentExpectResponse, AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
+    AgentInspectRequest, AgentInspectResponse, AgentIpcEntry, AgentIpcRequest,
+    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
+    AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentStorageRequest, AgentStorageResponse, AgentStreamRequest, AgentStreamResponse,
+    AgentTypeRequest, AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
+    ScreenshotBackend, WindowAction, WindowInfo,
 };
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
@@ -149,6 +149,15 @@ pub async fn agent_upload<R: Runtime>(
 ) -> Result<()> {
     request_bridge(&bridge, &app, request.window.as_deref(), "upload", &request)?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_dialog<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentDialogRequest,
+) -> Result<Value> {
+    request_bridge(&bridge, &app, request.window.as_deref(), "dialog", &request)
 }
 
 #[tauri::command]

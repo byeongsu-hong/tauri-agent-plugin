@@ -21,7 +21,7 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 pub(crate) const BRIDGE_METHODS: &[&str] = &[
     "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
     "check", "upload", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage",
-    "cookies", "location", "wait", "expect", "state", "record", "stream",
+    "cookies", "location", "wait", "expect", "state", "dialog", "record", "stream",
 ];
 
 use serde::de::DeserializeOwned;

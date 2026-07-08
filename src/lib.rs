@@ -175,6 +175,7 @@ impl Builder {
                 commands::agent_wait,
                 commands::agent_expect,
                 commands::agent_state,
+                commands::agent_dialog,
                 commands::agent_record,
                 commands::agent_stream,
             ])

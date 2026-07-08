@@ -135,6 +135,12 @@ export class DebuggerSession {
         })
       case 'state':
         return this.app.state(stringParam(params.key))
+      case 'dialog':
+        return this.app.dialog({
+          action: dialogActionParam(params.action),
+          accept: booleanParam(params.accept),
+          promptText: stringParam(params.promptText)
+        })
       case 'record':
         return this.handleRecord(params)
       case 'stream':
@@ -197,6 +203,10 @@ function numberParam(value: unknown): number | undefined {
 
 function booleanParam(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
+}
+
+function dialogActionParam(value: unknown): 'get' | 'set' | 'clear' | undefined {
+  return value === 'get' || value === 'set' || value === 'clear' ? value : undefined
 }
 
 function uploadFilesParam(value: unknown): UploadFile[] {

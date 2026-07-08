@@ -32,7 +32,8 @@ export const AGENT_METHODS = [
   'expect',
   'state',
   'record',
-  'stream'
+  'stream',
+  'dialog'
 ] as const satisfies readonly AgentMethod[]
 
 const AGENT_METHOD_SET = new Set<string>(AGENT_METHODS)

@@ -206,6 +206,8 @@ async function executeTool(
       )
     case 'tauri_state':
       return client.call('state', pick(args, ['window', 'key']))
+    case 'tauri_dialog':
+      return client.call('dialog', pick(args, ['window', 'action', 'accept', 'promptText']))
     case 'tauri_record':
       return client.call('record', pick(args, ['window', 'action']))
     case 'tauri_stream':
@@ -346,6 +348,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
     description: 'wait target state: present (default, appear) or absent (disappear).'
   },
   present: { type: 'boolean', description: 'expect: whether the target must exist (default true).' },
+  accept: { type: 'boolean', description: 'dialog: whether confirm/prompt are accepted (default true).' },
+  promptText: { type: 'string', description: 'dialog: text returned by accepted prompt dialogs.' },
   hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' },
   files: {
     type: 'array',
@@ -396,6 +400,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_wait', 'Wait', 'Wait for text/a semantic element to appear (or disappear with state=absent), a JS expression to become truthy (fn), or the network to go idle (networkIdle).', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state', 'fn', 'networkIdle', 'idleMs'])),
   tool('tauri_expect', 'Expect', 'Assert a semantic target exists (or is absent) and matches value/state; errors on mismatch.', schema(['window', 'scope', 'role', 'name', 'text', 'present', 'value', 'hasState'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
+  tool('tauri_dialog', 'Dialog', 'Auto-handle alert/confirm/prompt: set accept/promptText policy up front, then read what fired.', dialogSchema()),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
   tool(
     'tauri_stream',
@@ -441,6 +446,16 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
 function storageSchema(): JsonSchema {
   const inputSchema = schema(['window', 'area', 'key', 'value'])
   inputSchema.properties.action = { type: 'string', enum: ['get', 'set', 'remove', 'clear'] }
+  return inputSchema
+}
+
+function dialogSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'accept', 'promptText'])
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['get', 'set', 'clear'],
+    description: 'get (default) reads state; set updates the policy; clear empties the log.'
+  }
   return inputSchema
 }
 

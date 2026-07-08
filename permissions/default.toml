@@ -34,6 +34,7 @@ permissions = [
   "allow-agent-wait",
   "allow-agent-expect",
   "allow-agent-state",
+  "allow-agent-dialog",
   "allow-agent-record",
   "allow-agent-stream",
 ]

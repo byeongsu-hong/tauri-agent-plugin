@@ -43,7 +43,8 @@ describe('agent debug protocol', () => {
       'expect',
       'state',
       'record',
-      'stream'
+      'stream',
+      'dialog'
     ])
     expect(isAgentMethod('find')).toBe(true)
     expect(isAgentMethod('network')).toBe(true)
