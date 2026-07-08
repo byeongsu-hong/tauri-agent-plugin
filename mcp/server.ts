@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
-import { DebuggerClient, SocketTransport } from '../daemon/client'
-import { readEndpointRegistry } from '../daemon/endpoint'
-import { createDebuggerRpcHandler, InProcessTransport } from '../daemon/server'
-import { DebuggerSession } from '../daemon/session'
-import { StaticHtmlAppAdapter } from '../daemon/static-app'
+import type { DebuggerClient } from '../daemon/client'
+import { connectDebuggerClient, pollFollow } from '../daemon/connect'
 import type { AgentMethod } from '../protocol/types'
 
 const MCP_PROTOCOL_VERSION = '2025-11-25'
@@ -226,56 +223,24 @@ async function callFollowableEntries(
     return client.call(method, pick(args, ['window', 'follow', 'clear']))
   }
 
-  const pollMs = Math.max(1, numberField(args, 'pollMs') ?? 250)
-  const timeoutMs = Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
-  const startedAt = Date.now()
   const entries: unknown[] = []
-  let emitted = 0
-
-  while (true) {
-    const result = await client.call(method, { ...windowParams(args), follow: true })
-    if (!Array.isArray(result)) {
-      throw new Error(`${method} follow expected an array result`)
-    }
-
-    const start = result.length < emitted ? 0 : emitted
-    entries.push(...result.slice(start))
-    emitted = result.length
-
-    if (Date.now() - startedAt >= timeoutMs) {
-      return entries
-    }
-    await sleep(nextPollDelay(startedAt, pollMs, timeoutMs))
+  const poll = pollFollow(client, method, windowParams(args), {
+    pollMs: numberField(args, 'pollMs') ?? 250,
+    timeoutMs: Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
+  })
+  for await (const fresh of poll) {
+    entries.push(...fresh)
   }
+  return entries
 }
 
 async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
-  const port = numberField(args, 'port')
-  if (port !== undefined) {
-    return new DebuggerClient(
-      new SocketTransport({ port, host: stringField(args, 'host', '127.0.0.1') })
-    )
-  }
-
-  const app = stringField(args, 'app')
-  if (app) {
-    const endpoint = await readEndpointRegistry(app)
-    if (!isProcessAlive(endpoint.pid)) {
-      throw new Error(`debugger endpoint for app ${app} is stale: pid ${endpoint.pid} is not running`)
-    }
-    return new DebuggerClient(
-      new SocketTransport(
-        endpoint.transport === 'tcp'
-          ? { port: endpoint.port, host: endpoint.host }
-          : { path: endpoint.path }
-      ),
-      endpoint.token
-    )
-  }
-
-  const html = await htmlFromArgs(args)
-  const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
-  return new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
+  return connectDebuggerClient({
+    port: numberField(args, 'port'),
+    host: stringField(args, 'host', '127.0.0.1'),
+    app: stringField(args, 'app'),
+    resolveHtml: () => htmlFromArgs(args)
+  })
 }
 
 async function htmlFromArgs(args: ToolCallArgs): Promise<string> {
@@ -560,14 +525,6 @@ function numberField(value: Record<string, unknown>, field: string): number | un
   return typeof fieldValue === 'number' ? fieldValue : undefined
 }
 
-function nextPollDelay(startedAt: number, pollMs: number, timeoutMs: number): number {
-  return Math.max(0, Math.min(pollMs, timeoutMs - (Date.now() - startedAt)))
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function jsonRpcResult(id: string | number, result: unknown): string {
   return JSON.stringify({ jsonrpc: '2.0', id, result })
 }
@@ -582,13 +539,4 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
-  }
 }

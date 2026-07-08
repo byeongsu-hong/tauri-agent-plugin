@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises'
 
 import { Command } from 'commander'
 
-import { DebuggerClient, SocketTransport } from '../daemon/client'
+import type { DebuggerClient } from '../daemon/client'
+import { connectDebuggerClient, pollFollow } from '../daemon/connect'
 import { readEndpointRegistry } from '../daemon/endpoint'
-import { createDebuggerRpcHandler, createLineJsonRpcServer, InProcessTransport } from '../daemon/server'
+import { createDebuggerRpcHandler, createLineJsonRpcServer } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
 import type { AgentMethod, KeyModifier, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
@@ -540,26 +541,14 @@ async function followEntries(
   method: 'logs' | 'events' | 'network' | 'ipc'
 ): Promise<void> {
   const client = await debuggerClient(options)
-  const pollMs = Math.max(1, options.pollMs ?? 250)
-  const startedAt = Date.now()
-  let emitted = 0
-
-  while (true) {
-    const result = await client.call(method, { ...targetParams(options), follow: true })
-    if (!Array.isArray(result)) {
-      throw new Error(`${method} follow expected an array result`)
-    }
-
-    const start = result.length < emitted ? 0 : emitted
-    for (const entry of result.slice(start)) {
+  const poll = pollFollow(client, method, targetParams(options), {
+    pollMs: options.pollMs ?? 250,
+    timeoutMs: options.timeoutMs
+  })
+  for await (const fresh of poll) {
+    for (const entry of fresh) {
       process.stdout.write(`${JSON.stringify(entry)}\n`)
     }
-    emitted = result.length
-
-    if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
-      return
-    }
-    await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
   }
 }
 
@@ -735,30 +724,16 @@ function refActionParams(
 }
 
 async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClient> {
-  if (options.port) {
-    return new DebuggerClient(new SocketTransport({ port: options.port, host: options.host }))
-  }
-  if (options.app) {
-    const endpoint = await readEndpointRegistry(options.app)
-    if (!isProcessAlive(endpoint.pid)) {
-      throw new Error(`debugger endpoint for app ${options.app} is stale: pid ${endpoint.pid} is not running`)
-    }
-    return new DebuggerClient(
-      new SocketTransport(
-        endpoint.transport === 'tcp'
-          ? { port: endpoint.port, host: endpoint.host }
-          : { path: endpoint.path }
-      ),
-      endpoint.token
-    )
-  }
-  if (!options.fromHtml) {
+  if (!options.port && !options.app && !options.fromHtml) {
     exitBridgePending()
   }
-
-  const html = await readFile(options.fromHtml, 'utf8')
-  const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
-  return new DebuggerClient(new InProcessTransport(createDebuggerRpcHandler(session)))
+  const fromHtml = options.fromHtml
+  return connectDebuggerClient({
+    port: options.port,
+    host: options.host,
+    app: options.app,
+    resolveHtml: fromHtml ? () => readFile(fromHtml, 'utf8') : undefined
+  })
 }
 
 function printJson(value: unknown): void {
@@ -897,11 +872,3 @@ function exitBridgePending(): never {
   process.exit(2)
 }
 
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
-  }
-}
