@@ -196,6 +196,8 @@ export interface WaitParams extends WindowTarget {
   role?: string
   name?: string
   timeoutMs?: number
+  /** `present` (default) waits for appearance; `absent` waits for disappearance. */
+  state?: 'present' | 'absent'
 }
 
 export interface StateParams extends WindowTarget {

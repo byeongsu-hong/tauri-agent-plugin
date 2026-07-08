@@ -466,6 +466,7 @@ pub struct AgentWaitRequest {
     pub role: Option<String>,
     pub name: Option<String>,
     pub timeout_ms: Option<u64>,
+    pub state: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -664,6 +665,7 @@ mod tests {
             role: None,
             name: None,
             timeout_ms: Some(250),
+            state: None,
         };
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
@@ -673,7 +675,8 @@ mod tests {
                 "scope": null,
                 "role": null,
                 "name": null,
-                "timeoutMs": 250
+                "timeoutMs": 250,
+                "state": null
             })
         );
 
@@ -684,6 +687,7 @@ mod tests {
             role: Some("button".into()),
             name: Some("Forge".into()),
             timeout_ms: Some(250),
+            state: Some("absent".into()),
         };
         assert_eq!(
             serde_json::to_value(semantic_wait).unwrap(),
@@ -693,7 +697,8 @@ mod tests {
                 "scope": "main",
                 "role": "button",
                 "name": "Forge",
-                "timeoutMs": 250
+                "timeoutMs": 250,
+                "state": "absent"
             })
         );
 

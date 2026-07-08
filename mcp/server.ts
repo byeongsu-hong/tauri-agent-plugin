@@ -181,7 +181,10 @@ async function executeTool(
     case 'tauri_location':
       return client.call('location', pick(args, ['window', 'action', 'url']))
     case 'tauri_wait':
-      return client.call('wait', pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs']))
+      return client.call(
+        'wait',
+        pick(args, ['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])
+      )
     case 'tauri_state':
       return client.call('state', pick(args, ['window', 'key']))
     case 'tauri_record':
@@ -317,7 +320,12 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
   timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] },
-  since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' }
+  since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' },
+  state: {
+    type: 'string',
+    enum: ['present', 'absent'],
+    description: 'wait target state: present (default, appear) or absent (disappear).'
+  }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -347,7 +355,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
-  tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs'])),
+  tool('tauri_wait', 'Wait', 'Wait for text or a semantic element to appear, or disappear with state=absent.', schema(['window', 'text', 'scope', 'role', 'name', 'timeoutMs', 'state'])),
   tool('tauri_state', 'State', 'Return current app state probes.', schema(['window', 'key'])),
   tool('tauri_record', 'Record', 'Manage action recording.', schema(['window', 'action'])),
   tool(

@@ -112,7 +112,8 @@ export class DebuggerSession {
           scope: stringParam(params.scope),
           role: stringParam(params.role),
           name: stringParam(params.name),
-          timeoutMs: numberParam(params.timeoutMs)
+          timeoutMs: numberParam(params.timeoutMs),
+          state: params.state === 'absent' ? 'absent' : undefined
         })
       case 'state':
         return this.app.state(stringParam(params.key))

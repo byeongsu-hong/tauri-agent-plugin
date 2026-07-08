@@ -359,38 +359,38 @@ export class StaticHtmlAppAdapter {
   }
 
   async wait(options: WaitParams = {}): Promise<WaitResult> {
+    const startedAt = Date.now()
     const timeoutMs = options.timeoutMs ?? 1000
-    if (!hasSemanticWaitFilter(options)) {
-      if (!options.text) {
-        throw new Error('wait requires text or semantic filter')
-      }
-      return this.waitForText(options.text, timeoutMs)
+    const wantAbsent = options.state === 'absent'
+    const semantic = hasSemanticWaitFilter(options)
+    if (!semantic && !options.text) {
+      throw new Error('wait requires text or semantic filter')
     }
 
-    const startedAt = Date.now()
     while (Date.now() - startedAt <= timeoutMs) {
       this.bindGlobals()
-      const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
-      const match = findRefs({ ...options, limit: 1 }, snapshot.refs)[0]
-      if (match) {
-        this.pushEvent('wait', waitEventDetail(options, match))
-        return { matched: true, text: match.text, match }
+      if (semantic) {
+        const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
+        const match = findRefs({ ...options, limit: 1 }, snapshot.refs)[0]
+        if (wantAbsent ? !match : Boolean(match)) {
+          this.pushEvent('wait', match ? waitEventDetail(options, match) : { absent: true })
+          return match ? { matched: true, text: match.text, match } : { matched: true, text: '' }
+        }
+      } else {
+        const present = (this.dom.window.document.body.textContent ?? '').includes(
+          options.text as string
+        )
+        if (wantAbsent ? !present : present) {
+          this.pushEvent(
+            'wait',
+            wantAbsent ? { text: options.text, absent: true } : { text: options.text }
+          )
+          return { matched: true, text: options.text as string }
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
     }
-    throw new Error('wait timed out for semantic target')
-  }
-
-  async waitForText(text: string, timeoutMs = 1000): Promise<WaitResult> {
-    const startedAt = Date.now()
-    while (Date.now() - startedAt <= timeoutMs) {
-      if ((this.dom.window.document.body.textContent ?? '').includes(text)) {
-        this.pushEvent('wait', { text })
-        return { matched: true, text }
-      }
-      await new Promise((resolve) => setTimeout(resolve, Math.min(10, timeoutMs)))
-    }
-    throw new Error(`wait timed out for text: ${text}`)
+    throw new Error(waitTimeoutMessage(options, wantAbsent, semantic))
   }
 
   getLogs(clear = false): LogEntry[] {
@@ -522,6 +522,15 @@ function requiredDataUrlBody(dataUrl: string | undefined): string {
 
 function hasSemanticWaitFilter(options: WaitParams): boolean {
   return Boolean(options.scope || options.role || options.name)
+}
+
+function waitTimeoutMessage(options: WaitParams, wantAbsent: boolean, semantic: boolean): string {
+  if (wantAbsent) {
+    return semantic
+      ? 'wait timed out: semantic target still present'
+      : `wait timed out: text still present: ${options.text}`
+  }
+  return semantic ? 'wait timed out for semantic target' : `wait timed out for text: ${options.text}`
 }
 
 function waitEventDetail(options: WaitParams, match: InspectResult): Record<string, unknown> {

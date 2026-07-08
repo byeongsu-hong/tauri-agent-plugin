@@ -81,6 +81,7 @@ interface WaitOptions extends ConnectionOptions {
   role?: string
   name?: string
   timeoutMs?: number
+  absent?: boolean
 }
 
 interface StateOptions extends ConnectionOptions {
@@ -573,7 +574,7 @@ program
 
 program
   .command('wait')
-  .description('Wait for text or a semantic element to appear.')
+  .description('Wait for text or a semantic element to appear (or disappear with --absent).')
   .argument('[text]', 'text to wait for')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
@@ -583,6 +584,7 @@ program
   .option('--scope <selector>', 'limit the semantic wait to a CSS selector')
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
+  .option('--absent', 'wait for the target to disappear instead of appear')
   .option('--timeout-ms <ms>', 'timeout in milliseconds', Number)
   .action(async (text: string | undefined, options: WaitOptions) =>
     printJson(await call(options, 'wait', waitParams(options, text)))
@@ -789,7 +791,8 @@ function waitParams(options: WaitOptions, text: string | undefined): Record<stri
     scope: options.scope,
     role: options.role,
     name: options.name,
-    timeoutMs: options.timeoutMs
+    timeoutMs: options.timeoutMs,
+    state: options.absent ? 'absent' : undefined
   }
 }
 
