@@ -466,6 +466,7 @@ pub struct AgentWaitRequest {
     pub role: Option<String>,
     pub name: Option<String>,
     pub timeout_ms: Option<u64>,
+    pub state: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -473,6 +474,27 @@ pub struct AgentWaitRequest {
 pub struct AgentWaitResponse {
     pub matched: bool,
     pub text: String,
+    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
+    pub match_entry: Option<AgentInspectResponse>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentExpectRequest {
+    pub window: Option<String>,
+    pub scope: Option<String>,
+    pub role: Option<String>,
+    pub name: Option<String>,
+    pub text: Option<String>,
+    pub present: Option<bool>,
+    pub value: Option<String>,
+    pub has_state: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentExpectResponse {
+    pub ok: bool,
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
     pub match_entry: Option<AgentInspectResponse>,
 }
@@ -664,6 +686,7 @@ mod tests {
             role: None,
             name: None,
             timeout_ms: Some(250),
+            state: None,
         };
         assert_eq!(
             serde_json::to_value(wait).unwrap(),
@@ -673,7 +696,8 @@ mod tests {
                 "scope": null,
                 "role": null,
                 "name": null,
-                "timeoutMs": 250
+                "timeoutMs": 250,
+                "state": null
             })
         );
 
@@ -684,6 +708,7 @@ mod tests {
             role: Some("button".into()),
             name: Some("Forge".into()),
             timeout_ms: Some(250),
+            state: Some("absent".into()),
         };
         assert_eq!(
             serde_json::to_value(semantic_wait).unwrap(),
@@ -693,7 +718,8 @@ mod tests {
                 "scope": "main",
                 "role": "button",
                 "name": "Forge",
-                "timeoutMs": 250
+                "timeoutMs": 250,
+                "state": "absent"
             })
         );
 

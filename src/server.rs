@@ -21,7 +21,7 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 pub(crate) const BRIDGE_METHODS: &[&str] = &[
     "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
     "check", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage", "cookies",
-    "location", "wait", "state", "record", "stream",
+    "location", "wait", "expect", "state", "record", "stream",
 ];
 
 use serde::de::DeserializeOwned;
@@ -411,13 +411,11 @@ fn handle_window(
 
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
-    match request.backend.unwrap_or(ScreenshotBackend::Dom) {
-        ScreenshotBackend::Dom => handle_bridge_shot(backend, params),
-        ScreenshotBackend::Native => backend.native_screenshot(request),
-        ScreenshotBackend::Auto => backend
-            .native_screenshot(request)
-            .or_else(|_| handle_bridge_shot(backend, params)),
-    }
+    commands::resolve_screenshot(
+        request.backend.unwrap_or(ScreenshotBackend::Dom),
+        || handle_bridge_shot(backend, params.clone()),
+        || backend.native_screenshot(request.clone()),
+    )
 }
 
 fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {

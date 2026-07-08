@@ -81,6 +81,16 @@ interface WaitOptions extends ConnectionOptions {
   role?: string
   name?: string
   timeoutMs?: number
+  absent?: boolean
+}
+
+interface ExpectOptions extends ConnectionOptions {
+  role?: string
+  name?: string
+  text?: string
+  absent?: boolean
+  value?: string
+  hasState?: string
 }
 
 interface StateOptions extends ConnectionOptions {
@@ -573,7 +583,7 @@ program
 
 program
   .command('wait')
-  .description('Wait for text or a semantic element to appear.')
+  .description('Wait for text or a semantic element to appear (or disappear with --absent).')
   .argument('[text]', 'text to wait for')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
@@ -583,9 +593,40 @@ program
   .option('--scope <selector>', 'limit the semantic wait to a CSS selector')
   .option('--role <role>', 'semantic role to match exactly')
   .option('--name <name>', 'accessible name substring to match')
+  .option('--absent', 'wait for the target to disappear instead of appear')
   .option('--timeout-ms <ms>', 'timeout in milliseconds', Number)
   .action(async (text: string | undefined, options: WaitOptions) =>
     printJson(await call(options, 'wait', waitParams(options, text)))
+  )
+
+program
+  .command('expect')
+  .description('Assert a semantic target exists (or is absent) and matches value/state.')
+  .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
+  .option('--from-html <path>', 'prototype against a static HTML file')
+  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--port <port>', 'debug daemon port', Number)
+  .option('--window <label>', 'Tauri window label')
+  .option('--scope <selector>', 'limit the match to a CSS selector')
+  .option('--role <role>', 'semantic role to match exactly')
+  .option('--name <name>', 'accessible name substring to match')
+  .option('--text <text>', 'visible text substring to match')
+  .option('--absent', 'assert the target is absent instead of present')
+  .option('--value <value>', 'assert the matched control value equals this')
+  .option('--has-state <state>', 'assert the matched element has this state flag')
+  .action(async (options: ExpectOptions) =>
+    printJson(
+      await call(options, 'expect', {
+        ...targetParams(options),
+        scope: options.scope,
+        role: options.role,
+        name: options.name,
+        text: options.text,
+        present: options.absent ? false : undefined,
+        value: options.value,
+        hasState: options.hasState
+      })
+    )
   )
 
 program
@@ -789,7 +830,8 @@ function waitParams(options: WaitOptions, text: string | undefined): Record<stri
     scope: options.scope,
     role: options.role,
     name: options.name,
-    timeoutMs: options.timeoutMs
+    timeoutMs: options.timeoutMs,
+    state: options.absent ? 'absent' : undefined
   }
 }
 

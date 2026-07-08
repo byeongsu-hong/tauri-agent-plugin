@@ -28,6 +28,7 @@ export type AgentMethod =
   | 'cookies'
   | 'location'
   | 'wait'
+  | 'expect'
   | 'state'
   | 'record'
   | 'stream'
@@ -196,6 +197,28 @@ export interface WaitParams extends WindowTarget {
   role?: string
   name?: string
   timeoutMs?: number
+  /** `present` (default) waits for appearance; `absent` waits for disappearance. */
+  state?: 'present' | 'absent'
+}
+
+export interface ExpectParams extends WindowTarget {
+  // Locator (substring/role match, like find):
+  scope?: string
+  role?: string
+  name?: string
+  text?: string
+  // Assertions:
+  /** Whether the target must exist (default true). Set false to assert absence. */
+  present?: boolean
+  /** The matched control's value must equal this. */
+  value?: string
+  /** The matched element must carry this state flag (e.g. disabled, checked). */
+  hasState?: string
+}
+
+export interface ExpectResult {
+  ok: true
+  match?: InspectResult
 }
 
 export interface StateParams extends WindowTarget {

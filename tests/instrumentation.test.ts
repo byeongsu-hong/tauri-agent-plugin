@@ -170,10 +170,16 @@ describe('WebviewAgentInstrumentation', () => {
       Worker: 'remote'
     })
     expect(instrumentation.state('missing')).toBeNull()
-    expect(instrumentation.evaluate('document.querySelector("input")?.value')).toEqual({
+    await expect(instrumentation.evaluate('document.querySelector("input")?.value')).resolves.toEqual({
       type: 'string',
       value: 'worker-a',
       text: 'worker-a'
+    })
+    // Async code resolves to the real value instead of an opaque {}.
+    await expect(instrumentation.evaluate('Promise.resolve(41 + 1)')).resolves.toEqual({
+      type: 'number',
+      value: 42,
+      text: '42'
     })
     expect(instrumentation.storage({ action: 'set', key: 'agent.token', value: 'ready' })).toEqual({
       area: 'local',

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-agent-expect"
+description = "Enables the agent_expect command without any pre-configured scope."
+commands.allow = ["agent_expect"]
+
+[[permission]]
+identifier = "deny-agent-expect"
+description = "Denies the agent_expect command without any pre-configured scope."
+commands.deny = ["agent_expect"]

@@ -32,6 +32,8 @@ import type {
   CookieParams,
   CookieResult,
   EvalResult,
+  ExpectParams,
+  ExpectResult,
   FindResult,
   EventsParams,
   LocationParams,
@@ -77,6 +79,8 @@ export {
   type CookieResult,
   type DragOptions,
   type EvalResult,
+  type ExpectParams,
+  type ExpectResult,
   type EventsParams,
   type FindResult,
   type InspectResult,
@@ -231,6 +235,10 @@ export interface AgentWaitRequest extends WaitParams {
   window?: string
 }
 
+export interface AgentExpectRequest extends ExpectParams {
+  window?: string
+}
+
 export interface AgentStateRequest {
   window?: string
   key?: string
@@ -361,6 +369,10 @@ export async function agentLocation(request: AgentLocationRequest = {}): Promise
 
 export async function agentWait(request: AgentWaitRequest): Promise<AgentWaitResponse> {
   return invokeAgentCommand('plugin:agent|agent_wait', { request: withCurrentWindow(request) })
+}
+
+export async function agentExpect(request: AgentExpectRequest): Promise<ExpectResult> {
+  return invokeAgentCommand('plugin:agent|agent_expect', { request: withCurrentWindow(request) })
 }
 
 export async function agentState(request?: AgentStateRequest & { key?: undefined }): Promise<Record<string, unknown>>

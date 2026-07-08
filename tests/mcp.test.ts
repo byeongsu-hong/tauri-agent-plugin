@@ -90,6 +90,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_cookies',
       'tauri_location',
       'tauri_wait',
+      'tauri_expect',
       'tauri_state',
       'tauri_record',
       'tauri_stream'
