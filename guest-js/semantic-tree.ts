@@ -29,6 +29,7 @@ interface RenderState {
   nextRef: number
   refs: Map<string, Element>
   lines: string[]
+  verbose: boolean
 }
 
 let currentRefs = new Map<string, Element>()
@@ -66,14 +67,15 @@ const STRUCTURAL_ROLES = new Set([
 export function snapshotDocument(root: ParentNode = document, options: SnapshotOptions = {}): SnapshotResult {
   const target = options.scope ? root.querySelector(options.scope) : root
   if (!target) {
-    return finish({ nextRef: 1, refs: new Map(), lines: [] })
+    return finish({ nextRef: 1, refs: new Map(), lines: [], verbose: options.mode === 'verbose' })
   }
 
   const start = target instanceof Document ? target.body : target
   const state: RenderState = {
     nextRef: 1,
     refs: new Map(),
-    lines: []
+    lines: [],
+    verbose: options.mode === 'verbose'
   }
 
   if (start instanceof Element) {
@@ -405,10 +407,40 @@ function appendLine(element: Element, role: string, depth: number, state: Render
     role,
     name ? `"${escapeName(name)}"` : null,
     count == null ? null : String(count),
-    ...flags
+    ...flags,
+    ...(state.verbose ? verboseAnnotations(element) : [])
   ].filter(Boolean)
 
   state.lines.push(`${'  '.repeat(depth)}${parts.join(' ')}`)
+}
+
+// Extra per-line detail rendered only in `verbose` mode. These are pure
+// annotations on the same lines the compact tree emits, so ref numbering and
+// tree shape stay identical between modes — a `@3` means the same element either
+// way, and a caller can switch modes without invalidating refs.
+function verboseAnnotations(element: Element): string[] {
+  const extra: string[] = []
+  const value = controlValue(element).value
+  if (value !== undefined && value.length > 0) {
+    extra.push(`value="${escapeName(truncate(value, 80))}"`)
+  }
+  const id = element.getAttribute('id')
+  if (id) {
+    extra.push(`#${id}`)
+  }
+  const testid = element.getAttribute('data-testid') ?? element.getAttribute('data-test-id')
+  if (testid) {
+    extra.push(`[testid=${testid}]`)
+  }
+  const type = element.getAttribute('type')
+  if (type) {
+    extra.push(`type=${type}`)
+  }
+  return extra
+}
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max - 1)}…`
 }
 
 function assignRef(element: Element, state: RenderState): string {
