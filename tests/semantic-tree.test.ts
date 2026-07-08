@@ -85,6 +85,32 @@ describe('snapshotDocument', () => {
     )
   })
 
+  it('keeps a ref bound to its element across mutations (no silent wrong-element)', () => {
+    document.body.innerHTML = `
+      <main>
+        <button>Alpha</button>
+        <button>Beta</button>
+        <button>Gamma</button>
+      </main>
+    `
+    const first = snapshotDocument(document)
+    const beta = first.refs.get('@2')
+    expect(inspectRef('@2').name).toBe('Beta')
+
+    // Remove Alpha and re-snapshot. Under snapshot-local numbering @2 would be
+    // renumbered to Gamma — the silent wrong-element bug. Identity-stable refs
+    // keep @2 bound to Beta.
+    document.querySelector('button')?.remove()
+    const second = snapshotDocument(document)
+    expect(second.refs.get('@2')).toBe(beta)
+    expect(inspectRef('@2').name).toBe('Beta')
+    expect(inspectRef('@3').name).toBe('Gamma')
+
+    // Alpha's @1 left the tree, so it is rejected distinctly rather than
+    // resolving to whatever now sits at that position.
+    expect(() => resolveRef('@1')).toThrow('stale ref @1')
+  })
+
   it('scopes snapshots and fails stale refs clearly', () => {
     document.body.innerHTML = `
       <main>
