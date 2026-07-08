@@ -1,13 +1,14 @@
 # tauri-agent Improvement Plan
 
 **Date:** 2026-07-08
-**Status:** Largely implemented on `improve/phase-1-hardening`
-**Supersedes:** `2026-07-06-headless-agent-debugger.md` (fully implemented; archive it)
+**Status:** Fully implemented across `improve/phase-1-hardening`,
+`improve/phase-2-followups`, and `improve/phase-3-completion` (all merged to `main`)
+**Supersedes:** `archived/2026-07-06-headless-agent-debugger.md` (fully implemented; archived)
 
 ## Implementation Status (2026-07-08)
 
-Delivered on `improve/phase-1-hardening` (all commits verified: `bun run check`
-green, `cargo fmt`/`clippy -D warnings`/`test` green):
+Every workstream below is delivered on `main`. All commits verified: `bun run
+check` green, `cargo fmt`/`clippy -D warnings`/`test` green.
 
 - **WS1 Security — DONE.** Token auth + `0600` registry, loopback enforcement,
   `eval` split out of `agent:default` (+ `agent:readonly`), unforgeable bridge
@@ -16,26 +17,31 @@ green, `cargo fmt`/`clippy -D warnings`/`test` green):
   TCP surface, registry lifecycle (Exit-only, atomic, publish-gated), error
   taxonomy, unified window selection. TS: `console.log` capture, detached-ref
   liveness, socket error/timeout handling, MCP stdio concurrency, bounded
-  buffers.
-- **WS3 Release — DONE** (except jsdom demotion, deferred): dual licenses, CI
-  workflow (at `docs/ci-workflow.yml`, pending `workflow` token scope),
-  packaging metadata, `check:rust`, CHANGELOG.
-- **WS5 Docs — DONE** (except full multi-file split): adopter Quickstart with the
-  capabilities step, security section, `AGENTS.md`, exports fix.
-- **WS6 Testing — PARTIAL:** Rust `tauri::test` runtime integration tests added;
-  regression tests for each WS1/WS2 fix. Deferred: fixture `--self-test` e2e.
-- **WS7 Capabilities — DONE (high-value slice):** VNC advertise-only, DOM push
-  stream, `type`, Tauri IPC tracing, navigation (reload/back/forward), MCP image
-  content + instructions.
-- **WS4 Structure — PARTIAL:** single-sourced the bridge method list. **Deferred**
-  (large refactors, best as focused PRs to protect the green suite): shared
-  `dom-actions.ts` extraction, CLI `withConnectionOptions`/`refCommand` factoring,
-  `text`/`value`/`key` param canonicalization, Rust test-backend dedup, screenshot
-  dispatch unification.
+  buffers. **Ref epochs** (phase 3): snapshots stamped `@s<epoch>r<n>`, stale-epoch
+  refs rejected with a distinct `STALE_REF` code, `isConnected` liveness retained.
+- **WS3 Release — DONE.** Dual licenses, CI workflow (live at
+  `.github/workflows/ci.yml`), packaging metadata, `check:rust`, CHANGELOG,
+  `jsdom` demoted to a lazy dynamic import (phase 3).
+- **WS4 Structure — DONE.** Single-sourced bridge method list, shared
+  `guest-js/dom-actions.ts` extraction, unified screenshot dispatch (phase 2);
+  `text`/`value`/`key` param canonicalization, CLI `withConnectionOptions`/
+  `refCommand` factoring, shared CLI/MCP client+follow logic in `daemon/client.ts`,
+  parameterized Rust `ScriptedBackend` (phase 3).
+- **WS5 Docs — DONE.** Adopter Quickstart, security section, `AGENTS.md`, exports
+  fix (phases 1–2); full multi-file split into `docs/adopting.md`,
+  `docs/commands.md`, `docs/architecture.md`, `docs/security.md` (phase 3).
+- **WS6 Testing — DONE.** Rust `tauri::test` runtime integration tests and per-fix
+  regression tests (phase 1); fixture `--self-test` autorun + e2e harness,
+  cross-language endpoint golden fixtures, guest/static executor parity tests
+  (phase 3).
+- **WS7 Capabilities — DONE.** VNC advertise-only, DOM push stream, `type`, Tauri
+  IPC tracing, navigation, MCP image content + instructions (phases 1–2); async
+  `eval`, `tauri_expect`, wait-for-disappear (phase 2); dialogs, wait-for-function,
+  network-idle, file upload, element-scoped screenshots, XHR/WebSocket capture,
+  multi-webview addressing, `UNSUPPORTED_PLATFORM` screenshot taxonomy, and
+  `mode: verbose` tree rendering (phase 3).
 
-Also deferred from WS7: ref epochs (breaking ref-format change), dialogs,
-`tauri_expect`, wait-for-disappear/function, element-scoped screenshots, async
-`eval`, implement-or-delete `mode: verbose`, platform screenshot matrix.
+Nothing from the workstreams below remains deferred.
 
 ## Current State
 
