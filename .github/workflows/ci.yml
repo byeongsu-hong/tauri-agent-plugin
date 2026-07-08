@@ -1,13 +1,3 @@
-# CI workflow — pending activation.
-#
-# This file is the intended GitHub Actions workflow, kept here because the token
-# used to push this branch lacks GitHub's `workflow` OAuth scope and cannot
-# write under `.github/workflows/`. To activate it, copy this file to
-# `.github/workflows/ci.yml` and commit it with a token that has the `workflow`
-# scope (or paste it in via the GitHub web UI):
-#
-#   mkdir -p .github/workflows && cp docs/ci-workflow.yml .github/workflows/ci.yml
-#
 name: CI
 
 on:
