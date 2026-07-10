@@ -6,6 +6,7 @@ mod endpoint;
 mod error;
 mod models;
 mod random;
+mod registry;
 mod screenshot;
 mod server;
 
@@ -109,6 +110,7 @@ impl Builder {
                 let config = api.config().clone().unwrap_or_default();
                 validate_inline_server_config(&config, cfg!(debug_assertions))?;
                 app.manage(bridge::AgentBridge::default());
+                app.manage(registry::WebviewRegistry::<R>::default());
                 let endpoint = if config.inline_server.enabled {
                     let server = server::start_inline_debugger_server(
                         app.clone(),
@@ -131,14 +133,35 @@ impl Builder {
                 });
                 Ok(())
             })
-            .on_event(|app, event| {
+            .on_webview_ready(|webview| {
+                // Track every webview ourselves, keyed by webview label. Tauri's
+                // `webview_windows()` evicts a window from its map as soon as a
+                // second webview joins it, which would drop the guest
+                // registration for the original webview (#39).
+                let window = webview.window();
+                webview
+                    .state::<registry::WebviewRegistry<R>>()
+                    .register(webview.label(), window);
+            })
+            .on_event(|app, event| match event {
                 // Clean up only on the real Exit; ExitRequested can be vetoed by
                 // the app, which would leave a still-running app undiscoverable.
-                if matches!(event, tauri::RunEvent::Exit) {
+                tauri::RunEvent::Exit => {
                     if let Some(agent) = app.try_state::<Agent>() {
                         agent.cleanup_endpoint();
                     }
                 }
+                // Evict registrations only for the exact window that died.
+                tauri::RunEvent::WindowEvent {
+                    label,
+                    event: tauri::WindowEvent::Destroyed,
+                    ..
+                } => {
+                    if let Some(registry) = app.try_state::<registry::WebviewRegistry<R>>() {
+                        registry.remove_window(label);
+                    }
+                }
+                _ => {}
             })
             .on_drop(|app| {
                 if let Some(agent) = app.try_state::<Agent>() {

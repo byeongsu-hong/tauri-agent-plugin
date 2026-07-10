@@ -35,7 +35,9 @@ tauri-plugin = { version = "2", features = ["build"] }
 
 [dev-dependencies]
 serde_json = "1"
-tauri = { version = "2", features = ["test"] }
+# `unstable` lets tests exercise the multiwebview `add_child` path (#39); it
+# only affects test builds via feature unification, not the published crate.
+tauri = { version = "2", features = ["test", "unstable"] }
 
 [dependencies]
 base64 = "0.22"

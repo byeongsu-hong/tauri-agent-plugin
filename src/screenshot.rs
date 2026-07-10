@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde_json::{json, Value};
-use tauri::{Runtime, WebviewWindow};
+use tauri::{Runtime, Window};
 
 use crate::{Error, Result};
 
@@ -20,7 +20,7 @@ pub(crate) fn write_data_url_to_path(data_url: &str, path: &str) -> Result<()> {
 }
 
 pub(crate) fn capture_native_screenshot<R: Runtime>(
-    window: &WebviewWindow<R>,
+    window: &Window<R>,
     path: Option<&str>,
 ) -> Result<Value> {
     capture_native_screenshot_impl(window, path)
@@ -28,7 +28,7 @@ pub(crate) fn capture_native_screenshot<R: Runtime>(
 
 #[cfg(target_os = "macos")]
 fn capture_native_screenshot_impl<R: Runtime>(
-    window: &WebviewWindow<R>,
+    window: &Window<R>,
     path: Option<&str>,
 ) -> Result<Value> {
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
@@ -62,7 +62,7 @@ fn capture_native_screenshot_impl<R: Runtime>(
 
 #[cfg(not(target_os = "macos"))]
 fn capture_native_screenshot_impl<R: Runtime>(
-    _window: &WebviewWindow<R>,
+    _window: &Window<R>,
     _path: Option<&str>,
 ) -> Result<Value> {
     // The native pixel backend is macOS-only today (see the support matrix in
