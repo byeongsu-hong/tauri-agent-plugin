@@ -56,10 +56,10 @@ This table is the single source for what each does.
 - **Scoped MCP.** `tauri-agent-mcp --app <id> --profile core` removes repeated
   connection fields and exposes the nine Fleet-relevant tools. `full` remains
   the default profile.
-- **Connection inputs.** Every command accepts `--app <id>` (endpoint
-  discovery), `--port`/`--host` (a known daemon), or `--from-html <path>` /
-  `html` (deterministic static prototyping). Targeting a specific window uses
-  `--window <label>`.
+- **Connection inputs.** Every command requires exactly one of `--app <id>`
+  (endpoint discovery), `--port` (a known daemon), or `--from-html <path>` /
+  `html` (deterministic static prototyping). `--host` is valid only as a
+  modifier for `--port`. Targeting a specific window uses `--window <label>`.
 - **Canonical params.** `fill`/`type` take `text`, `press` takes `key`,
   `select` takes `value`, `check` takes `checked`. The guest rejects legacy
   `value` aliases for `fill`/`press`, and recordings use only canonical names.
