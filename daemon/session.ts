@@ -2,6 +2,7 @@ import type { StaticHtmlAppAdapter } from './static-app'
 import type { AgentMethod, KeyModifier, RecordingEntry, ScreenshotBackend, WindowAction } from '../protocol/types'
 import { isRecordableMethod } from '../protocol/json-rpc'
 import type { UploadFile } from '../guest-js/semantic-tree'
+import { AgentProtocolError } from '../protocol/error'
 
 export class DebuggerSession {
   private recording = false
@@ -50,7 +51,7 @@ export class DebuggerSession {
           name: stringParam(params.name),
           text: stringParam(params.text),
           action: locatorActionParam(params.action),
-          value: typeof params.value === 'string' || typeof params.value === 'boolean' ? params.value : undefined,
+          value: stringOrBooleanParam(params.value),
           x: numberParam(params.x),
           y: numberParam(params.y),
           timeoutMs: numberParam(params.timeoutMs),
@@ -131,7 +132,7 @@ export class DebuggerSession {
           role: stringParam(params.role),
           name: stringParam(params.name),
           timeoutMs: numberParam(params.timeoutMs),
-          state: params.state === 'absent' ? 'absent' : undefined,
+          state: waitStateParam(params.state),
           fn: stringParam(params.fn),
           networkIdle: booleanParam(params.networkIdle),
           idleMs: numberParam(params.idleMs)
@@ -181,7 +182,7 @@ export class DebuggerSession {
       case 'get':
         return { recording: this.recording, entries: [...this.recordingEntries] }
       default:
-        throw new Error(`unknown record action: ${action}`)
+        return invalidParam(`unknown record action: ${action}`)
     }
   }
 
@@ -202,21 +203,36 @@ export class DebuggerSession {
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`missing required string param: ${name}`)
+    throw new AgentProtocolError('INVALID_PARAMS', `missing required string param: ${name}`)
   }
   return value
 }
 
 function stringParam(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') invalidParam('expected a string parameter')
+  return value
 }
 
 function numberParam(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value)) invalidParam('expected a finite number parameter')
+  return value
 }
 
 function booleanParam(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') invalidParam('expected a boolean parameter')
+  return value
+}
+
+function stringOrBooleanParam(value: unknown): string | boolean | undefined {
+  if (value === undefined || typeof value === 'string' || typeof value === 'boolean') return value
+  return invalidParam('expected a string or boolean parameter')
+}
+
+function waitStateParam(value: unknown): 'present' | 'absent' | undefined {
+  return enumParam(value, ['present', 'absent'], 'wait state')
 }
 
 function captureParams(params: Record<string, unknown>): {
@@ -234,27 +250,34 @@ function captureParams(params: Record<string, unknown>): {
 }
 
 function locatorActionParam(value: unknown): 'click' | 'hover' | 'focus' | 'blur' | 'fill' | 'type' | 'press' | 'scroll' | 'select' | 'check' {
-  if (typeof value === 'string' && ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'].includes(value)) {
-    return value as 'click' | 'hover' | 'focus' | 'blur' | 'fill' | 'type' | 'press' | 'scroll' | 'select' | 'check'
-  }
-  throw new Error(`unknown locator action: ${String(value)}`)
+  return enumParam(
+    value,
+    ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'],
+    'locator action'
+  ) ?? invalidParam('missing locator action')
 }
 
 function dialogActionParam(value: unknown): 'get' | 'set' | 'clear' | undefined {
-  return value === 'get' || value === 'set' || value === 'clear' ? value : undefined
+  return enumParam(value, ['get', 'set', 'clear'], 'dialog action')
 }
 
 function uploadFilesParam(value: unknown): UploadFile[] {
   if (!Array.isArray(value)) {
-    throw new Error('upload requires a files array')
+    return invalidParam('upload requires a files array')
   }
   return value.map((entry) => {
     if (!entry || typeof entry !== 'object') {
-      throw new Error('each upload file must be an object with a name')
+      return invalidParam('each upload file must be an object with a name')
     }
     const record = entry as Record<string, unknown>
     if (typeof record.name !== 'string' || record.name.length === 0) {
-      throw new Error('each upload file requires a name')
+      return invalidParam('each upload file requires a name')
+    }
+    if (record.type !== undefined && typeof record.type !== 'string') {
+      return invalidParam('upload file type must be a string')
+    }
+    if (record.text !== undefined && typeof record.text !== 'string') {
+      return invalidParam('upload file text must be a string')
     }
     return {
       name: record.name,
@@ -269,7 +292,7 @@ function keyModifiersParam(value: unknown): KeyModifier[] | undefined {
     return undefined
   }
   if (!Array.isArray(value)) {
-    throw new Error('modifiers must be an array')
+    return invalidParam('modifiers must be an array')
   }
   return value.map(keyModifierParam)
 }
@@ -278,56 +301,45 @@ function keyModifierParam(value: unknown): KeyModifier {
   if (value === 'Alt' || value === 'Control' || value === 'Meta' || value === 'Shift') {
     return value
   }
-  throw new Error(`unknown key modifier: ${String(value)}`)
+  return invalidParam(`unknown key modifier: ${String(value)}`)
 }
 
 function screenshotBackendParam(value: unknown): ScreenshotBackend | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  if (value === 'dom' || value === 'native' || value === 'auto') {
-    return value
-  }
-  throw new Error(`unknown screenshot backend: ${String(value)}`)
+  return enumParam(value, ['dom', 'native', 'auto'], 'screenshot backend')
 }
 
 function modeParam(value: unknown): 'compact' | 'verbose' | undefined {
-  return value === 'compact' || value === 'verbose' ? value : undefined
+  return enumParam(value, ['compact', 'verbose'], 'snapshot mode')
 }
 
 function storageAreaParam(value: unknown): 'local' | 'session' | undefined {
-  return value === 'local' || value === 'session' ? value : undefined
+  return enumParam(value, ['local', 'session'], 'storage area')
 }
 
 function storageActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
-  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+  return enumParam(value, ['get', 'set', 'remove', 'clear'], 'storage action')
 }
 
 function cookieActionParam(value: unknown): 'get' | 'set' | 'remove' | 'clear' | undefined {
-  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+  return enumParam(value, ['get', 'set', 'remove', 'clear'], 'cookie action')
 }
 
-function locationActionParam(value: unknown): 'get' | 'push' | 'replace' | undefined {
-  return value === 'get' || value === 'push' || value === 'replace' ? value : undefined
+function locationActionParam(value: unknown): 'get' | 'push' | 'replace' | 'reload' | 'back' | 'forward' | undefined {
+  return enumParam(value, ['get', 'push', 'replace', 'reload', 'back', 'forward'], 'location action')
 }
 
 function windowActionParam(value: unknown): WindowAction | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  if (
-    value === 'get' ||
-    value === 'focus' ||
-    value === 'show' ||
-    value === 'hide' ||
-    value === 'minimize' ||
-    value === 'unminimize' ||
-    value === 'maximize' ||
-    value === 'unmaximize' ||
-    value === 'setSize' ||
-    value === 'setPosition'
-  ) {
-    return value
-  }
-  throw new Error(`unknown window action: ${String(value)}`)
+  return enumParam(value, [
+    'get', 'focus', 'show', 'hide', 'minimize', 'unminimize', 'maximize', 'unmaximize', 'setSize', 'setPosition'
+  ], 'window action')
+}
+
+function enumParam<const T extends string>(value: unknown, values: readonly T[], name: string): T | undefined {
+  if (value === undefined) return undefined
+  if (typeof value === 'string' && values.includes(value as T)) return value as T
+  return invalidParam(`unknown ${name}: ${String(value)}`)
+}
+
+function invalidParam(message: string): never {
+  throw new AgentProtocolError('INVALID_PARAMS', message)
 }
