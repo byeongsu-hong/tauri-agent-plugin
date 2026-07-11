@@ -162,7 +162,13 @@ export async function readEndpointRegistry(
 ): Promise<EndpointDescriptor> {
   const path = endpointRegistryPath({ appId, env: options.env })
   try {
-    return parseEndpointDescriptor(await readFile(path, 'utf8'))
+    const descriptor = parseEndpointDescriptor(await readFile(path, 'utf8'))
+    if (descriptor.appId !== appId) {
+      throw new Error(
+        `endpoint registry app id mismatch: expected ${appId}, found ${descriptor.appId}`
+      )
+    }
+    return descriptor
   } catch (error) {
     if (isNotFound(error)) {
       throw new Error(`endpoint registry not found for app: ${appId}`)
@@ -183,16 +189,20 @@ function runtimeBaseDir(env: EndpointPathOptions['env']): string {
 }
 
 function safeAppId(appId: string): string {
-  const sanitized = appId.replace(/[^A-Za-z0-9._-]/g, '_')
-  // An empty or dot-only segment ("", ".", "..") would escape the runtime
-  // directory when joined as a path component; neutralize it.
-  if (sanitized.length === 0) {
-    return '_'
+  if (appId.length === 0) return '~'
+  const encodeDots = /^\.+$/.test(appId)
+  let encoded = ''
+  for (const byte of Buffer.from(appId, 'utf8')) {
+    const safe =
+      (byte >= 0x41 && byte <= 0x5a) ||
+      (byte >= 0x61 && byte <= 0x7a) ||
+      (byte >= 0x30 && byte <= 0x39) ||
+      byte === 0x5f ||
+      byte === 0x2d ||
+      (byte === 0x2e && !encodeDots)
+    encoded += safe ? String.fromCharCode(byte) : `~${byte.toString(16).toUpperCase().padStart(2, '0')}`
   }
-  if (/^\.+$/.test(sanitized)) {
-    return sanitized.replace(/\./g, '_')
-  }
-  return sanitized
+  return encoded
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

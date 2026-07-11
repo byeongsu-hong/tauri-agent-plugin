@@ -3,12 +3,16 @@
   "cases": [
     { "appId": "dev.byeongsu.fixture", "safeAppId": "dev.byeongsu.fixture" },
     { "appId": "a-b_c.d", "safeAppId": "a-b_c.d" },
-    { "appId": "com.example/../secret", "safeAppId": "com.example_.._secret" },
-    { "appId": "a b!c", "safeAppId": "a_b_c" },
-    { "appId": "Weird™Name", "safeAppId": "Weird_Name" },
-    { "appId": "", "safeAppId": "_" },
-    { "appId": ".", "safeAppId": "_" },
-    { "appId": "..", "safeAppId": "__" },
-    { "appId": "...", "safeAppId": "___" }
+    { "appId": "com.example/../secret", "safeAppId": "com.example~2F..~2Fsecret" },
+    { "appId": "a b!c", "safeAppId": "a~20b~21c" },
+    { "appId": "Weird™Name", "safeAppId": "Weird~E2~84~A2Name" },
+    { "appId": "a/b", "safeAppId": "a~2Fb" },
+    { "appId": "a_b", "safeAppId": "a_b" },
+    { "appId": "~", "safeAppId": "~7E" },
+    { "appId": "\u0000", "safeAppId": "~00" },
+    { "appId": "", "safeAppId": "~" },
+    { "appId": ".", "safeAppId": "~2E" },
+    { "appId": "..", "safeAppId": "~2E~2E" },
+    { "appId": "...", "safeAppId": "~2E~2E~2E" }
   ]
 }

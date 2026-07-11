@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -49,6 +49,7 @@ describe('debugger endpoint discovery', () => {
       readFileSync(join(process.cwd(), 'tests/fixtures/endpoint-app-ids.json'), 'utf8')
     ) as { cases: Array<{ appId: string; safeAppId: string }> }
 
+    expect(new Set(golden.cases.map(({ safeAppId }) => safeAppId)).size).toBe(golden.cases.length)
     for (const { appId, safeAppId } of golden.cases) {
       expect(
         endpointRuntimeDir({ appId, env: { XDG_RUNTIME_DIR: '/run/user/501' } })
@@ -83,7 +84,7 @@ describe('debugger endpoint discovery', () => {
       expect(dir.includes('..')).toBe(false)
     }
     expect(endpointRuntimeDir({ appId: '..', env: { XDG_RUNTIME_DIR: '/run' } })).toBe(
-      '/run/tauri-agent/__'
+      '/run/tauri-agent/~2E~2E'
     )
   })
 
@@ -179,6 +180,25 @@ describe('debugger endpoint discovery', () => {
     await removeEndpointRegistry('dev.byeongsu.fixture', { env })
     await expect(readEndpointRegistry('dev.byeongsu.fixture', { env })).rejects.toThrow(
       'endpoint registry not found for app: dev.byeongsu.fixture'
+    )
+  })
+
+  it('rejects a registry whose descriptor belongs to another app id', async () => {
+    const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-endpoint-mismatch-'))
+    const env = { XDG_RUNTIME_DIR: runtimeDir }
+    const appId = 'dev.expected.app'
+    const path = endpointRegistryPath({ appId, env })
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify({
+      appId: 'dev.other.app',
+      pid: 4242,
+      transport: 'tcp',
+      host: '127.0.0.1',
+      port: 45127
+    }))
+
+    await expect(readEndpointRegistry(appId, { env })).rejects.toThrow(
+      'endpoint registry app id mismatch: expected dev.expected.app, found dev.other.app'
     )
   })
 })

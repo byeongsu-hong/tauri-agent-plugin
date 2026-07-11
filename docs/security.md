@@ -46,9 +46,9 @@ Bridge commands are gated by Tauri's ACL. Three sets ship:
 - **Unforgeable bridge ids.** Bridge request ids carry a random suffix and the
   responding window label is verified, so one webview cannot spoof another
   window's bridge response.
-- **App-id sanitization.** Registry paths sanitize the app id (dot-only ids are
-  neutralized) so a crafted id cannot escape the runtime directory. Rust and TS
-  implementations are locked together by a golden fixture.
+- **App-id path encoding.** Registry paths escape unsafe UTF-8 bytes without
+  collisions, so a crafted id cannot escape or alias another app's runtime
+  directory. Rust and TS implementations are locked together by a golden fixture.
 
 ## Native surfaces
 

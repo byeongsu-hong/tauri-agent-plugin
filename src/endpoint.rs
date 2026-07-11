@@ -199,6 +199,12 @@ pub enum EndpointRegistryError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("endpoint registry app id mismatch at {path:?}: expected {expected}, found {actual}")]
+    AppIdMismatch {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
 }
 
 pub fn endpoint_runtime_dir(app_id: &str, runtime_base: Option<PathBuf>) -> PathBuf {
@@ -285,7 +291,21 @@ pub fn read_endpoint_registry(
         }
     })?;
 
-    serde_json::from_str(&contents).map_err(|source| EndpointRegistryError::Json { path, source })
+    let descriptor =
+        serde_json::from_str::<AgentEndpointDescriptor>(&contents).map_err(|source| {
+            EndpointRegistryError::Json {
+                path: path.clone(),
+                source,
+            }
+        })?;
+    if descriptor.app_id() != app_id {
+        return Err(EndpointRegistryError::AppIdMismatch {
+            path,
+            expected: app_id.to_string(),
+            actual: descriptor.app_id().to_string(),
+        });
+    }
+    Ok(descriptor)
 }
 
 pub fn remove_endpoint_registry(
@@ -310,24 +330,23 @@ fn default_runtime_base() -> PathBuf {
 }
 
 fn safe_app_id(app_id: &str) -> String {
-    let sanitized: String = app_id
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect();
-
-    // An empty or dot-only segment ("", ".", "..", ...) would escape the runtime
-    // directory when joined as a path component; neutralize it.
-    if sanitized.is_empty() {
-        return "_".to_string();
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    if app_id.is_empty() {
+        return "~".to_string();
     }
-    if sanitized.chars().all(|ch| ch == '.') {
-        return sanitized.replace('.', "_");
+    let encode_dots = app_id.bytes().all(|byte| byte == b'.');
+    let mut encoded = String::with_capacity(app_id.len());
+    for &byte in app_id.as_bytes() {
+        let safe = byte.is_ascii_alphanumeric()
+            || matches!(byte, b'_' | b'-')
+            || (byte == b'.' && !encode_dots);
+        if safe {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('~');
+            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
     }
-    sanitized
+    encoded
 }
