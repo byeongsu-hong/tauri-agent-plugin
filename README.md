@@ -22,7 +22,7 @@ tauri-agent click @3 --app dev.byeongsu.tauri-agent.fixture
 
    ```rust
    tauri::Builder::default()
-     .plugin(tauri_plugin_agent::init())
+     .plugin(tauri_agent_plugin::init())
      .run(tauri::generate_context!())?;
    ```
 
@@ -33,7 +33,7 @@ tauri-agent click @3 --app dev.byeongsu.tauri-agent.fixture
    until it runs:
 
    ```ts
-   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-agent-plugin'
    new WebviewAgentInstrumentation({ windowLabel: 'main' }).install()
    ```
 
@@ -70,7 +70,7 @@ connection inputs as the CLI (`app`, `port`/`host`, or `html`/`fromHtml`). See
 
 ```bash
 bun install
-bun run build      # produces dist-js (the fixture links against it)
+bun run build      # produces dist-js (the fixture imports it)
 bun run check      # typecheck + vitest + build
 bun run check:rust # cargo fmt --check + clippy -D warnings + test
 ```

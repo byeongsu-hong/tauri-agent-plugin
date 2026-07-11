@@ -1,5 +1,5 @@
 [package]
-name = "tauri-plugin-agent"
+name = "tauri-agent-plugin"
 version = "0.0.2"
 description = "Agent-facing control surface for live Tauri apps using compact semantic trees."
 edition = "2021"
@@ -10,6 +10,8 @@ repository = "https://github.com/byeongsu-hong/tauri-agent-plugin"
 readme = "README.md"
 keywords = ["tauri", "agent", "debugger", "automation", "webview"]
 categories = ["development-tools::debugging", "gui", "development-tools::testing"]
+# Tauri derives the runtime ACL namespace from this internal plugin identity.
+# Keep `agent:*` stable even though the public crate is `tauri-agent-plugin`.
 links = "tauri-plugin-agent"
 include = [
     "/src/**/*.rs",

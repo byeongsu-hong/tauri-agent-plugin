@@ -3,16 +3,16 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('example fixture Tauri app', () => {
-  it('is wired to the local plugin package and exposes agent-testable controls', () => {
+  it('is wired to the local plugin build and exposes agent-testable controls', () => {
     const packageJson = JSON.parse(readFileSync('examples/fixture-app/package.json', 'utf8'))
     expect(packageJson.scripts).toMatchObject({
       dev: 'vite --host 127.0.0.1 --port 1420',
       'tauri:dev': 'tauri dev'
     })
-    expect(packageJson.dependencies['@byeongsu-hong/tauri-plugin-agent']).toBe('file:../..')
+    expect(packageJson.dependencies).not.toHaveProperty('@byeongsu-hong/tauri-agent-plugin')
 
     const cargoToml = readFileSync('examples/fixture-app/src-tauri/Cargo.toml', 'utf8')
-    expect(cargoToml).toContain('tauri-plugin-agent = { path = "../../.." }')
+    expect(cargoToml).toContain('tauri-agent-plugin = { path = "../../.." }')
 
     const tauriConfig = JSON.parse(
       readFileSync('examples/fixture-app/src-tauri/tauri.conf.json', 'utf8')
@@ -23,7 +23,7 @@ describe('example fixture Tauri app', () => {
     ])
 
     const libRs = readFileSync('examples/fixture-app/src-tauri/src/lib.rs', 'utf8')
-    expect(libRs).toContain('.plugin(tauri_plugin_agent::init())')
+    expect(libRs).toContain('.plugin(tauri_agent_plugin::init())')
 
     const capability = JSON.parse(
       readFileSync('examples/fixture-app/src-tauri/capabilities/default.json', 'utf8')
@@ -32,6 +32,7 @@ describe('example fixture Tauri app', () => {
     expect(capability.permissions).toContain('agent:default')
 
     const appTs = readFileSync('examples/fixture-app/src/main.ts', 'utf8')
+    expect(appTs).toContain("from '../../../dist-js/index.js'")
     expect(appTs).toContain('new WebviewAgentInstrumentation')
     expect(appTs).toContain('getCurrentWindow')
     expect(appTs).toContain('fixtureWindowLabel')

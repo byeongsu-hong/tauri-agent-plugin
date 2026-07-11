@@ -18,7 +18,7 @@ WKWebView/webkit2gtk webview (not jsdom) answers the agent bridge.
 
 ```bash
 # from the repo root
-bun run build                       # build the plugin JS the fixture links
+bun run build                       # build the plugin JS the fixture imports
 cd examples/fixture-app
 bun install
 bun run tauri:build -- --no-bundle  # produce the binary

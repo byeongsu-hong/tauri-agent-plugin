@@ -35,7 +35,7 @@ jobs:
       - run: npm pack --dry-run
       - run: |
           npm pack
-          tar -tzf byeongsu-hong-tauri-plugin-agent-*.tgz > files.txt
+          tar -tzf byeongsu-hong-tauri-agent-plugin-*.tgz > files.txt
           for f in package/dist-js/index.js package/dist-cli/tauri-agent.js package/dist-cli/tauri-agent-mcp.js package/LICENSE-MIT package/LICENSE-APACHE; do
             grep -qx "$f" files.txt || { echo "missing from tarball: $f"; exit 1; }
           done
@@ -91,7 +91,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             xvfb
-      # Build the plugin JS the fixture links via file:../.., then the fixture.
+      # Build the root JS before the fixture, which imports dist-js directly.
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Build the fixture app

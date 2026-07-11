@@ -13,6 +13,13 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Runtime selection.** Wry remains the default; CEF apps can disable default
   features and enable the `cef` feature without pulling in Wry.
 
+### Changed
+
+- Published artifacts now match the repository name: the Rust crate is
+  `tauri-agent-plugin` and the npm package is
+  `@byeongsu-hong/tauri-agent-plugin`. The `agent:*` permission namespace and
+  `plugin:agent|*` IPC routes are unchanged.
+
 ### Fixed
 
 - Adding a second webview no longer makes a healthy guest registration disappear

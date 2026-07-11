@@ -11,12 +11,12 @@ can drive it.
    app supplies its concrete CEF runtime:
 
    ```toml
-   tauri-plugin-agent = { version = "0.0.2", default-features = false, features = ["cef"] }
+   tauri-agent-plugin = { version = "0.0.2", default-features = false, features = ["cef"] }
    ```
 
    ```rust
    tauri::Builder::default()
-     .plugin(tauri_plugin_agent::init())
+     .plugin(tauri_agent_plugin::init())
      .run(tauri::generate_context!())?;
    ```
 
@@ -35,7 +35,7 @@ can drive it.
    (`tree`, `click`, …) hang until the webview calls `install()`:
 
    ```ts
-   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+   import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-agent-plugin'
    new WebviewAgentInstrumentation({ windowLabel: 'main' }).install()
    ```
 
@@ -103,7 +103,7 @@ Discover it with `tauri-agent vnc --app <id>`. See
 also exposes the same operations directly for in-process use:
 
 ```ts
-import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-plugin-agent'
+import { WebviewAgentInstrumentation } from '@byeongsu-hong/tauri-agent-plugin'
 
 const agent = new WebviewAgentInstrumentation({
   windowLabel: 'main',
@@ -126,13 +126,13 @@ plugin by local path. It is the first real target for live-bridge work — its
 config enables the inline server, it opens `main` and `secondary` windows for
 `--window` testing, and its UI exposes agent-testable semantics.
 
-**Fresh-clone build order.** The fixture links the plugin via `file:../..`, and
-the plugin's `dist-js` is gitignored — so build the repo root first:
+**Fresh-clone build order.** The fixture imports the root package's gitignored
+`dist-js` output directly, so build the repo root first:
 
 ```bash
 # from the repo root
 bun install
-bun run build            # produces dist-js the fixture links against
+bun run build            # produces dist-js for the fixture
 cd examples/fixture-app
 bun install
 bun run tauri:dev
