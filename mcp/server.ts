@@ -218,6 +218,26 @@ function validateToolSemantics(args: ToolCallArgs, tool: string): void {
   if (tool === 'tauri_location' && ['push', 'replace'].includes(args.action as string) && !args.url) {
     throw new McpRequestError(-32602, 'location action requires url')
   }
+  if (tool === 'tauri_wait') {
+    const hasLocator = ['text', 'scope', 'role', 'name'].some(
+      (field) => typeof args[field] === 'string' && args[field].length > 0
+    )
+    const hasFunction = typeof args.fn === 'string' && args.fn.length > 0
+    const networkIdle = args.networkIdle === true
+    if (args.fn === '') throw new McpRequestError(-32602, 'fn must be non-empty')
+    if (!networkIdle && args.idleMs !== undefined) {
+      throw new McpRequestError(-32602, 'idleMs requires networkIdle=true')
+    }
+    if (networkIdle && (hasLocator || hasFunction || args.state !== undefined)) {
+      throw new McpRequestError(-32602, 'networkIdle cannot be combined with locator, fn, or state')
+    }
+    if (hasFunction && (hasLocator || args.state !== undefined)) {
+      throw new McpRequestError(-32602, 'fn cannot be combined with locator or state')
+    }
+    if (!networkIdle && !hasFunction && !hasLocator) {
+      throw new McpRequestError(-32602, 'wait requires text, a semantic filter, fn, or networkIdle')
+    }
+  }
 }
 
 function validateConnectionArguments(args: ToolCallArgs): void {

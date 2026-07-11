@@ -404,6 +404,23 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>' } }, 'wait requires text, a semantic filter, fn, or networkIdle'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', fn: '' } }, 'fn must be non-empty'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', text: 'ready', idleMs: 10 } }, 'idleMs requires networkIdle=true'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', networkIdle: true, text: 'ready' } }, 'networkIdle cannot be combined with locator, fn, or state'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', fn: 'true', role: 'button' } }, 'fn cannot be combined with locator or state'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', fn: 'true', state: 'absent' } }, 'fn cannot be combined with locator or state']
+  ])('requires one coherent MCP wait mode %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 44, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 44,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
