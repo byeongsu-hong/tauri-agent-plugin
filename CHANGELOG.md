@@ -66,6 +66,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   concurrent connection cap.
 - TypeScript JSON-RPC errors now preserve valid request ids for unknown methods,
   matching the Rust inline server.
+- Static `serve` mode now binds only to `127.0.0.1`; its unauthenticated daemon
+  can no longer be exposed through a configurable host.
 - TypeScript socket clients now cap newline-delimited responses at 64 MiB so a
   malformed peer cannot grow the receive buffer until timeout.
 - TypeScript endpoint registries now match Rust's integer and optional-field

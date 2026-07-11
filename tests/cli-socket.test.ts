@@ -144,6 +144,12 @@ function staticWindowInfo(title: string): Record<string, unknown> {
 }
 
 describe('tauri-agent CLI socket mode', () => {
+  it('does not allow the unauthenticated static server to bind beyond loopback', () => {
+    expect(() =>
+      runCli(['serve', '--from-html', htmlFile(), '--host', '0.0.0.0'])
+    ).toThrow(/unknown option '--host'/)
+  })
+
   it('controls a persistent headless debugger daemon', async () => {
     const port = await unusedPort()
     await startServer(htmlFile(), port)

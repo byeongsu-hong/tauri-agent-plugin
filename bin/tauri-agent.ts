@@ -203,9 +203,8 @@ program
   .command('serve')
   .description('Serve the headless debugger JSON-RPC protocol.')
   .option('--from-html <path>', 'serve a static HTML adapter')
-  .option('--host <host>', 'host to bind', '127.0.0.1')
   .option('--port <port>', 'port to bind', Number, 45127)
-  .action(async (options: ConnectionOptions & { host: string; port: number }) => {
+  .action(async (options: { fromHtml?: string; port: number }) => {
     if (!options.fromHtml) {
       exitBridgePending()
     }
@@ -213,7 +212,7 @@ program
     const server = createLineJsonRpcServer(
       new DebuggerSession(await StaticHtmlAppAdapter.create({ html }))
     )
-    await new Promise<void>((resolve) => server.listen(options.port, options.host, resolve))
+    await new Promise<void>((resolve) => server.listen(options.port, '127.0.0.1', resolve))
     const address = server.address()
     printJson({ listening: true, address })
   })
