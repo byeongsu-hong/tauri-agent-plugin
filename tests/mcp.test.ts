@@ -370,6 +370,23 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', pollMs: 100 } }, 'pollMs and timeoutMs require follow=true'],
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', follow: true, clear: true } }, 'follow cannot be combined with clear or limit'],
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', follow: true, limit: 1 } }, 'follow cannot be combined with clear or limit'],
+    [{ name: 'tauri_network', arguments: { html: '<main></main>', id: '' } }, 'id must be a non-empty string'],
+    [{ name: 'tauri_network', arguments: { html: '<main></main>', id: 'fetch-1', since: 1 } }, 'id cannot be combined with capture list options'],
+    [{ name: 'tauri_ipc', arguments: { html: '<main></main>', follow: true, id: 'ipc-1' } }, 'id cannot be combined with follow']
+  ])('rejects conflicting MCP capture modes %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 42, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 42,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
