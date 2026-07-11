@@ -354,6 +354,22 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_window', arguments: { html: '<main></main>', action: 'setSize', width: 800 } }, 'window setSize requires positive height'],
+    [{ name: 'tauri_window', arguments: { html: '<main></main>', action: 'setPosition', x: 10 } }, 'window setPosition requires y'],
+    [{ name: 'tauri_act', arguments: { html: '<main></main>', action: 'fill', role: 'textbox' } }, 'fill requires a string value'],
+    [{ name: 'tauri_act', arguments: { html: '<main></main>', action: 'check', role: 'checkbox', value: 'true' } }, 'check value must be a boolean'],
+    [{ name: 'tauri_act', arguments: { html: '<main></main>', action: 'click' } }, 'act requires a locator']
+  ])('rejects semantically incomplete MCP tool arguments %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 41, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 41,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
