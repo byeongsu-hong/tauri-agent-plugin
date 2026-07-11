@@ -326,6 +326,16 @@ describe('DebuggerSession', () => {
     await expect(session.execute('window', { action: 'teleport' })).rejects.toThrow('unknown window action: teleport')
   })
 
+  it('enforces Rust window integer bounds in static sessions', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
+
+    await expect(session.execute('window', { action: 'get', x: 1.5 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('window', { action: 'get', x: 2_147_483_648 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('window', { action: 'get', width: 4_294_967_296 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('window', { action: 'setSize', width: 0, height: 600 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('window', { action: 'setPosition', x: 10 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+  })
+
   it('removes path-scoped cookies visible on the current route', async () => {
     const session = new DebuggerSession(
       await StaticHtmlAppAdapter.create({
