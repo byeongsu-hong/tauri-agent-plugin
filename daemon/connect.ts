@@ -60,9 +60,39 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+/** Collect a compact cross-surface debugger report without adding a protocol method. */
+export async function collectDiagnosis(
+  client: DebuggerClient,
+  options: { window?: string; limit?: number } = {}
+): Promise<Record<string, unknown>> {
+  const limit = Math.max(1, Math.min(100, options.limit ?? 20))
+  const target = options.window ? { window: options.window } : {}
+  const [attach, state, logs, events, network, ipc] = await Promise.all([
+    client.call('attach', target),
+    client.call('state', target),
+    client.call('logs', target),
+    client.call('events', target),
+    client.call('network', target),
+    client.call('ipc', target)
+  ])
+  return {
+    capturedAt: new Date().toISOString(),
+    attach,
+    state,
+    logs: recentEntries(logs, limit, 'logs'),
+    events: recentEntries(events, limit, 'events'),
+    network: recentEntries(network, limit, 'network'),
+    ipc: recentEntries(ipc, limit, 'ipc')
+  }
+}
+
+function recentEntries(value: unknown, limit: number, method: string): unknown[] {
+  if (!isCaptureResult(value)) throw new Error(`${method} expected a capture result`)
+  return value.entries.slice(-limit)
+}
+
 /**
- * Poll a follow-capable method, yielding only the entries appended since the
- * last poll (length-based diff, resilient to a clear that shrinks the buffer).
+ * Poll a capture method, yielding only entries appended after its cursor.
  * Shared by the CLI (streams to stdout) and the MCP server (accumulates into a
  * bounded result). Without `timeoutMs` it streams until the caller stops
  * iterating; with it, it returns once the budget elapses.
@@ -75,23 +105,27 @@ export async function* pollFollow(
 ): AsyncGenerator<unknown[]> {
   const startedAt = Date.now()
   const pollMs = Math.max(1, options.pollMs)
-  let emitted = 0
+  let cursor = typeof params.since === 'number' ? params.since : 0
   while (true) {
-    const result = await client.call(method, { ...params, follow: true })
-    if (!Array.isArray(result)) {
-      throw new Error(`${method} follow expected an array result`)
+    const result = await client.call(method, { ...params, since: cursor })
+    if (!isCaptureResult(result)) {
+      throw new Error(`${method} follow expected a capture result`)
     }
-    const start = result.length < emitted ? 0 : emitted
-    const fresh = result.slice(start)
-    emitted = result.length
-    if (fresh.length > 0) {
-      yield fresh
+    cursor = result.cursor
+    if (result.entries.length > 0) {
+      yield result.entries
     }
     if (options.timeoutMs !== undefined && Date.now() - startedAt >= options.timeoutMs) {
       return
     }
     await sleep(nextPollDelay(startedAt, pollMs, options.timeoutMs))
   }
+}
+
+function isCaptureResult(value: unknown): value is { entries: unknown[]; cursor: number } {
+  return typeof value === 'object' && value !== null
+    && Array.isArray((value as { entries?: unknown }).entries)
+    && typeof (value as { cursor?: unknown }).cursor === 'number'
 }
 
 function nextPollDelay(startedAt: number, pollMs: number, timeoutMs?: number): number {

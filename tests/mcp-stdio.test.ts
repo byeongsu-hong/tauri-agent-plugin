@@ -48,7 +48,7 @@ describe('tauri-agent MCP stdio binary', () => {
     server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`)
 
     const tools = await waitForResponse(responses, 3)
-    expect(tools.result.tools).toHaveLength(8)
+    expect(tools.result.tools).toHaveLength(9)
     expect(tools.result.tools.every((tool: { inputSchema: { properties: Record<string, unknown> } }) =>
       !('app' in tool.inputSchema.properties)
     )).toBe(true)

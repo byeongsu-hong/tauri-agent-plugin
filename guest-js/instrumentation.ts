@@ -59,12 +59,14 @@ import type {
   CookieResult,
   DialogParams,
   DialogResult,
+  DetailResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
   FindParams,
   FindResult,
   InspectResult,
+  IpcDetail,
   IpcEntry,
   IpcParams,
   LocationParams,
@@ -74,6 +76,7 @@ import type {
   KeyModifier,
   EventsParams,
   NetworkEntry,
+  NetworkDetail,
   NetworkParams,
   RecordingEntry,
   ScreenshotResult,
@@ -135,6 +138,7 @@ const CONSOLE_LEVELS: ReadonlyArray<[ConsoleMethod, LogEntry['level']]> = [
 
 /** Maximum entries retained per capture buffer before old entries drop. */
 const MAX_CAPTURE_ENTRIES = 1000
+const MAX_DETAIL_BYTES = 64 * 1024
 
 function formatConsoleArgs(args: unknown[]): string {
   return args.map(formatConsoleArg).join(' ')
@@ -167,6 +171,20 @@ interface AgentBridgeRequest {
   params?: Record<string, unknown>
 }
 
+interface NetworkDetailRecord {
+  entry: NetworkEntry
+  requestHeaders?: Record<string, string>
+  requestBody?: unknown
+  responseHeaders?: Record<string, string>
+  responseBody?: unknown
+}
+
+interface IpcDetailRecord {
+  entry: IpcEntry
+  args?: unknown
+  result?: unknown
+}
+
 export class WebviewAgentInstrumentation {
   private installed = false
   private bridgeInstalled = false
@@ -175,7 +193,11 @@ export class WebviewAgentInstrumentation {
   private capturedEvents = new CaptureBuffer<AgentEvent>(MAX_CAPTURE_ENTRIES)
   private capturedNetwork = new CaptureBuffer<NetworkEntry>(MAX_CAPTURE_ENTRIES)
   private capturedIpc = new CaptureBuffer<IpcEntry>(MAX_CAPTURE_ENTRIES)
+  private networkDetails = new Map<string, NetworkDetailRecord>()
+  private ipcDetails = new Map<string, IpcDetailRecord>()
   private ipcEntryId = 0
+  private actionTraceId = 0
+  private activeTraceId?: string
   private ipcTarget?: TauriInternals
   private originalInvoke?: TauriInternals['invoke']
   private recording = false
@@ -184,6 +206,7 @@ export class WebviewAgentInstrumentation {
   private originalFetch?: typeof window.fetch
   private originalXhrOpen?: XMLHttpRequest['open']
   private originalXhrSend?: XMLHttpRequest['send']
+  private originalXhrSetRequestHeader?: XMLHttpRequest['setRequestHeader']
   private originalWebSocket?: typeof WebSocket
   private networkEntryId = 0
   /** In-flight fetch/XHR count, used by `wait({ networkIdle: true })`. */
@@ -238,8 +261,12 @@ export class WebviewAgentInstrumentation {
     if (this.originalXhrOpen && this.originalXhrSend && typeof window.XMLHttpRequest === 'function') {
       window.XMLHttpRequest.prototype.open = this.originalXhrOpen
       window.XMLHttpRequest.prototype.send = this.originalXhrSend
+      if (this.originalXhrSetRequestHeader) {
+        window.XMLHttpRequest.prototype.setRequestHeader = this.originalXhrSetRequestHeader
+      }
       this.originalXhrOpen = undefined
       this.originalXhrSend = undefined
+      this.originalXhrSetRequestHeader = undefined
     }
     if (this.originalWebSocket) {
       window.WebSocket = this.originalWebSocket
@@ -319,7 +346,7 @@ export class WebviewAgentInstrumentation {
       x: params.x,
       y: params.y
     }
-    const result = this.action(action, false)
+    const result = this.actionWithTrace(action, false)
     if (this.recording) {
       pushCapped(this.recordingEntries, {
         method: 'act',
@@ -354,48 +381,61 @@ export class WebviewAgentInstrumentation {
   }
 
   action(action: InstrumentedAction, record = true): { ok: true } {
-    switch (action.action) {
-      case 'click':
-        clickRef(requiredRef(action.ref))
-        break
-      case 'hover':
-        hoverRef(requiredRef(action.ref))
-        break
-      case 'focus':
-        focusRef(requiredRef(action.ref))
-        break
-      case 'blur':
-        blurRef(requiredRef(action.ref))
-        break
-      case 'scroll':
-        scrollRef(requiredRef(action.ref), { x: action.x, y: action.y })
-        break
-      case 'drag':
-        dragRef(requiredRef(action.ref), { toRef: action.toRef })
-        break
-      case 'fill':
-        fillRef(requiredRef(action.ref), action.value ?? '')
-        break
-      case 'type':
-        typeRef(requiredRef(action.ref), action.value ?? '')
-        break
-      case 'press':
-        if (action.ref) {
-          focusRef(action.ref)
-        }
-        pressKey(action.value ?? '', document, { modifiers: action.modifiers })
-        break
-      case 'select':
-        selectRef(requiredRef(action.ref), action.value)
-        break
-      case 'check':
-        checkRef(requiredRef(action.ref), action.checked ?? true)
-        break
-    }
+    const { traceId: _, ...result } = this.actionWithTrace(action, record)
+    return result
+  }
 
-    this.pushEvent(action.action, serializableAction(action))
-    if (record) this.recordAction(action)
-    return { ok: true }
+  private actionWithTrace(action: InstrumentedAction, record = true): ActResult {
+    const previousTraceId = this.activeTraceId
+    const traceId = `action-${++this.actionTraceId}`
+    this.activeTraceId = traceId
+    try {
+      switch (action.action) {
+        case 'click':
+          clickRef(requiredRef(action.ref))
+          break
+        case 'hover':
+          hoverRef(requiredRef(action.ref))
+          break
+        case 'focus':
+          focusRef(requiredRef(action.ref))
+          break
+        case 'blur':
+          blurRef(requiredRef(action.ref))
+          break
+        case 'scroll':
+          scrollRef(requiredRef(action.ref), { x: action.x, y: action.y })
+          break
+        case 'drag':
+          dragRef(requiredRef(action.ref), { toRef: action.toRef })
+          break
+        case 'fill':
+          fillRef(requiredRef(action.ref), action.value ?? '')
+          break
+        case 'type':
+          typeRef(requiredRef(action.ref), action.value ?? '')
+          break
+        case 'press':
+          if (action.ref) focusRef(action.ref)
+          pressKey(action.value ?? '', document, { modifiers: action.modifiers })
+          break
+        case 'select':
+          selectRef(requiredRef(action.ref), action.value)
+          break
+        case 'check':
+          checkRef(requiredRef(action.ref), action.checked ?? true)
+          break
+        case 'upload':
+          uploadRef(requiredRef(action.ref), action.files ?? [])
+          break
+      }
+
+      this.pushEvent(action.action, serializableAction(action))
+      if (record) this.recordAction(action)
+      return { ok: true, traceId }
+    } finally {
+      this.activeTraceId = previousTraceId
+    }
   }
 
   inspect(ref: string): InspectResult {
@@ -403,75 +443,39 @@ export class WebviewAgentInstrumentation {
   }
 
   hover(ref: string): { ok: true } {
-    hoverRef(ref)
-    const action: InstrumentedAction = { action: 'hover', ref }
-    this.pushEvent('hover', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'hover', ref })
   }
 
   focus(ref: string): { ok: true } {
-    focusRef(ref)
-    const action: InstrumentedAction = { action: 'focus', ref }
-    this.pushEvent('focus', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'focus', ref })
   }
 
   blur(ref: string): { ok: true } {
-    blurRef(ref)
-    const action: InstrumentedAction = { action: 'blur', ref }
-    this.pushEvent('blur', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'blur', ref })
   }
 
   scroll(ref: string, options: ScrollOptions = {}): { ok: true } {
-    scrollRef(ref, options)
-    const action: InstrumentedAction = { action: 'scroll', ref, x: options.x, y: options.y }
-    this.pushEvent('scroll', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'scroll', ref, x: options.x, y: options.y })
   }
 
   drag(ref: string, options: DragOptions = {}): { ok: true } {
-    dragRef(ref, options)
-    const action: InstrumentedAction = { action: 'drag', ref, toRef: options.toRef }
-    this.pushEvent('drag', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'drag', ref, toRef: options.toRef })
   }
 
   select(ref: string, value?: string): { ok: true } {
-    selectRef(ref, value)
-    const action: InstrumentedAction = { action: 'select', ref, value }
-    this.pushEvent('select', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'select', ref, value })
   }
 
   check(ref: string, checked = true): { ok: true } {
-    checkRef(ref, checked)
-    const action: InstrumentedAction = { action: 'check', ref, checked }
-    this.pushEvent('check', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'check', ref, checked })
   }
 
   upload(ref: string, files: UploadFile[]): { ok: true } {
-    uploadRef(ref, files)
-    const action: InstrumentedAction = { action: 'upload', ref, files }
-    this.pushEvent('upload', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'upload', ref, files })
   }
 
   type(ref: string, text: string): { ok: true } {
-    typeRef(ref, text)
-    const action: InstrumentedAction = { action: 'type', ref, value: text }
-    this.pushEvent('type', serializableAction(action))
-    this.recordAction(action)
-    return { ok: true }
+    return this.action({ action: 'type', ref, value: text })
   }
 
   evaluate(code: string): Promise<EvalResult> {
@@ -581,28 +585,30 @@ export class WebviewAgentInstrumentation {
     return screenshotDocument(document, options)
   }
 
-  logs(): LogEntry[]
-  logs(options: LogsParams): LogEntry[] | CaptureResult<LogEntry>
-  logs(options: LogsParams = {}): LogEntry[] | CaptureResult<LogEntry> {
+  logs(options: LogsParams = {}): CaptureResult<LogEntry> {
     return this.capturedLogs.read(options)
   }
 
-  events(): AgentEvent[]
-  events(options: EventsParams): AgentEvent[] | CaptureResult<AgentEvent>
-  events(options: EventsParams = {}): AgentEvent[] | CaptureResult<AgentEvent> {
+  events(options: EventsParams = {}): CaptureResult<AgentEvent> {
     return this.capturedEvents.read(options)
   }
 
-  network(): NetworkEntry[]
-  network(options: NetworkParams): NetworkEntry[] | CaptureResult<NetworkEntry>
-  network(options: NetworkParams = {}): NetworkEntry[] | CaptureResult<NetworkEntry> {
-    return this.capturedNetwork.read(options)
+  network(options: NetworkParams & { id: string }): DetailResult<NetworkDetail>
+  network(options?: NetworkParams): CaptureResult<NetworkEntry>
+  network(options: NetworkParams = {}): CaptureResult<NetworkEntry> | DetailResult<NetworkDetail> {
+    if (options.id !== undefined) return retainedDetail<NetworkDetail>(this.networkDetails, options)
+    const result = this.capturedNetwork.read(options)
+    if (options.clear) this.networkDetails.clear()
+    return result
   }
 
-  ipc(): IpcEntry[]
-  ipc(options: IpcParams): IpcEntry[] | CaptureResult<IpcEntry>
-  ipc(options: IpcParams = {}): IpcEntry[] | CaptureResult<IpcEntry> {
-    return this.capturedIpc.read(options)
+  ipc(options: IpcParams & { id: string }): DetailResult<IpcDetail>
+  ipc(options?: IpcParams): CaptureResult<IpcEntry>
+  ipc(options: IpcParams = {}): CaptureResult<IpcEntry> | DetailResult<IpcDetail> {
+    if (options.id !== undefined) return retainedDetail<IpcDetail>(this.ipcDetails, options)
+    const result = this.capturedIpc.read(options)
+    if (options.clear) this.ipcDetails.clear()
+    return result
   }
 
   storage(options: StorageParams = {}): StorageResult {
@@ -838,7 +844,8 @@ export class WebviewAgentInstrumentation {
     this.capturedLogs.push({
       level,
       message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
     })
   }
 
@@ -846,7 +853,8 @@ export class WebviewAgentInstrumentation {
     this.capturedEvents.push({
       kind,
       detail,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
     })
   }
 
@@ -867,9 +875,21 @@ export class WebviewAgentInstrumentation {
         id: `fetch-${++this.networkEntryId}`,
         type: 'fetch',
         method: fetchMethod(input, init),
-        url,
-        startedAt: new Date(startedAtMs).toISOString()
+        url: redactUrl(url),
+        startedAt: new Date(startedAtMs).toISOString(),
+        ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
       }
+      const detail: NetworkDetailRecord = {
+        entry,
+        requestHeaders: redactedHeaders(fetchRequestHeaders(input, init))
+      }
+      setCapped(this.networkDetails, entry.id, detail)
+      void fetchRequestDetail(input, init).then((captured) => {
+        if (captured.body !== undefined) detail.requestBody = captured.body
+        if (entry.requestBodySize === undefined && captured.size !== undefined) {
+          entry.requestBodySize = captured.size
+        }
+      })
       const requestBodySize = bodySize(requestBody(input, init))
       if (requestBodySize !== undefined) {
         entry.requestBodySize = requestBodySize
@@ -881,10 +901,10 @@ export class WebviewAgentInstrumentation {
         const response = await originalFetch.call(window, input, init)
         entry.status = response.status
         entry.ok = response.ok
-        const responseBodySize = await clonedResponseBodySize(response)
-        if (responseBodySize !== undefined) {
-          entry.responseBodySize = responseBodySize
-        }
+        detail.responseHeaders = redactedHeaders(response.headers)
+        const captured = await clonedResponseDetail(response)
+        if (captured.size !== undefined) entry.responseBodySize = captured.size
+        if (captured.body !== undefined) detail.responseBody = captured.body
         finishNetworkEntry(entry, startedAtMs)
         return response
       } catch (error) {
@@ -905,22 +925,39 @@ export class WebviewAgentInstrumentation {
     const capture = this
     const openImpl = XHR.prototype.open
     const sendImpl = XHR.prototype.send
+    const setRequestHeaderImpl = XHR.prototype.setRequestHeader
     this.originalXhrOpen = openImpl
     this.originalXhrSend = sendImpl
 
     XHR.prototype.open = function (
-      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string; headers: Record<string, string> } },
       method: string,
       url: string | URL,
       ...rest: unknown[]
     ) {
-      this.__agentNet = { method: String(method ?? 'GET').toUpperCase(), url: resolveUrl(String(url)) }
+      this.__agentNet = {
+        method: String(method ?? 'GET').toUpperCase(),
+        url: resolveUrl(String(url)),
+        headers: {}
+      }
       // eslint-disable-next-line prefer-rest-params
       return (openImpl as (...args: unknown[]) => void).apply(this, [method, url, ...rest])
     } as XMLHttpRequest['open']
 
+    if (typeof setRequestHeaderImpl === 'function') {
+      this.originalXhrSetRequestHeader = setRequestHeaderImpl
+      XHR.prototype.setRequestHeader = function (
+        this: XMLHttpRequest & { __agentNet?: { headers: Record<string, string> } },
+        name: string,
+        value: string
+      ): void {
+        if (this.__agentNet) this.__agentNet.headers[name] = value
+        setRequestHeaderImpl.call(this, name, value)
+      }
+    }
+
     XHR.prototype.send = function (
-      this: XMLHttpRequest & { __agentNet?: { method: string; url: string } },
+      this: XMLHttpRequest & { __agentNet?: { method: string; url: string; headers: Record<string, string> } },
       body?: Document | XMLHttpRequestBodyInit | null
     ) {
       const meta = this.__agentNet
@@ -930,9 +967,18 @@ export class WebviewAgentInstrumentation {
           id: `xhr-${++capture.networkEntryId}`,
           type: 'xhr',
           method: meta.method,
-          url: meta.url,
-          startedAt: new Date(startedAtMs).toISOString()
+          url: redactUrl(meta.url),
+          startedAt: new Date(startedAtMs).toISOString(),
+          ...(capture.activeTraceId ? { traceId: capture.activeTraceId } : {})
         }
+        const detail: NetworkDetailRecord = {
+          entry,
+          requestHeaders: redactedHeaders(meta.headers)
+        }
+        setCapped(capture.networkDetails, entry.id, detail)
+        void bodyDetail(body).then((capturedBody) => {
+          if (capturedBody !== undefined) detail.requestBody = capturedBody
+        })
         const requestBodySize = bodySize(body as BodyInit | null | undefined)
         if (requestBodySize !== undefined) {
           entry.requestBodySize = requestBodySize
@@ -954,6 +1000,11 @@ export class WebviewAgentInstrumentation {
           if (responseBodySize !== undefined) {
             entry.responseBodySize = responseBodySize
           }
+          if (typeof this.getAllResponseHeaders === 'function') {
+            detail.responseHeaders = redactedHeaders(parseXhrHeaders(this.getAllResponseHeaders()))
+          }
+          const responseBody = xhrResponseBody(this)
+          if (responseBody !== undefined) detail.responseBody = responseBody
           finishNetworkEntry(entry, startedAtMs)
           settle()
         })
@@ -986,12 +1037,14 @@ export class WebviewAgentInstrumentation {
         id: `ws-${++capture.networkEntryId}`,
         type: 'websocket',
         method: 'GET',
-        url: resolveUrl(typeof url === 'string' ? url : url.href),
-        startedAt: new Date(startedAtMs).toISOString()
+        url: redactUrl(resolveUrl(typeof url === 'string' ? url : url.href)),
+        startedAt: new Date(startedAtMs).toISOString(),
+        ...(capture.activeTraceId ? { traceId: capture.activeTraceId } : {})
       }
       let sent = 0
       let received = 0
       capture.capturedNetwork.push(entry)
+      setCapped(capture.networkDetails, entry.id, { entry })
       socket.addEventListener('open', () => {
         entry.status = 101
         entry.ok = true
@@ -1045,11 +1098,17 @@ export class WebviewAgentInstrumentation {
         const entry: IpcEntry = {
           id: `ipc-${++this.ipcEntryId}`,
           command,
-          startedAt: new Date(startedAtMs).toISOString()
+          startedAt: new Date(startedAtMs).toISOString(),
+          ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
         }
+        const detail: IpcDetailRecord = { entry, args: safeDetailValue(args) }
+        setCapped(this.ipcDetails, entry.id, detail)
         this.capturedIpc.push(entry)
         Promise.resolve(promise).then(
-          () => finishIpcEntry(entry, startedAtMs, true),
+          (result) => {
+            detail.result = safeDetailValue(result)
+            finishIpcEntry(entry, startedAtMs, true)
+          },
           (error: unknown) => {
             entry.error = error instanceof Error ? error.message : String(error)
             finishIpcEntry(entry, startedAtMs, false)
@@ -1097,6 +1156,25 @@ function requiredRef(ref: string | undefined): string {
     throw new Error('missing required ref')
   }
   return ref
+}
+
+function retainedDetail<T>(
+  details: Map<string, { entry: unknown }>,
+  options: NetworkParams | IpcParams
+): DetailResult<T> {
+  if (!options.id?.trim()) throw new AgentProtocolError('INVALID_PARAMS', 'id must be a non-empty string')
+  if (options.clear || options.since !== undefined || options.limit !== undefined) {
+    throw new AgentProtocolError('INVALID_PARAMS', 'id cannot be combined with capture list options')
+  }
+  const record = details.get(options.id)
+  if (!record) throw new AgentProtocolError('CAPTURE_NOT_FOUND', `capture detail not retained: ${options.id}`)
+  const { entry, ...detail } = record
+  return { detail: { ...(entry as object), ...detail } as T }
+}
+
+function setCapped<K, V>(map: Map<K, V>, key: K, value: V): void {
+  map.set(key, value)
+  if (map.size > MAX_CAPTURE_ENTRIES) map.delete(map.keys().next().value as K)
 }
 
 function serializableAction(action: InstrumentedAction): Record<string, unknown> {
@@ -1183,11 +1261,12 @@ function booleanParam(params: Record<string, unknown>, key: string): boolean | u
   return typeof value === 'boolean' ? value : undefined
 }
 
-function captureParams(params: Record<string, unknown>): LogsParams {
+function captureParams(params: Record<string, unknown>): NetworkParams {
   return {
     clear: booleanParam(params, 'clear'),
     since: numberParam(params, 'since'),
-    limit: numberParam(params, 'limit')
+    limit: numberParam(params, 'limit'),
+    id: stringParam(params, 'id')
   }
 }
 
@@ -1257,6 +1336,122 @@ function requestBody(input: RequestInfo | URL, init?: RequestInit): BodyInit | n
   return isRequest(input) ? input.body : undefined
 }
 
+function fetchRequestHeaders(input: RequestInfo | URL, init?: RequestInit): Headers {
+  const headers = new Headers(isRequest(input) ? input.headers : undefined)
+  if (init?.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value))
+  return headers
+}
+
+async function fetchRequestDetail(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<{ body?: unknown; size?: number }> {
+  if (init?.body !== undefined) {
+    return { body: await bodyDetail(init.body), size: bodySize(init.body) }
+  }
+  if (!isRequest(input) || input.body === null) return {}
+  try {
+    const text = await input.clone().text()
+    return { body: bodyTextDetail(text), size: new TextEncoder().encode(text).byteLength }
+  } catch {
+    return {}
+  }
+}
+
+async function bodyDetail(body: unknown): Promise<unknown> {
+  if (body === null || body === undefined) return undefined
+  if (typeof body === 'string') return bodyTextDetail(body)
+  if (body instanceof URLSearchParams) return bodyTextDetail(body.toString())
+  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    return safeDetailValue(Object.fromEntries(Array.from(body.entries(), ([key, value]) => [
+      key,
+      typeof value === 'string' ? value : { name: value.name, type: value.type, size: value.size }
+    ])))
+  }
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    if (body.size > MAX_DETAIL_BYTES) return `[binary ${body.size} bytes]`
+    return bodyTextDetail(await body.text())
+  }
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    return `[binary ${body.byteLength} bytes]`
+  }
+  return safeDetailValue(body)
+}
+
+function bodyTextDetail(text: string): unknown {
+  try {
+    return safeDetailValue(JSON.parse(text))
+  } catch {
+    if (text.includes('=')) {
+      const params = new URLSearchParams(text)
+      if ([...params].length > 0) {
+        for (const key of [...params.keys()]) {
+          if (isSensitiveKey(key)) params.set(key, '[REDACTED]')
+        }
+        return truncateUtf8(params.toString())
+      }
+    }
+    return truncateUtf8(text)
+  }
+}
+
+function safeDetailValue(value: unknown): unknown {
+  if (value === undefined) return undefined
+  try {
+    const json = JSON.stringify(value, (key, nested) => isSensitiveKey(key) ? '[REDACTED]' : nested)
+    if (json === undefined) return undefined
+    const truncated = truncateUtf8(json)
+    return truncated === json ? JSON.parse(json) : truncated
+  } catch {
+    return truncateUtf8(String(value))
+  }
+}
+
+function truncateUtf8(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  if (bytes.byteLength <= MAX_DETAIL_BYTES) return text
+  const suffix = '…[truncated]'
+  const suffixBytes = new TextEncoder().encode(suffix).byteLength
+  let prefix = new TextDecoder().decode(bytes.slice(0, MAX_DETAIL_BYTES - suffixBytes))
+  while (new TextEncoder().encode(prefix).byteLength + suffixBytes > MAX_DETAIL_BYTES) {
+    prefix = prefix.slice(0, -1)
+  }
+  return `${prefix}${suffix}`
+}
+
+function isSensitiveKey(key: string): boolean {
+  return /authorization|cookie|credential|password|passwd|secret|session|token|api[-_]?key/i.test(key)
+}
+
+function redactedHeaders(input: HeadersInit | Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  new Headers(input).forEach((value, key) => {
+    result[key] = isSensitiveKey(key) ? '[REDACTED]' : truncateUtf8(value)
+  })
+  return result
+}
+
+function redactUrl(value: string): string {
+  try {
+    const url = new URL(value)
+    if (url.username) url.username = '[REDACTED]'
+    if (url.password) url.password = '[REDACTED]'
+    for (const key of [...url.searchParams.keys()]) {
+      if (isSensitiveKey(key)) url.searchParams.set(key, '[REDACTED]')
+    }
+    return url.href
+  } catch {
+    return value
+  }
+}
+
+function parseXhrHeaders(raw: string): Record<string, string> {
+  return Object.fromEntries(raw.trim().split(/[\r\n]+/).filter(Boolean).map((line) => {
+    const separator = line.indexOf(':')
+    return separator === -1 ? [line, ''] : [line.slice(0, separator).trim(), line.slice(separator + 1).trim()]
+  }))
+}
+
 function bodySize(body: BodyInit | ReadableStream<Uint8Array> | null | undefined): number | undefined {
   if (body === null || body === undefined) {
     return undefined
@@ -1308,6 +1503,16 @@ function xhrResponseSize(xhr: XMLHttpRequest): number | undefined {
   return undefined
 }
 
+function xhrResponseBody(xhr: XMLHttpRequest): unknown {
+  try {
+    if (typeof xhr.responseText === 'string') return bodyTextDetail(xhr.responseText)
+  } catch {
+    // responseText throws for non-text responseTypes; use response metadata.
+  }
+  const response: unknown = xhr.response
+  return typeof response === 'string' ? bodyTextDetail(response) : safeDetailValue(response)
+}
+
 function messageSize(data: unknown): number {
   if (typeof data === 'string') {
     return new TextEncoder().encode(data).byteLength
@@ -1324,12 +1529,16 @@ function messageSize(data: unknown): number {
   return 0
 }
 
-async function clonedResponseBodySize(response: Response): Promise<number | undefined> {
+async function clonedResponseDetail(response: Response): Promise<{ size?: number; body?: unknown }> {
   try {
     const body = await response.clone().text()
-    return new TextEncoder().encode(body).byteLength
+    return {
+      size: new TextEncoder().encode(body).byteLength,
+      body: bodyTextDetail(body)
+    }
   } catch {
-    return undefined
+    const size = Number(response.headers.get('content-length'))
+    return Number.isSafeInteger(size) && size >= 0 ? { size } : {}
   }
 }
 

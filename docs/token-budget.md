@@ -5,14 +5,14 @@ JSON wire sizes; provider-reported model tokens remain Fleet run artifacts.
 
 | Path | Baseline | Fleet path | Result |
 | --- | ---: | ---: | ---: |
-| MCP `tools/list` | 29,724 B (`fc773cc`) | 4,837 B scoped/core | 16.3% of baseline |
+| MCP `tools/list` | 29,724 B (`fc773cc`) | 5,282 B scoped/core | 17.8% of baseline |
 | 200-line incremental semantic pull | 5,115 B repeated snapshot | 122 B lean frame | 2.4% |
 | 1 new capture after 1,000 entries | 38,894 B full buffer | 83 B cursor result | 0.21% |
-| Locator action | `find` + ref action | one `act` request returning `{ok:true}` | 1 request |
+| Locator action | `find` + ref action | one `act` request returning `{ok:true,traceId}` | 1 request |
 
-The expanded full MCP surface is 31,922 B because it also documents `act`,
+The expanded full MCP surface is 32,872 B because it also documents `act`,
 capture cursors, and lean streams. Fleet does not use it: Fleet imports the
-direct `DebuggerClient`. The scoped/core profile is 15.2% of that full surface,
+direct `DebuggerClient`. The scoped/core profile is 16.1% of that full surface,
 comfortably below the 40% acceptance ceiling.
 
 The semantic measurement uses a deterministic 200-line compact tree with one

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { Command } from 'commander'
 
 import type { DebuggerClient } from '../daemon/client'
-import { connectDebuggerClient, pollFollow } from '../daemon/connect'
+import { collectDiagnosis, connectDebuggerClient, pollFollow } from '../daemon/connect'
 import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
@@ -29,6 +29,7 @@ interface FollowOptions extends ConnectionOptions {
   timeoutMs?: number
   since?: number
   limit?: number
+  id?: string
 }
 
 interface TreeOptions extends ConnectionOptions {
@@ -164,14 +165,17 @@ function registerFollowCommand(
   description: string,
   noun: string
 ): void {
-  withConnectionOptions(program.command(name).description(description))
+  const command = withConnectionOptions(program.command(name).description(description))
     .option('--follow', `poll and stream new ${noun} entries as newline-delimited JSON`)
     .option('--clear', `clear captured ${noun} entries after reading`)
     .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
     .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
     .option('--since <cursor>', 'return entries after this cursor', parseNumber)
     .option('--limit <count>', 'maximum entries to return', parseNumber)
-    .action(async (options: FollowOptions) => {
+  if (name === 'network' || name === 'ipc') {
+    command.option('--id <id>', `return one retained ${noun} detail by id`)
+  }
+  command.action(async (options: FollowOptions) => {
       if (options.follow) {
         await followEntries(options, name)
         return
@@ -179,10 +183,10 @@ function registerFollowCommand(
       printJson(
         await call(options, name, {
           ...targetParams(options),
-          follow: options.follow,
           clear: options.clear,
           since: options.since,
-          limit: options.limit
+          limit: options.limit,
+          id: options.id
         })
       )
     })
@@ -459,6 +463,15 @@ registerFollowCommand('events', 'Print captured app events.', 'event')
 registerFollowCommand('network', 'Print captured fetch/XHR/WebSocket network entries.', 'network')
 registerFollowCommand('ipc', 'Print captured Tauri IPC invoke traces.', 'IPC')
 
+withConnectionOptions(program.command('diagnose').description('Collect a compact debugger report.'))
+  .option('--limit <count>', 'recent entries per capture surface', parseNumber, 20)
+  .action(async (options: ConnectionOptions & { limit?: number }) => {
+    printJson(await collectDiagnosis(await debuggerClient(options), {
+      window: options.window,
+      limit: options.limit
+    }))
+  })
+
 withConnectionOptions(
   program.command('storage').description('Inspect or mutate webview localStorage/sessionStorage.')
 )
@@ -601,7 +614,7 @@ async function followEntries(
   method: 'logs' | 'events' | 'network' | 'ipc'
 ): Promise<void> {
   const client = await debuggerClient(options)
-  const poll = pollFollow(client, method, targetParams(options), {
+  const poll = pollFollow(client, method, { ...targetParams(options), since: options.since }, {
     pollMs: options.pollMs ?? 250,
     timeoutMs: options.timeoutMs
   })

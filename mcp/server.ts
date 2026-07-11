@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
 import type { DebuggerClient } from '../daemon/client'
-import { connectDebuggerClient, pollFollow, type DebuggerTarget } from '../daemon/connect'
+import { collectDiagnosis, connectDebuggerClient, pollFollow, type DebuggerTarget } from '../daemon/connect'
 import type { AgentMethod } from '../protocol/types'
 
 const MCP_PROTOCOL_VERSION = '2025-11-25'
@@ -190,6 +190,11 @@ async function executeTool(
       return callFollowableEntries(client, 'network', args)
     case 'tauri_ipc':
       return callFollowableEntries(client, 'ipc', args)
+    case 'tauri_diagnose':
+      return collectDiagnosis(client, {
+        window: stringField(args, 'window') || undefined,
+        limit: numberField(args, 'limit')
+      })
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
     case 'tauri_cookies':
@@ -239,11 +244,12 @@ async function callFollowableEntries(
   args: ToolCallArgs
 ): Promise<unknown> {
   if (args.follow !== true) {
-    return client.call(method, pick(args, ['window', 'follow', 'clear', 'since', 'limit']))
+    return client.call(method, pick(args, ['window', 'clear', 'since', 'limit', 'id']))
   }
+  if (args.id !== undefined) throw new Error('id cannot be combined with follow')
 
   const entries: unknown[] = []
-  const poll = pollFollow(client, method, windowParams(args), {
+  const poll = pollFollow(client, method, pick(args, ['window', 'since']), {
     pollMs: numberField(args, 'pollMs') ?? 250,
     timeoutMs: Math.max(0, numberField(args, 'timeoutMs') ?? 1000)
   })
@@ -329,6 +335,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' },
   lean: { type: 'boolean', description: 'Omit repeated semantic snapshots except for initial sync or dropped recovery.' },
   detail: { type: 'boolean', description: 'Include optional response detail.' },
+  id: { type: 'string', description: 'Retained network/IPC entry id for redacted detail lookup.' },
   state: {
     type: 'string',
     enum: ['present', 'absent'],
@@ -380,8 +387,9 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).', schema(['window', 'path', 'backend', 'ref'])),
   tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
-  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
-  tool('tauri_ipc', 'IPC', 'Return captured Tauri IPC invoke traces (command, timing, ok/error).', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
+  tool('tauri_network', 'Network', 'List network summaries or pass id for redacted headers/body detail.', schema(['window', 'follow', 'clear', 'since', 'limit', 'id', 'pollMs', 'timeoutMs'])),
+  tool('tauri_ipc', 'IPC', 'List Tauri IPC summaries or pass id for redacted args/result detail.', schema(['window', 'follow', 'clear', 'since', 'limit', 'id', 'pollMs', 'timeoutMs'])),
+  tool('tauri_diagnose', 'Diagnose', 'Collect attach/state plus recent logs, events, network, and IPC in one report.', schema(['window', 'limit'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
@@ -398,8 +406,8 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   )
 ]
 
-const CORE_TOOLS = new Set(['tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_expect', 'tauri_state', 'tauri_stream', 'tauri_ipc', 'tauri_shot'])
-const LARGE_RESULT_TOOLS = new Set(['tauri_tree', 'tauri_logs', 'tauri_events', 'tauri_network', 'tauri_ipc', 'tauri_stream'])
+const CORE_TOOLS = new Set(['tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_expect', 'tauri_state', 'tauri_stream', 'tauri_ipc', 'tauri_shot', 'tauri_diagnose'])
+const LARGE_RESULT_TOOLS = new Set(['tauri_tree', 'tauri_logs', 'tauri_events', 'tauri_network', 'tauri_ipc', 'tauri_stream', 'tauri_diagnose'])
 
 class McpRequestError extends Error {
   constructor(

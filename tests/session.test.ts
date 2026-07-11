@@ -27,12 +27,12 @@ describe('DebuggerSession', () => {
 
     await expect(session.execute('attach', {})).resolves.toEqual({
       attached: true,
-      protocolVersion: 1,
+      protocolVersion: 2,
       sessionId: expect.any(String),
       platform: expect.stringMatching(/^(linux|macos|windows|unknown)$/),
       runtime: 'unknown',
       methods: expect.arrayContaining(['attach', 'act', 'stream', 'ipc']),
-      features: ['locator-action', 'lean-stream', 'capture-cursors'],
+      features: ['locator-action', 'lean-stream', 'capture-cursors', 'correlated-details'],
       screenshotBackends: expect.arrayContaining(['dom']),
       windows: [staticWindowInfo('Ducktape')]
     })
@@ -80,7 +80,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
     await expect(session.execute('act', {
       role: 'textbox', name: 'Agent name', action: 'fill', value: 'fleet', timeoutMs: 100
-    })).resolves.toEqual({ ok: true })
+    })).resolves.toEqual(expect.objectContaining({ ok: true, traceId: expect.any(String) }))
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('hover', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('focus', { ref: '@2' })).resolves.toEqual({ ok: true })
@@ -138,14 +138,14 @@ describe('DebuggerSession', () => {
         text: 'Forge'
       })
     })
-    await expect(session.execute('logs', {})).resolves.toMatchObject([
-      { level: 'info', message: 'booted', window: 'main' }
-    ])
-    await expect(session.execute('logs', { clear: true })).resolves.toMatchObject([
-      { level: 'info', message: 'booted', window: 'main' }
-    ])
-    await expect(session.execute('logs', {})).resolves.toEqual([])
-    await expect(session.execute('network', {})).resolves.toEqual([])
+    await expect(session.execute('logs', {})).resolves.toMatchObject({
+      entries: [{ level: 'info', message: 'booted', window: 'main' }]
+    })
+    await expect(session.execute('logs', { clear: true })).resolves.toMatchObject({
+      entries: [{ level: 'info', message: 'booted', window: 'main' }]
+    })
+    await expect(session.execute('logs', {})).resolves.toMatchObject({ entries: [] })
+    await expect(session.execute('network', {})).resolves.toMatchObject({ entries: [] })
     await expect(
       session.execute('storage', { action: 'set', key: 'agent.token', value: 'ready' })
     ).resolves.toEqual({
@@ -232,7 +232,7 @@ describe('DebuggerSession', () => {
       hash: ''
     })
     await expect(session.execute('events', {})).resolves.toEqual(
-      expect.arrayContaining([
+      expect.objectContaining({ entries: expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
         expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } }),
@@ -243,15 +243,15 @@ describe('DebuggerSession', () => {
         expect.objectContaining({ kind: 'fill', detail: { ref: '@2', text: 'worker-a' } }),
         expect.objectContaining({ kind: 'press', detail: { key: 'Enter' } }),
         expect.objectContaining({ kind: 'press', detail: { key: 'k', ref: '@2', modifiers: ['Meta', 'Shift'] } })
-      ])
+      ]) })
     )
     await expect(session.execute('events', { clear: true })).resolves.toEqual(
-      expect.arrayContaining([
+      expect.objectContaining({ entries: expect.arrayContaining([
         expect.objectContaining({ kind: 'attach', window: 'main' }),
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } })
-      ])
+      ]) })
     )
-    await expect(session.execute('events', {})).resolves.toEqual([])
+    await expect(session.execute('events', {})).resolves.toMatchObject({ entries: [] })
     await expect(session.execute('record', { action: 'get' })).resolves.toEqual({
       recording: true,
       entries: [
@@ -359,13 +359,13 @@ describe('DebuggerSession', () => {
       ].join('; ')
     })
 
-    await expect(session.execute('logs', {})).resolves.toEqual([
+    await expect(session.execute('logs', {})).resolves.toMatchObject({ entries: [
       expect.objectContaining({ level: 'error', message: expect.stringContaining('static boom'), window: 'main' }),
       expect.objectContaining({ level: 'error', message: expect.stringContaining('static promise boom'), window: 'main' }),
       expect.objectContaining({ level: 'error', message: expect.stringContaining('E_STATIC_RUNTIME'), window: 'main' })
-    ])
-    await expect(session.execute('logs', { clear: true })).resolves.toHaveLength(3)
-    await expect(session.execute('logs', {})).resolves.toEqual([])
+    ] })
+    await expect(session.execute('logs', { clear: true })).resolves.toMatchObject({ entries: expect.any(Array) })
+    await expect(session.execute('logs', {})).resolves.toMatchObject({ entries: [] })
   })
 
   it('asserts semantic targets with expect', async () => {

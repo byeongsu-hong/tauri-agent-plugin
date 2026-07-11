@@ -57,6 +57,16 @@ Bridge commands are gated by Tauri's ACL. Three sets ship:
 - The plugin never binds a VNC port — the `vnc` config only advertises where a
   separately-run stream lives.
 
+## Captured detail
+
+- Capture lists contain summaries only. Network headers/bodies and IPC
+  args/results require an explicit retained-entry id.
+- Authorization, cookies, credentials, passwords, sessions, tokens, secrets,
+  and API keys are replaced with `[REDACTED]`; sensitive URL query parameters
+  are redacted too.
+- Each stored body/value is capped at 64 KiB, and detail buffers remain bounded
+  with the summary capture buffers.
+
 ## Error taxonomy
 
 Failures carry distinct wire codes so agents can branch on retryable vs not:

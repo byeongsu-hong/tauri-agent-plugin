@@ -18,14 +18,13 @@ export class CaptureBuffer<T> {
     if (this.entries.length > this.capacity) this.entries.shift()
   }
 
-  read(params: CaptureParams = {}): T[] | CaptureResult<T> {
+  read(params: CaptureParams = {}): CaptureResult<T> {
     if (params.since !== undefined && (!Number.isSafeInteger(params.since) || params.since < 0)) {
       throw new AgentProtocolError('INVALID_PARAMS', 'since must be a non-negative integer')
     }
     if (params.limit !== undefined && (!Number.isSafeInteger(params.limit) || params.limit < 1)) {
       throw new AgentProtocolError('INVALID_PARAMS', 'limit must be a positive integer')
     }
-    const cursorMode = params.since !== undefined || params.limit !== undefined
     const since = params.since ?? 0
     const available = this.entries.filter((entry) => entry.seq > since)
     const selected = params.limit === undefined ? available : available.slice(0, params.limit)
@@ -34,6 +33,6 @@ export class CaptureBuffer<T> {
     const cursor = selected.at(-1)?.seq ?? (available.length === 0 ? this.seq : since)
     const values = selected.map((entry) => entry.value)
     if (params.clear) this.entries = []
-    return cursorMode ? { entries: values, cursor, dropped } : values
+    return { entries: values, cursor, dropped }
   }
 }

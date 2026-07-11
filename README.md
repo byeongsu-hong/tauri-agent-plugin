@@ -13,6 +13,7 @@ single bridge inside the instrumented webview.
 # drive a running app the CLI discovers by app id
 tauri-agent tree  --app dev.byeongsu.tauri-agent.fixture
 tauri-agent act click --role button --name Forge --app dev.byeongsu.tauri-agent.fixture
+tauri-agent diagnose --app dev.byeongsu.tauri-agent.fixture
 ```
 
 ## Quickstart

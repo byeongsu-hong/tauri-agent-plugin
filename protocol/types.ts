@@ -210,7 +210,6 @@ export interface ShotParams extends WindowTarget {
 }
 
 export interface CaptureParams extends WindowTarget {
-  follow?: boolean
   clear?: boolean
   since?: number
   limit?: number
@@ -220,9 +219,15 @@ export interface LogsParams extends CaptureParams {}
 
 export interface EventsParams extends CaptureParams {}
 
-export interface NetworkParams extends CaptureParams {}
+export interface NetworkParams extends CaptureParams {
+  /** Return one retained request with redacted headers/body instead of the summary list. */
+  id?: string
+}
 
-export interface IpcParams extends CaptureParams {}
+export interface IpcParams extends CaptureParams {
+  /** Return one retained invoke with redacted args/result instead of the summary list. */
+  id?: string
+}
 
 export interface StorageParams extends WindowTarget {
   area?: 'local' | 'session'
@@ -372,12 +377,14 @@ export interface FindResult {
 
 export interface ActResult {
   ok: true
+  /** Correlates synchronous logs/events/network/IPC caused by this action. */
+  traceId: string
   match?: InspectResult
 }
 
 export interface AttachResult {
   attached: true
-  protocolVersion: 1
+  protocolVersion: 2
   sessionId: string
   platform: 'linux' | 'macos' | 'windows' | 'unknown'
   runtime: 'wry' | 'cef' | 'unknown'
@@ -398,6 +405,7 @@ export interface LogEntry {
   message: string
   timestamp: string
   window?: string
+  traceId?: string
 }
 
 export interface AgentEvent {
@@ -405,6 +413,7 @@ export interface AgentEvent {
   timestamp: string
   window?: string
   detail?: unknown
+  traceId?: string
 }
 
 export interface NetworkEntry {
@@ -422,6 +431,14 @@ export interface NetworkEntry {
   responseBodySize?: number
   error?: string
   window?: string
+  traceId?: string
+}
+
+export interface NetworkDetail extends NetworkEntry {
+  requestHeaders?: Record<string, string>
+  requestBody?: unknown
+  responseHeaders?: Record<string, string>
+  responseBody?: unknown
 }
 
 export interface IpcEntry {
@@ -433,12 +450,22 @@ export interface IpcEntry {
   ok?: boolean
   error?: string
   window?: string
+  traceId?: string
+}
+
+export interface IpcDetail extends IpcEntry {
+  args?: unknown
+  result?: unknown
 }
 
 export interface CaptureResult<T> {
   entries: T[]
   cursor: number
   dropped: boolean
+}
+
+export interface DetailResult<T> {
+  detail: T
 }
 
 export interface StorageEntry {

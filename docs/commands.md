@@ -12,7 +12,7 @@ This table is the single source for what each does.
 | `window` | `tauri-agent window --action <a>` | `tauri_window` | Read or control one window: `get`/`focus`/`show`/`hide`/`minimize`/`unminimize`/`maximize`/`unmaximize`/`setSize`/`setPosition`. |
 | `tree` | `tauri-agent tree [--mode verbose] [--scope <sel>] [--interactive]` | `tauri_tree` | Compact semantic tree with `@ref`s. `verbose` adds `value`/`#id`/`[testid]`/`type` annotations on the same lines (refs stay stable). |
 | `find` | `tauri-agent find --role <r> --name <n> --text <t> --limit <k>` | `tauri_find` | Refresh the snapshot and return inspect-shaped matches, so agents get refs without parsing tree text. |
-| `act` | `tauri-agent act <action> --role <r> --name <n> [--value <v>] [--detail]` | `tauri_act` | Locate exactly one target, wait for actionability/stability, and act in one guest turn. Returns only `{ok:true}` unless detail is requested. |
+| `act` | `tauri-agent act <action> --role <r> --name <n> [--value <v>] [--detail]` | `tauri_act` | Locate exactly one target, wait for actionability/stability, and act in one guest turn. Returns `{ok:true,traceId}`; synchronous effects carry the same trace id. |
 | `inspect` | `tauri-agent inspect @<n>` | `tauri_inspect` | Full detail for one ref: role, name, tagName, text, value, attributes, states. |
 | `click` | `tauri-agent click @<n>` | `tauri_click` | Click a ref. |
 | `hover` | `tauri-agent hover @<n>` | `tauri_hover` | Dispatch `mouseover`/`mouseenter`/`mousemove`. |
@@ -27,10 +27,10 @@ This table is the single source for what each does.
 | `press` | `tauri-agent press <key> [--ref @<n>] [--modifier <m>]` | `tauri_press` | Dispatch a key to the active element (or focus a ref first) with `Alt`/`Control`/`Meta`/`Shift`. |
 | `eval` | `tauri-agent eval <code>` | `tauri_eval` | Dev-only JS eval; returns `{ type, text, value? }` and awaits thenables. Requires `agent:allow-agent-eval`. |
 | `shot` | `tauri-agent shot [path] [--backend <b>] [--ref @<n>]` | `tauri_shot` | Screenshot. `dom` (SVG), `native` (macOS pixels), `auto` (native→dom). `--ref` crops to one element (forces `dom`). |
-| `logs` | `tauri-agent logs [--follow] [--clear] [--since <c>] [--limit <n>]` | `tauri_logs` | Captured `console.*` plus uncaught `error`/`unhandledrejection`. Cursor inputs return `{ entries, cursor, dropped }`. |
+| `logs` | `tauri-agent logs [--follow] [--clear] [--since <c>] [--limit <n>]` | `tauri_logs` | Captured `console.*` plus uncaught `error`/`unhandledrejection`. Always returns `{ entries, cursor, dropped }`. |
 | `events` | `tauri-agent events [--follow] [--clear] [--since <c>] [--limit <n>]` | `tauri_events` | Captured lifecycle/interaction events with the same cursor contract. |
-| `network` | `tauri-agent network [--follow] [--clear] [--since <c>] [--limit <n>]` | `tauri_network` | Captured fetch/XHR/WebSocket entries with the same cursor contract. |
-| `ipc` | `tauri-agent ipc [--follow] [--clear] [--since <c>] [--limit <n>]` | `tauri_ipc` | Captured Tauri IPC invokes with the same cursor contract. Skips agent bridge traffic. |
+| `network` | `tauri-agent network [...cursor options] [--id <id>]` | `tauri_network` | List fetch/XHR/WebSocket summaries, or retrieve one retained request's redacted headers/body by id. |
+| `ipc` | `tauri-agent ipc [...cursor options] [--id <id>]` | `tauri_ipc` | List Tauri invokes, or retrieve redacted args/result by id. Skips agent bridge traffic. |
 | `storage` | `tauri-agent storage --action <a> --key <k> --value <v> [--area session]` | `tauri_storage` | Read/mutate localStorage/sessionStorage. |
 | `cookies` | `tauri-agent cookies --action <a> --name <n> --value <v>` | `tauri_cookies` | Read/mutate webview-visible `document.cookie`. |
 | `location` | `tauri-agent location --action <a> --url <u>` | `tauri_location` | Read location or navigate: `push`/`replace`/`reload`/`back`/`forward`. |
@@ -49,8 +49,11 @@ This table is the single source for what each does.
   result so agent calls stay finite.
 - **Replay.** `tauri-agent replay replay.json --app <id>` validates and runs
   recorded actions sequentially. It is client-side and adds no protocol method.
+- **Diagnosis.** `tauri-agent diagnose --app <id>` / `tauri_diagnose` aggregates
+  attach/state and the most recent logs/events/network/IPC without adding a
+  protocol method. Use the returned ids for focused network/IPC detail calls.
 - **Scoped MCP.** `tauri-agent-mcp --app <id> --profile core` removes repeated
-  connection fields and exposes the eight Fleet-relevant tools. `full` remains
+  connection fields and exposes the nine Fleet-relevant tools. `full` remains
   the default profile.
 - **Connection inputs.** Every command accepts `--app <id>` (endpoint
   discovery), `--port`/`--host` (a known daemon), or `--from-html <path>` /

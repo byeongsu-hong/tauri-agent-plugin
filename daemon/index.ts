@@ -1,4 +1,5 @@
 export * from './client'
+export * from './connect'
 export * from './endpoint'
 export * from './server'
 export * from './session'

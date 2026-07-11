@@ -223,11 +223,13 @@ function captureParams(params: Record<string, unknown>): {
   clear?: boolean
   since?: number
   limit?: number
+  id?: string
 } {
   return {
     clear: booleanParam(params.clear),
     since: numberParam(params.since),
-    limit: numberParam(params.limit)
+    limit: numberParam(params.limit),
+    id: stringParam(params.id)
   }
 }
 

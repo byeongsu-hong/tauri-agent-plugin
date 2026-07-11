@@ -46,7 +46,11 @@ describe('WebviewAgentInstrumentation', () => {
     instrumentation.install()
 
     console.info('booted')
-    const fetchResponse = await window.fetch('/api/agents', { method: 'POST', body: 'worker-a' })
+    const fetchResponse = await window.fetch('/api/agents?token=secret', {
+      method: 'POST',
+      headers: { authorization: 'Bearer secret' },
+      body: 'worker-a'
+    })
     await window.fetch('ipc://localhost/plugin%3Aagent%7Cagent_bridge_response', { method: 'POST', body: '{}' })
     const tree = instrumentation.snapshot()
     instrumentation.record('start')
@@ -78,7 +82,8 @@ describe('WebviewAgentInstrumentation', () => {
     })
 
     expect(fetchResponse.status).toBe(201)
-    expect(instrumentation.network()).toEqual([
+    const networkCapture = instrumentation.network()
+    expect(networkCapture.entries).toEqual([
       expect.objectContaining({
         id: expect.any(String),
         type: 'fetch',
@@ -93,8 +98,22 @@ describe('WebviewAgentInstrumentation', () => {
         responseBodySize: 11
       })
     ])
-    expect(instrumentation.network({ clear: true })).toHaveLength(1)
-    expect(instrumentation.network()).toEqual([])
+    const networkId = networkCapture.entries[0].id
+    expect(instrumentation.network({ id: networkId })).toEqual({
+      detail: expect.objectContaining({
+        id: networkId,
+        url: expect.not.stringContaining('secret'),
+        requestHeaders: expect.objectContaining({ authorization: '[REDACTED]' }),
+        requestBody: 'worker-a',
+        responseBody: { ok: true }
+      })
+    })
+    expect(() => instrumentation.network({ id: networkId, clear: true })).toThrow(
+      'id cannot be combined with capture list options'
+    )
+    expect(instrumentation.network({ clear: true }).entries).toHaveLength(1)
+    expect(instrumentation.network().entries).toEqual([])
+    expect(() => instrumentation.network({ id: networkId })).toThrow('capture detail not retained')
     expect(tree.text).toBe(
       [
         'main "Ducktape"',
@@ -131,14 +150,14 @@ describe('WebviewAgentInstrumentation', () => {
       },
       states: ['focused']
     })
-    expect(instrumentation.logs()).toEqual([
+    expect(instrumentation.logs().entries).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
     ])
-    expect(instrumentation.logs({ clear: true })).toEqual([
+    expect(instrumentation.logs({ clear: true }).entries).toEqual([
       expect.objectContaining({ level: 'info', message: 'booted' })
     ])
-    expect(instrumentation.logs()).toEqual([])
-    expect(instrumentation.events()).toEqual(
+    expect(instrumentation.logs().entries).toEqual([])
+    expect(instrumentation.events().entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
         expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } }),
@@ -151,13 +170,13 @@ describe('WebviewAgentInstrumentation', () => {
         expect.objectContaining({ kind: 'wait', detail: { text: 'Registered worker-a' } })
       ])
     )
-    expect(instrumentation.events({ clear: true })).toEqual(
+    expect(instrumentation.events({ clear: true }).entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'click', detail: { ref: '@1' } }),
         expect.objectContaining({ kind: 'hover', detail: { ref: '@1' } })
       ])
     )
-    expect(instrumentation.events()).toEqual([])
+    expect(instrumentation.events().entries).toEqual([])
     expect(instrumentation.state()).toEqual({
       url: window.location.href,
       title: '',
@@ -274,7 +293,7 @@ describe('WebviewAgentInstrumentation', () => {
     try {
       console.log('hello', { a: 1 }, 42)
       console.debug('dbg')
-      expect(instrumentation.logs()).toEqual(
+      expect(instrumentation.logs().entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ level: 'info', message: 'hello {"a":1} 42' }),
           expect.objectContaining({ level: 'debug', message: 'dbg' })
@@ -312,10 +331,40 @@ describe('WebviewAgentInstrumentation', () => {
     }, 10)
     try {
       await expect(instrumentation.act({ role: 'button', name: 'Save', action: 'click', timeoutMs: 200 }))
-        .resolves.toEqual({ ok: true })
+        .resolves.toEqual(expect.objectContaining({ ok: true, traceId: expect.any(String) }))
       expect(clicked).toBe(true)
     } finally {
       instrumentation.dispose()
+    }
+  })
+
+  it('correlates action-caused logs, network, IPC, and events', async () => {
+    type Internals = { invoke: (command: string, args?: unknown) => Promise<unknown> }
+    const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }
+    const originalFetch = window.fetch
+    window.fetch = async () => new Response('{"saved":true}', { headers: { 'content-type': 'application/json' } })
+    withInternals.__TAURI_INTERNALS__ = { invoke: async () => ({ saved: true }) }
+    document.body.innerHTML = '<button>Save</button>'
+    document.querySelector('button')?.addEventListener('click', () => {
+      console.info('saving')
+      void window.fetch('/save', { method: 'POST', body: '{"token":"secret"}' })
+      void withInternals.__TAURI_INTERNALS__!.invoke('save_item', { token: 'secret' })
+    })
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      const result = await instrumentation.act({ role: 'button', name: 'Save', action: 'click' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(instrumentation.logs().entries).toContainEqual(expect.objectContaining({ traceId: result.traceId }))
+      expect(instrumentation.events().entries).toContainEqual(expect.objectContaining({
+        kind: 'click', traceId: result.traceId
+      }))
+      expect(instrumentation.network().entries).toContainEqual(expect.objectContaining({ traceId: result.traceId }))
+      expect(instrumentation.ipc().entries).toContainEqual(expect.objectContaining({ traceId: result.traceId }))
+    } finally {
+      instrumentation.dispose()
+      window.fetch = originalFetch
+      delete withInternals.__TAURI_INTERNALS__
     }
   })
 
@@ -333,19 +382,29 @@ describe('WebviewAgentInstrumentation', () => {
     const instrumentation = new WebviewAgentInstrumentation()
     instrumentation.install()
     try {
-      await withInternals.__TAURI_INTERNALS__!.invoke('greet', { name: 'x' })
+      await withInternals.__TAURI_INTERNALS__!.invoke('greet', { name: 'x', token: 'secret' })
       await expect(withInternals.__TAURI_INTERNALS__!.invoke('boom')).rejects.toThrow('nope')
+      await withInternals.__TAURI_INTERNALS__!.invoke('large', { payload: 'x'.repeat(70_000) })
       // The agent's own bridge traffic must not appear in the trace.
       await withInternals.__TAURI_INTERNALS__!.invoke('plugin:agent|agent_snapshot')
       await Promise.resolve()
 
       const traces = instrumentation.ipc()
-      expect(traces.map((entry) => entry.command)).toEqual(['greet', 'boom'])
-      expect(traces[0].ok).toBe(true)
-      expect(traces[1].ok).toBe(false)
-      expect(traces[1].error).toContain('nope')
-      expect(instrumentation.ipc({ clear: true })).toHaveLength(2)
-      expect(instrumentation.ipc()).toEqual([])
+      expect(traces.entries.map((entry) => entry.command)).toEqual(['greet', 'boom', 'large'])
+      expect(traces.entries[0].ok).toBe(true)
+      expect(traces.entries[1].ok).toBe(false)
+      expect(traces.entries[1].error).toContain('nope')
+      expect(instrumentation.ipc({ id: traces.entries[0].id })).toEqual({
+        detail: expect.objectContaining({
+          args: { name: 'x', token: '[REDACTED]' },
+          result: 'ok'
+        })
+      })
+      const largeArgs = instrumentation.ipc({ id: traces.entries[2].id }).detail.args
+      expect(largeArgs).toEqual(expect.stringMatching(/…\[truncated\]$/))
+      expect(new TextEncoder().encode(largeArgs as string).byteLength).toBeLessThanOrEqual(64 * 1024)
+      expect(instrumentation.ipc({ clear: true }).entries).toHaveLength(3)
+      expect(instrumentation.ipc().entries).toEqual([])
     } finally {
       instrumentation.dispose()
       delete withInternals.__TAURI_INTERNALS__
@@ -525,7 +584,7 @@ describe('WebviewAgentInstrumentation', () => {
       socket.emit('message', { data: 'pong-response' })
       socket.emit('close')
 
-      const network = instrumentation.network()
+      const network = instrumentation.network().entries
       const xhrEntry = network.find((entry) => entry.type === 'xhr')
       expect(xhrEntry).toMatchObject({
         method: 'GET',
@@ -580,13 +639,13 @@ describe('WebviewAgentInstrumentation', () => {
       Object.defineProperty(objectRejection, 'reason', { value: { code: 'E_RUNTIME' } })
       window.dispatchEvent(objectRejection)
 
-      expect(instrumentation.logs()).toEqual([
+      expect(instrumentation.logs().entries).toEqual([
         expect.objectContaining({ level: 'error', message: expect.stringContaining('runtime boom') }),
         expect.objectContaining({ level: 'error', message: expect.stringContaining('promise boom') }),
         expect.objectContaining({ level: 'error', message: expect.stringContaining('E_RUNTIME') })
       ])
-      expect(instrumentation.logs({ clear: true })).toHaveLength(3)
-      expect(instrumentation.logs()).toEqual([])
+      expect(instrumentation.logs({ clear: true }).entries).toHaveLength(3)
+      expect(instrumentation.logs().entries).toEqual([])
     } finally {
       window.removeEventListener('error', suppressHarnessUnhandled, { capture: true })
       window.removeEventListener('unhandledrejection', suppressHarnessUnhandled, { capture: true })

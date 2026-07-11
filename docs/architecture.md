@@ -74,7 +74,10 @@ scheduling, models, suites, artifacts, and dashboards. The plugin never depends
 on Fleet.
 
 `act` closes the rerender race by locating, waiting, and acting inside one guest
-request. Logs/events/network/IPC use monotonic `since` cursors, and lean stream
+request. Its `traceId` is copied onto synchronous logs/events/network/IPC so an
+agent can follow one interaction across surfaces. Capture lists are summaries;
+network/IPC `id` lookup exposes bounded, redacted detail. All capture calls use
+monotonic `since` cursors, and lean stream
 pulls omit the full snapshot after initial synchronization unless frames were
 dropped and recovery is required.
 
