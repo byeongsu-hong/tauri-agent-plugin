@@ -83,6 +83,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   validation and use atomic owner-only file replacement.
 - Rust and TypeScript endpoint parsers now reject zero pid/port values and
   empty app ids, transport addresses, paths, tokens, and VNC fields.
+- Endpoint registry paths now escape unsafe UTF-8 bytes without collisions, and
+  discovery rejects descriptors whose app id differs from the requested app.
 - MCP requests now reject invalid JSON-RPC ids plus malformed initialize and
   tools/list params instead of accepting or ignoring them.
 - MCP stdio now caps newline-delimited requests by UTF-8 byte length and

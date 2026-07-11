@@ -17,9 +17,11 @@ fn rust_app_id_sanitization_matches_the_shared_golden_fixture() {
     let parsed: serde_json::Value = serde_json::from_str(&fixture).expect("golden fixture is JSON");
     let cases = parsed["cases"].as_array().expect("cases array");
     assert!(!cases.is_empty());
+    let mut seen = std::collections::HashSet::new();
     for case in cases {
         let app_id = case["appId"].as_str().expect("appId string");
         let safe = case["safeAppId"].as_str().expect("safeAppId string");
+        assert!(seen.insert(safe), "duplicate safe app id {safe:?}");
         assert_eq!(
             endpoint_runtime_dir(app_id, Some(PathBuf::from("/run/user/501"))),
             PathBuf::from(format!("/run/user/501/tauri-agent/{safe}")),
@@ -72,7 +74,7 @@ fn rust_endpoint_runtime_dir_neutralizes_dot_only_app_ids() {
     }
     assert_eq!(
         endpoint_runtime_dir("..", Some(PathBuf::from("/run"))),
-        PathBuf::from("/run/tauri-agent/__")
+        PathBuf::from("/run/tauri-agent/~2E~2E")
     );
 }
 
@@ -166,6 +168,33 @@ fn rust_endpoint_registry_round_trips_app_scoped_files() {
             .to_string(),
         "endpoint registry not found for app: dev.byeongsu.fixture"
     );
+
+    let _ = std::fs::remove_dir_all(runtime_base);
+}
+
+#[test]
+fn rust_endpoint_registry_rejects_another_app_descriptor() {
+    let runtime_base = std::env::temp_dir().join(format!(
+        "tauri-agent-rust-endpoint-mismatch-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&runtime_base);
+    let app_id = "dev.expected.app";
+    let path = endpoint_registry_path(app_id, Some(runtime_base.clone()));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"{"appId":"dev.other.app","pid":4242,"transport":"tcp","host":"127.0.0.1","port":45127}"#,
+    )
+    .unwrap();
+
+    let error = read_endpoint_registry(app_id, Some(runtime_base.clone())).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("endpoint registry app id mismatch at"));
+    assert!(error
+        .to_string()
+        .contains("expected dev.expected.app, found dev.other.app"));
 
     let _ = std::fs::remove_dir_all(runtime_base);
 }

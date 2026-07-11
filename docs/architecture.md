@@ -39,10 +39,10 @@ Consumers use those fields instead of guessing from the selected build variant.
 
 - No global `/tmp/tauri-mcp.sock`. Each app publishes an app-scoped registry at
   `.../tauri-agent/<app-id>/endpoint.json` under the runtime directory.
-- App ids are sanitized identically in Rust (`src/endpoint.rs`) and TS
+- App ids are escaped identically in Rust (`src/endpoint.rs`) and TS
   (`daemon/endpoint.ts`) — locked by a shared golden fixture
-  (`tests/fixtures/endpoint-app-ids.json`) so dot-only ids can't escape the
-  runtime directory.
+  (`tests/fixtures/endpoint-app-ids.json`) so unsafe bytes cannot collide or
+  escape the runtime directory.
 - Localhost TCP is the portable fallback and the current inline-server
   transport; a Unix socket variant is modeled in the descriptor and reserved.
 - CLI and MCP require exactly one connection source: app id (`--app`), a known
