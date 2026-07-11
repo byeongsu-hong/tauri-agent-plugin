@@ -60,8 +60,10 @@ export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequ
       switch (request.method) {
         case 'initialize':
           return jsonRpcResult(request.id, initializeResult(request.params))
-        case 'tools/list':
+        case 'tools/list': {
+          objectParam(request.params, 'tools/list params')
           return jsonRpcResult(request.id, { tools: definitions })
+        }
         case 'tools/call':
           return jsonRpcResult(request.id, await callTool(request.params, names, options.target, options.profile))
         default:
@@ -283,7 +285,11 @@ async function htmlFromArgs(args: ToolCallArgs): Promise<string> {
 }
 
 function initializeResult(params: unknown): Record<string, unknown> {
-  const requested = objectParam(params, 'initialize params').protocolVersion
+  const request = objectParam(params, 'initialize params')
+  const requested = request.protocolVersion
+  if (typeof requested !== 'string') {
+    throw new McpRequestError(-32602, 'protocolVersion must be a string')
+  }
   return {
     protocolVersion: requested === MCP_PROTOCOL_VERSION ? requested : MCP_PROTOCOL_VERSION,
     capabilities: { tools: { listChanged: false } },
@@ -559,16 +565,31 @@ function windowParams(args: ToolCallArgs): Record<string, unknown> {
 }
 
 function parseJsonRpcRequest(message: string): JsonRpcRequest {
-  let parsed: JsonRpcRequest
+  let parsed: unknown
   try {
-    parsed = JSON.parse(message) as JsonRpcRequest
+    parsed = JSON.parse(message) as unknown
   } catch {
     throw new JsonRpcParseError('invalid MCP JSON-RPC message')
   }
-  if (parsed.jsonrpc !== '2.0' || typeof parsed.method !== 'string') {
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !('jsonrpc' in parsed) ||
+    parsed.jsonrpc !== '2.0' ||
+    !('method' in parsed) ||
+    typeof parsed.method !== 'string'
+  ) {
     throw new Error('invalid MCP JSON-RPC request')
   }
-  return parsed
+  if (
+    'id' in parsed &&
+    (typeof parsed.id !== 'string' &&
+      (typeof parsed.id !== 'number' || !Number.isFinite(parsed.id)))
+  ) {
+    throw new Error('invalid MCP JSON-RPC request')
+  }
+  return parsed as unknown as JsonRpcRequest
 }
 
 function objectParam(value: unknown, name: string): Record<string, unknown> {
