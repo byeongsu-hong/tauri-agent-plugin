@@ -138,7 +138,7 @@ describe('WebviewAgentInstrumentation bridge handling', () => {
     expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
       response: {
         id: 'bridge-4',
-        error: 'limit must be a finite number',
+        error: 'limit must be a non-negative safe integer',
         errorCode: 'INVALID_PARAMS'
       }
     })
@@ -160,6 +160,27 @@ describe('WebviewAgentInstrumentation bridge handling', () => {
       response: {
         id: 'bridge-5',
         error: 'params must be an object',
+        errorCode: 'INVALID_PARAMS'
+      }
+    })
+    instrumentation.dispose()
+  })
+
+  it('returns INVALID_PARAMS for negative unsigned live bridge fields', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({ payload: { id: 'bridge-6', method: 'find', params: { limit: -1 } } })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-6',
+        error: 'limit must be a non-negative safe integer',
         errorCode: 'INVALID_PARAMS'
       }
     })

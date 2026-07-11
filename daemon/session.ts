@@ -42,7 +42,7 @@ export class DebuggerSession {
           role: stringParam(params.role),
           name: stringParam(params.name),
           text: stringParam(params.text),
-          limit: numberParam(params.limit)
+          limit: unsignedIntegerParam(params.limit, 'limit')
         })
       case 'act':
         return this.app.act({
@@ -54,7 +54,7 @@ export class DebuggerSession {
           value: stringOrBooleanParam(params.value),
           x: numberParam(params.x),
           y: numberParam(params.y),
-          timeoutMs: numberParam(params.timeoutMs),
+          timeoutMs: unsignedIntegerParam(params.timeoutMs, 'timeoutMs'),
           detail: booleanParam(params.detail)
         })
       case 'click':
@@ -131,11 +131,11 @@ export class DebuggerSession {
           scope: stringParam(params.scope),
           role: stringParam(params.role),
           name: stringParam(params.name),
-          timeoutMs: numberParam(params.timeoutMs),
+          timeoutMs: unsignedIntegerParam(params.timeoutMs, 'timeoutMs'),
           state: waitStateParam(params.state),
           fn: stringParam(params.fn),
           networkIdle: booleanParam(params.networkIdle),
-          idleMs: numberParam(params.idleMs)
+          idleMs: unsignedIntegerParam(params.idleMs, 'idleMs')
         })
       case 'expect':
         return this.app.expect({
@@ -159,8 +159,8 @@ export class DebuggerSession {
         return this.handleRecord(params)
       case 'stream':
         return this.app.stream({
-          since: numberParam(params.since),
-          timeoutMs: numberParam(params.timeoutMs),
+          since: unsignedIntegerParam(params.since, 'since'),
+          timeoutMs: unsignedIntegerParam(params.timeoutMs, 'timeoutMs'),
           lean: booleanParam(params.lean)
         })
     }
@@ -220,6 +220,14 @@ function numberParam(value: unknown): number | undefined {
   return value
 }
 
+function unsignedIntegerParam(value: unknown, name: string): number | undefined {
+  if (value === undefined) return undefined
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    return invalidParam(`${name} must be a non-negative safe integer`)
+  }
+  return value as number
+}
+
 function booleanParam(value: unknown): boolean | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'boolean') invalidParam('expected a boolean parameter')
@@ -243,8 +251,8 @@ function captureParams(params: Record<string, unknown>): {
 } {
   return {
     clear: booleanParam(params.clear),
-    since: numberParam(params.since),
-    limit: numberParam(params.limit),
+    since: unsignedIntegerParam(params.since, 'since'),
+    limit: unsignedIntegerParam(params.limit, 'limit'),
     id: stringParam(params.id)
   }
 }

@@ -294,6 +294,16 @@ describe('DebuggerSession', () => {
     })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
   })
 
+  it('rejects negative, fractional, and unsafe unsigned fields', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
+
+    await expect(session.execute('find', { limit: -1 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('logs', { since: 1.5 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('wait', {
+      text: 'Forge', timeoutMs: Number.MAX_SAFE_INTEGER + 1
+    })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+  })
+
   it('controls static window state and bounds', async () => {
     const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
 

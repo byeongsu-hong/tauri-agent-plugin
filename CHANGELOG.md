@@ -49,6 +49,9 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recovers cleanly after discarding an oversized line.
 - CLI replay now validates every recording method and params object before
   executing any action, preventing partial or defaulted replays.
+- Static and live bridges now require non-negative safe integers for cursor,
+  limit, timeout, and idle-duration fields, matching unsigned semantics without
+  accepting values JavaScript cannot represent precisely.
 
 ## [0.0.2] - 2026-07-11
 
