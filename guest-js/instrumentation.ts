@@ -715,7 +715,8 @@ export class WebviewAgentInstrumentation {
           value: stringParam(params, 'value') ?? booleanParam(params, 'value'),
           x: numberParam(params, 'x'),
           y: numberParam(params, 'y'),
-          timeoutMs: numberParam(params, 'timeoutMs')
+          timeoutMs: numberParam(params, 'timeoutMs'),
+          detail: booleanParam(params, 'detail')
         })
       case 'click':
         return this.action({ action: 'click', ref: requiredStringParam(params, 'ref') })

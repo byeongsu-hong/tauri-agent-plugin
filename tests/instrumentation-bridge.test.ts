@@ -93,6 +93,36 @@ describe('WebviewAgentInstrumentation bridge handling', () => {
     })
     instrumentation.dispose()
   })
+
+  it('returns requested atomic-action match detail through the bridge', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    document.body.innerHTML = '<button>Save</button>'
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({
+      payload: {
+        id: 'bridge-3',
+        method: 'act',
+        params: { role: 'button', name: 'Save', action: 'focus', detail: true }
+      }
+    })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-3',
+        result: expect.objectContaining({
+          ok: true,
+          match: expect.objectContaining({ role: 'button', name: 'Save' })
+        })
+      }
+    })
+    instrumentation.dispose()
+  })
 })
 
 async function waitForInvoke(command: string): Promise<void> {
