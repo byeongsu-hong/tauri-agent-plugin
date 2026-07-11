@@ -37,6 +37,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of converting them to empty text or a checked state.
 - The Rust inline JSON-RPC server now rejects explicit null, array, and scalar
   `params` envelopes consistently with the TypeScript daemon.
+- Debugger clients now reject malformed, ambiguous, and mismatched JSON-RPC
+  response envelopes instead of trusting unchecked response casts.
 
 ## [0.0.2] - 2026-07-11
 

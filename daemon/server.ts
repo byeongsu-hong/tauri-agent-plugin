@@ -88,8 +88,39 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
 }
 
 export function parseResponse(message: string): JsonRpcResponse {
-  const parsed = JSON.parse(message) as JsonRpcResponse
-  return parsed
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(message)
+  } catch {
+    return invalidResponse('invalid JSON-RPC response')
+  }
+  if (!isObject(parsed) || parsed.jsonrpc !== '2.0' || !validId(parsed.id)) {
+    return invalidResponse('invalid JSON-RPC response')
+  }
+  const hasResult = Object.hasOwn(parsed, 'result')
+  const hasError = Object.hasOwn(parsed, 'error')
+  if (hasResult === hasError) {
+    return invalidResponse('JSON-RPC response must contain exactly one of result or error')
+  }
+  if (hasError) {
+    const error = parsed.error
+    if (!isObject(error) || typeof error.code !== 'string' || typeof error.message !== 'string') {
+      return invalidResponse('invalid JSON-RPC error response')
+    }
+  }
+  return parsed as unknown as JsonRpcResponse
+}
+
+function validId(value: unknown): value is string | number {
+  return typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function invalidResponse(message: string): never {
+  throw new AgentProtocolError('INVALID_RESPONSE', message)
 }
 
 function paramRecord(params: unknown): Record<string, unknown> {

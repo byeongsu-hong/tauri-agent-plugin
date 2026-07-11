@@ -71,6 +71,20 @@ describe('debugger JSON-RPC transport', () => {
     })
   })
 
+  it('rejects malformed and mismatched JSON-RPC responses', async () => {
+    for (const response of [
+      'not json',
+      JSON.stringify({ jsonrpc: '1.0', id: 1, result: null }),
+      JSON.stringify({ jsonrpc: '2.0', id: 1 }),
+      JSON.stringify({ jsonrpc: '2.0', id: 1, result: null, error: { code: 'NOPE', message: 'bad' } }),
+      JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 1, message: 'bad' } }),
+      JSON.stringify({ jsonrpc: '2.0', id: 2, result: null })
+    ]) {
+      const client = new DebuggerClient({ send: async () => response })
+      await expect(client.call('windows')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+    }
+  })
+
   it('rejects malformed params instead of silently applying defaults', async () => {
     const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' }))
     const handler = createDebuggerRpcHandler(session)
