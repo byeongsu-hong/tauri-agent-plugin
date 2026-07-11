@@ -41,6 +41,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   response envelopes instead of trusting unchecked response casts.
 - TypeScript socket transports now preserve UTF-8 characters split across TCP
   chunks and enforce request limits per byte-counted line.
+- TypeScript endpoint registries now match Rust's integer and optional-field
+  validation and use atomic owner-only file replacement.
 
 ## [0.0.2] - 2026-07-11
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -135,6 +135,23 @@ describe('debugger endpoint discovery', () => {
     expect('vnc' in plain).toBe(false)
   })
 
+  it('rejects endpoint fields that the Rust descriptor types reject', () => {
+    for (const descriptor of [
+      { appId: 'a', pid: -1, transport: 'tcp', host: '127.0.0.1', port: 1 },
+      { appId: 'a', pid: 1.5, transport: 'tcp', host: '127.0.0.1', port: 1 },
+      { appId: 'a', pid: 0x1_0000_0000, transport: 'tcp', host: '127.0.0.1', port: 1 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: -1 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1.5 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 0x1_0000 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, token: true },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, vnc: { host: 'x', port: 1, novncUrl: true } }
+    ]) {
+      expect(() => parseEndpointDescriptor(JSON.stringify(descriptor))).toThrow(
+        'invalid endpoint descriptor'
+      )
+    }
+  })
+
   it('writes, reads, and removes app-specific endpoint registry files', async () => {
     const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-endpoint-'))
     const env = { XDG_RUNTIME_DIR: runtimeDir }
@@ -146,6 +163,9 @@ describe('debugger endpoint discovery', () => {
 
     await writeEndpointRegistry(descriptor, { env })
     await expect(readEndpointRegistry('dev.byeongsu.fixture', { env })).resolves.toEqual(descriptor)
+    if (process.platform !== 'win32') {
+      expect(statSync(endpointRegistryPath({ appId: descriptor.appId, env })).mode & 0o777).toBe(0o600)
+    }
 
     await removeEndpointRegistry('dev.byeongsu.fixture', { env })
     await expect(readEndpointRegistry('dev.byeongsu.fixture', { env })).rejects.toThrow(
