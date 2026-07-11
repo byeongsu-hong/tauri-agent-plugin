@@ -52,6 +52,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Static and live bridges now require non-negative safe integers for cursor,
   limit, timeout, and idle-duration fields, matching unsigned semantics without
   accepting values JavaScript cannot represent precisely.
+- MCP tool calls now enforce each advertised required and additional-property
+  rule before connecting to or mutating a debugger target.
 
 ## [0.0.2] - 2026-07-11
 
