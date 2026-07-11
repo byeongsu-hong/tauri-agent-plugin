@@ -168,7 +168,7 @@ function pushCapped<T>(buffer: T[], entry: T, max = MAX_CAPTURE_ENTRIES): void {
 interface AgentBridgeRequest {
   id: string
   method: AgentMethod
-  params?: Record<string, unknown>
+  params?: unknown
 }
 
 interface NetworkDetailRecord {
@@ -699,7 +699,13 @@ export class WebviewAgentInstrumentation {
   }
 
   private async executeBridgeRequest(request: AgentBridgeRequest): Promise<unknown> {
-    const params = request.params ?? {}
+    if (
+      request.params !== undefined &&
+      (typeof request.params !== 'object' || request.params === null || Array.isArray(request.params))
+    ) {
+      throw new AgentProtocolError('INVALID_PARAMS', 'params must be an object')
+    }
+    const params = (request.params ?? {}) as Record<string, unknown>
     switch (request.method) {
       case 'tree':
         return { text: this.snapshot({ scope: stringParam(params, 'scope'), mode: modeParam(params) }).text }
@@ -718,7 +724,7 @@ export class WebviewAgentInstrumentation {
           name: stringParam(params, 'name'),
           text: stringParam(params, 'text'),
           action: locatorActionParam(params),
-          value: stringParam(params, 'value') ?? booleanParam(params, 'value'),
+          value: stringOrBooleanParam(params, 'value'),
           x: numberParam(params, 'x'),
           y: numberParam(params, 'y'),
           timeoutMs: numberParam(params, 'timeoutMs'),
@@ -745,12 +751,12 @@ export class WebviewAgentInstrumentation {
         return this.action({
           action: 'fill',
           ref: requiredStringParam(params, 'ref'),
-          value: stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
+          value: requiredStringParam(params, 'text')
         })
       case 'type':
         return this.type(
           requiredStringParam(params, 'ref'),
-          stringParam(params, 'text') ?? stringParam(params, 'value') ?? ''
+          requiredStringParam(params, 'text')
         )
       case 'select':
         return this.select(requiredStringParam(params, 'ref'), stringParam(params, 'value'))
@@ -766,7 +772,7 @@ export class WebviewAgentInstrumentation {
         return this.action({
           action: 'press',
           ref: stringParam(params, 'ref'),
-          value: stringParam(params, 'key') ?? stringParam(params, 'value') ?? '',
+          value: requiredStringParam(params, 'key'),
           modifiers: modifierListParam(params, 'modifiers')
         })
       case 'shot':
@@ -804,7 +810,7 @@ export class WebviewAgentInstrumentation {
           role: stringParam(params, 'role'),
           name: stringParam(params, 'name'),
           timeoutMs: numberParam(params, 'timeoutMs'),
-          state: stringParam(params, 'state') === 'absent' ? 'absent' : undefined,
+          state: enumParam(params, 'state', ['present', 'absent'], 'wait state'),
           fn: stringParam(params, 'fn'),
           networkIdle: booleanParam(params, 'networkIdle'),
           idleMs: numberParam(params, 'idleMs')
@@ -1247,7 +1253,7 @@ function controlName(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
 function requiredStringParam(params: Record<string, unknown>, key: string): string {
   const value = stringParam(params, key)
   if (value === undefined) {
-    throw new Error(`missing required param: ${key}`)
+    return invalidParam(`missing required param: ${key}`)
   }
   return value
 }
@@ -1255,15 +1261,21 @@ function requiredStringParam(params: Record<string, unknown>, key: string): stri
 function uploadFilesParam(params: Record<string, unknown>): UploadFile[] {
   const raw = params.files
   if (!Array.isArray(raw)) {
-    throw new Error('upload requires a files array')
+    return invalidParam('upload requires a files array')
   }
   return raw.map((entry) => {
     if (!entry || typeof entry !== 'object') {
-      throw new Error('each upload file must be an object with a name')
+      return invalidParam('each upload file must be an object with a name')
     }
     const record = entry as Record<string, unknown>
     if (typeof record.name !== 'string' || record.name.length === 0) {
-      throw new Error('each upload file requires a name')
+      return invalidParam('each upload file requires a name')
+    }
+    if (record.type !== undefined && typeof record.type !== 'string') {
+      return invalidParam('upload file type must be a string')
+    }
+    if (record.text !== undefined && typeof record.text !== 'string') {
+      return invalidParam('upload file text must be a string')
     }
     return {
       name: record.name,
@@ -1275,17 +1287,29 @@ function uploadFilesParam(params: Record<string, unknown>): UploadFile[] {
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key]
-  return typeof value === 'string' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') return invalidParam(`${key} must be a string`)
+  return value
 }
 
 function numberParam(params: Record<string, unknown>, key: string): number | undefined {
   const value = params[key]
-  return typeof value === 'number' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value)) return invalidParam(`${key} must be a finite number`)
+  return value
 }
 
 function booleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
   const value = params[key]
-  return typeof value === 'boolean' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') return invalidParam(`${key} must be a boolean`)
+  return value
+}
+
+function stringOrBooleanParam(params: Record<string, unknown>, key: string): string | boolean | undefined {
+  const value = params[key]
+  if (value === undefined || typeof value === 'string' || typeof value === 'boolean') return value
+  return invalidParam(`${key} must be a string or boolean`)
 }
 
 function captureParams(params: Record<string, unknown>): NetworkParams {
@@ -1298,11 +1322,12 @@ function captureParams(params: Record<string, unknown>): NetworkParams {
 }
 
 function locatorActionParam(params: Record<string, unknown>): ActParams['action'] {
-  const value = stringParam(params, 'action')
-  if (value && ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'].includes(value)) {
-    return value as ActParams['action']
-  }
-  throw new Error(`unknown locator action: ${String(value)}`)
+  return enumParam(
+    params,
+    'action',
+    ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'],
+    'locator action'
+  ) ?? invalidParam('missing locator action')
 }
 
 function modifierListParam(params: Record<string, unknown>, key: string): KeyModifier[] | undefined {
@@ -1311,7 +1336,7 @@ function modifierListParam(params: Record<string, unknown>, key: string): KeyMod
     return undefined
   }
   if (!Array.isArray(value)) {
-    throw new Error(`${key} must be an array`)
+    return invalidParam(`${key} must be an array`)
   }
   return value.map((modifier) => keyModifierParam(modifier, key))
 }
@@ -1320,22 +1345,19 @@ function keyModifierParam(value: unknown, key: string): KeyModifier {
   if (value === 'Alt' || value === 'Control' || value === 'Meta' || value === 'Shift') {
     return value
   }
-  throw new Error(`unknown ${key} value: ${String(value)}`)
+  return invalidParam(`unknown ${key} value: ${String(value)}`)
 }
 
 function modeParam(params: Record<string, unknown>): SnapshotOptions['mode'] | undefined {
-  const mode = params.mode
-  return mode === 'compact' || mode === 'verbose' ? mode : undefined
+  return enumParam(params, 'mode', ['compact', 'verbose'], 'snapshot mode')
 }
 
 function recordActionParam(params: Record<string, unknown>): 'start' | 'stop' | 'get' | 'clear' {
-  const action = params.action
-  return action === 'start' || action === 'stop' || action === 'clear' ? action : 'get'
+  return enumParam(params, 'action', ['start', 'stop', 'get', 'clear'], 'record action') ?? 'get'
 }
 
 function dialogActionParam(params: Record<string, unknown>): 'get' | 'set' | 'clear' {
-  const action = params.action
-  return action === 'set' || action === 'clear' ? action : 'get'
+  return enumParam(params, 'action', ['get', 'set', 'clear'], 'dialog action') ?? 'get'
 }
 
 function fetchMethod(input: RequestInfo | URL, init?: RequestInit): string {
@@ -1600,39 +1622,44 @@ function tauriIpcCommand(value: string): string | undefined {
 }
 
 function storageAreaParam(params: Record<string, unknown>, key: string): 'local' | 'session' | undefined {
-  const value = params[key]
-  return value === 'local' || value === 'session' ? value : undefined
+  return enumParam(params, key, ['local', 'session'], 'storage area')
 }
 
 function storageActionParam(
   params: Record<string, unknown>,
   key: string
 ): 'get' | 'set' | 'remove' | 'clear' | undefined {
-  const value = params[key]
-  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+  return enumParam(params, key, ['get', 'set', 'remove', 'clear'], 'storage action')
 }
 
 function cookieActionParam(
   params: Record<string, unknown>,
   key: string
 ): 'get' | 'set' | 'remove' | 'clear' | undefined {
-  const value = params[key]
-  return value === 'get' || value === 'set' || value === 'remove' || value === 'clear' ? value : undefined
+  return enumParam(params, key, ['get', 'set', 'remove', 'clear'], 'cookie action')
 }
 
 function locationActionParam(
   params: Record<string, unknown>,
   key: string
 ): LocationParams['action'] {
+  return enumParam(params, key, ['get', 'push', 'replace', 'reload', 'back', 'forward'], 'location action')
+}
+
+function enumParam<const T extends string>(
+  params: Record<string, unknown>,
+  key: string,
+  values: readonly T[],
+  name: string
+): T | undefined {
   const value = params[key]
-  return value === 'get' ||
-    value === 'push' ||
-    value === 'replace' ||
-    value === 'reload' ||
-    value === 'back' ||
-    value === 'forward'
-    ? value
-    : undefined
+  if (value === undefined) return undefined
+  if (typeof value === 'string' && values.includes(value as T)) return value as T
+  return invalidParam(`unknown ${name}: ${String(value)}`)
+}
+
+function invalidParam(message: string): never {
+  throw new AgentProtocolError('INVALID_PARAMS', message)
 }
 
 function applyLocationAction(options: LocationParams): void {

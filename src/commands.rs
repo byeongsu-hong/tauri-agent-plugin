@@ -140,7 +140,20 @@ pub async fn agent_action<R: Runtime>(
         AgentAction::Fill => "fill",
         AgentAction::Press => "press",
     };
-    request_bridge(&bridge, &app, request.window.as_deref(), method, &request)?;
+    let mut params = match &request.action {
+        AgentAction::Click => serde_json::json!({ "ref": request.ref_id }),
+        AgentAction::Fill => serde_json::json!({
+            "ref": request.ref_id,
+            "text": request.value.as_deref().unwrap_or_default()
+        }),
+        AgentAction::Press => serde_json::json!({
+            "ref": request.ref_id,
+            "key": request.value,
+            "modifiers": request.modifiers
+        }),
+    };
+    strip_null_object_fields(&mut params);
+    bridge.request_webview(&app, request.window.as_deref(), method, params)?;
     Ok(())
 }
 
@@ -494,9 +507,21 @@ fn request_bridge<R: Runtime, T: Serialize>(
     method: &str,
     request: &T,
 ) -> Result<Value> {
-    let params = serde_json::to_value(request)
+    let mut params = serde_json::to_value(request)
         .map_err(|_| Error::BridgeUnavailable("failed to serialize agent bridge request".into()))?;
+    strip_null_object_fields(&mut params);
     bridge.request_webview(app, window, method, params)
+}
+
+fn strip_null_object_fields(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            fields.retain(|_, value| !value.is_null());
+            fields.values_mut().for_each(strip_null_object_fields);
+        }
+        Value::Array(items) => items.iter_mut().for_each(strip_null_object_fields),
+        _ => {}
+    }
 }
 
 fn snapshot_text_from_bridge(result: Value) -> Result<String> {
@@ -893,6 +918,25 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "live bridge unavailable: malformed bridge result"
+        );
+    }
+
+    #[test]
+    fn typed_bridge_params_omit_nested_null_object_fields() {
+        let mut params = serde_json::json!({
+            "empty": null,
+            "nested": { "empty": null, "kept": 1 },
+            "items": [{ "empty": null, "kept": true }, null]
+        });
+
+        strip_null_object_fields(&mut params);
+
+        assert_eq!(
+            params,
+            serde_json::json!({
+                "nested": { "kept": 1 },
+                "items": [{ "kept": true }, null]
+            })
         );
     }
 

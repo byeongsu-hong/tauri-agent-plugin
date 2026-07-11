@@ -25,8 +25,8 @@ import { agentFind } from '../guest-js/index'
 interface CapturedEvent {
   payload: {
     id: string
-    method: 'click' | 'act'
-    params: Record<string, unknown>
+    method: 'click' | 'act' | 'find'
+    params: unknown
   }
 }
 
@@ -119,6 +119,48 @@ describe('WebviewAgentInstrumentation bridge handling', () => {
           ok: true,
           match: expect.objectContaining({ role: 'button', name: 'Save' })
         })
+      }
+    })
+    instrumentation.dispose()
+  })
+
+  it('returns INVALID_PARAMS for malformed live bridge fields', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({ payload: { id: 'bridge-4', method: 'find', params: { limit: '1' } } })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-4',
+        error: 'limit must be a finite number',
+        errorCode: 'INVALID_PARAMS'
+      }
+    })
+    instrumentation.dispose()
+  })
+
+  it('returns INVALID_PARAMS for non-object live bridge params', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({ payload: { id: 'bridge-5', method: 'find', params: [] } })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-5',
+        error: 'params must be an object',
+        errorCode: 'INVALID_PARAMS'
       }
     })
     instrumentation.dispose()
