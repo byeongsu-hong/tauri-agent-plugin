@@ -136,9 +136,10 @@ export class SocketTransport implements LineTransport {
         this.timeoutMs
       )
 
+      socket.setEncoding('utf8')
       socket.on('connect', () => socket.write(`${message}\n`))
       socket.on('data', (chunk) => {
-        buffer += chunk.toString('utf8')
+        buffer += chunk.toString()
         const newlineIndex = buffer.indexOf('\n')
         if (newlineIndex === -1) {
           return
