@@ -9,7 +9,8 @@ const APP_ID = 'dev.byeongsu.tauri-agent.fixture'
 const CLI = fileURLToPath(new URL('../dist-cli/tauri-agent.js', import.meta.url))
 const execute = promisify(execFile)
 
-const endpoint = await waitForEndpoint()
+await waitForEndpoint()
+let passed = false
 try {
   const attach = await cliJson<{ protocolVersion: number; windows: Array<{ label: string }> }>('attach')
   assert.equal(attach.protocolVersion, 2)
@@ -47,12 +48,16 @@ try {
   assert(diagnosis.ipc.some(({ command }) => command.includes('window')))
 
   assert.match(await runCli('tree', '--window', 'secondary'), /Ducktape secondary/)
-  process.stdout.write('external fixture smoke test passed\n')
+  passed = true
 } finally {
-  try {
-    process.kill(endpoint.pid, 'SIGTERM')
-  } catch {}
+  const title = passed ? 'EXTERNALTEST:PASS' : 'EXTERNALTEST:FAIL'
+  await runCli(
+    'eval',
+    `window.__TAURI_INTERNALS__.invoke("plugin:window|set_title", { label: "main", value: "${title}" })`
+  )
+  await waitForEndpointRemoval()
 }
+process.stdout.write('external fixture smoke test passed\n')
 
 async function waitForEndpoint() {
   const deadline = Date.now() + 30_000
@@ -76,6 +81,19 @@ async function waitForTree(): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
   throw new Error('fixture webview was not ready within 30 seconds')
+}
+
+async function waitForEndpointRemoval(): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    try {
+      await readEndpointRegistry(APP_ID)
+    } catch {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('fixture endpoint was not removed after exit')
 }
 
 async function cliJson<T = unknown>(...args: string[]): Promise<T> {
