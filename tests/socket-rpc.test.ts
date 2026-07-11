@@ -103,6 +103,88 @@ describe('socket JSON-RPC transport', () => {
     })
   })
 
+  it('processes pipelined requests in connection order', async () => {
+    server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main>ready</main>' }))
+    )
+    const port = await listen(server)
+    const responses = await rawResponses(port, [
+      request(1, 'wait', { text: 'missing', timeoutMs: 30 }),
+      request(2, 'tree')
+    ])
+
+    expect(responses.map(({ id }) => id)).toEqual([1, 2])
+    expect(responses[0]?.error?.code).toBe('WAIT_TIMEOUT')
+  })
+
+  it('does not treat request processing time as connection idleness', async () => {
+    server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main>ready</main>' })),
+      1024,
+      20
+    )
+    const port = await listen(server)
+
+    const responses = await rawResponses(port, [request(1, 'wait', { text: 'missing', timeoutMs: 40 })])
+
+    expect(responses[0]?.error?.code).toBe('WAIT_TIMEOUT')
+  })
+
+  it('responds to valid requests queued before an oversized line', async () => {
+    server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main>ready</main>' })),
+      100
+    )
+    const port = await listen(server)
+
+    const responses = await rawResponses(port, [request(1, 'tree'), 'x'.repeat(101)])
+
+    expect(responses.map(({ id }) => id)).toEqual([1, 0])
+    expect(responses[1]?.error?.code).toBe('INVALID_REQUEST')
+  })
+
+  it('waits for response writes to flush before running the next request', async () => {
+    const session = new DebuggerSession(
+      await StaticHtmlAppAdapter.create({ html: '<main>ready</main>' })
+    )
+    const executed: string[] = []
+    const execute = session.execute.bind(session)
+    session.execute = async (method, params) => {
+      executed.push(method)
+      return execute(method, params)
+    }
+    server = createLineJsonRpcServer(session)
+    let releaseWrite: (() => void) | undefined
+    let markWriteHeld: () => void = () => {}
+    const writeHeld = new Promise<void>((resolve) => {
+      markWriteHeld = resolve
+    })
+    server.on('connection', (socket) => {
+      const write = socket.write.bind(socket)
+      socket.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
+        const text = chunk.toString()
+        if (text.includes('"id":1') && text.includes('"result"')) {
+          releaseWrite = args.find((arg): arg is () => void => typeof arg === 'function')
+          markWriteHeld()
+          return Reflect.apply(write, socket, [chunk]) as boolean
+        }
+        return Reflect.apply(write, socket, [chunk, ...args]) as boolean
+      }) as typeof socket.write
+    })
+    const port = await listen(server)
+
+    const responsesPromise = rawResponses(port, [
+      request(1, 'wait', { networkIdle: true }),
+      request(2, 'tree')
+    ])
+    await writeHeld
+
+    expect(releaseWrite).toBeTypeOf('function')
+    expect(executed).toEqual(['wait'])
+    releaseWrite?.()
+    expect((await responsesPromise).map(({ id }) => id)).toEqual([1, 2])
+  })
+
   it('caps concurrent connections and closes idle sockets', async () => {
     server = createLineJsonRpcServer(
       new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' })),
@@ -141,6 +223,43 @@ async function rawCall(port: number, first: Buffer, second: Buffer): Promise<str
       }
     })
     socket.on('error', reject)
+  })
+}
+
+interface RawResponse {
+  id: number
+  error?: { code: string }
+}
+
+function request(id: number, method: string, params?: Record<string, unknown>): string {
+  return JSON.stringify({ jsonrpc: '2.0', id, method, params })
+}
+
+async function rawResponses(port: number, requests: string[]): Promise<RawResponse[]> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ port, host: '127.0.0.1' })
+    const responses: RawResponse[] = []
+    let buffer = ''
+    const timer = setTimeout(() => finish(new Error('timed out waiting for raw responses')), 1_000)
+    const finish = (error?: Error): void => {
+      clearTimeout(timer)
+      socket.destroy()
+      if (error) reject(error)
+      else resolve(responses)
+    }
+    socket.setEncoding('utf8')
+    socket.on('connect', () => socket.write(`${requests.join('\n')}\n`))
+    socket.on('data', (chunk) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      responses.push(...lines.filter(Boolean).map((line) => JSON.parse(line) as RawResponse))
+      if (responses.length === requests.length) finish()
+    })
+    socket.on('close', () => {
+      if (responses.length < requests.length) finish(new Error('socket closed before all responses arrived'))
+    })
+    socket.on('error', finish)
   })
 }
 
