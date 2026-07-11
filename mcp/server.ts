@@ -40,7 +40,7 @@ export interface McpServerOptions {
 
 export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequestHandler {
   const definitions = toolDefinitions(options)
-  const names = new Set(definitions.map((definition) => definition.name))
+  const definitionsByName = new Map(definitions.map((definition) => [definition.name, definition]))
   return async (message: string) => {
     let request: JsonRpcRequest
     try {
@@ -65,7 +65,10 @@ export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequ
           return jsonRpcResult(request.id, { tools: definitions })
         }
         case 'tools/call':
-          return jsonRpcResult(request.id, await callTool(request.params, names, options.target, options.profile))
+          return jsonRpcResult(
+            request.id,
+            await callTool(request.params, definitionsByName, options.target, options.profile)
+          )
         default:
           return jsonRpcError(request.id, -32601, `unsupported MCP method: ${request.method}`)
       }
@@ -83,16 +86,18 @@ export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequ
 
 async function callTool(
   params: unknown,
-  names: Set<string>,
+  definitions: Map<string, ToolDefinition>,
   target?: DebuggerTarget,
   profile?: 'core' | 'full'
 ): Promise<Record<string, unknown>> {
   const request = objectParam(params, 'tools/call params')
   const name = stringField(request, 'name')
-  if (!names.has(name)) {
+  const definition = definitions.get(name)
+  if (!definition) {
     throw new McpRequestError(-32602, `unknown MCP tool: ${name}`)
   }
   const args = objectParam(request.arguments, 'tool arguments')
+  validateToolArguments(args, definition)
   const client = await debuggerClient(args, target)
   const result = await executeTool(client, name, args, profile)
   const response: Record<string, unknown> = {
@@ -101,6 +106,20 @@ async function callTool(
   }
   if (!LARGE_RESULT_TOOLS.has(name)) response.structuredContent = structuredContent(result)
   return response
+}
+
+function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): void {
+  const allowed = new Set(Object.keys(definition.inputSchema.properties))
+  for (const key of Object.keys(args)) {
+    if (!allowed.has(key)) {
+      throw new McpRequestError(-32602, `unknown argument for ${definition.name}: ${key}`)
+    }
+  }
+  for (const key of definition.inputSchema.required ?? []) {
+    if (args[key] === undefined) {
+      throw new McpRequestError(-32602, `missing required argument for ${definition.name}: ${key}`)
+    }
+  }
 }
 
 /**

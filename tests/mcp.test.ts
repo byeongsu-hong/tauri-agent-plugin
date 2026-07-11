@@ -291,6 +291,25 @@ describe('tauri-agent MCP server', () => {
     })
   })
 
+  it.each([
+    [
+      { name: 'tauri_attach', arguments: { html: '<main></main>', bogus: true } },
+      'unknown argument for tauri_attach: bogus'
+    ],
+    [
+      { name: 'tauri_click', arguments: { html: '<main></main>' } },
+      'missing required argument for tauri_click: ref'
+    ]
+  ])('enforces advertised MCP tool schemas %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 37, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 37,
+      error: { code: -32602, message }
+    })
+  })
+
   it('returns JSON-RPC parse errors for malformed MCP input', async () => {
     const response = JSON.parse(await requiredResponse(createMcpRequestHandler()('{not-json')))
 
