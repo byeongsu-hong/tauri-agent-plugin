@@ -120,6 +120,20 @@ function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): 
       throw new McpRequestError(-32602, `missing required argument for ${definition.name}: ${key}`)
     }
   }
+  for (const field of ['since', 'limit', 'timeoutMs', 'idleMs']) {
+    const value = numberField(args, field)
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new McpRequestError(-32602, `${field} must be a non-negative safe integer`)
+    }
+  }
+  const pollMs = numberField(args, 'pollMs')
+  if (pollMs !== undefined && (!Number.isSafeInteger(pollMs) || pollMs < 1)) {
+    throw new McpRequestError(-32602, 'pollMs must be a positive safe integer')
+  }
+  const port = numberField(args, 'port')
+  if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
+    throw new McpRequestError(-32602, 'port must be an integer between 1 and 65535')
+  }
 }
 
 /**
@@ -344,7 +358,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   y: { type: 'number', description: 'Vertical scroll delta.' },
   width: { type: 'number', description: 'Width in physical pixels.' },
   height: { type: 'number', description: 'Height in physical pixels.' },
-  limit: { type: 'number', description: 'Maximum number of matches.' },
+  limit: { type: 'integer', minimum: 0, description: 'Maximum number of matches.' },
   path: { type: 'string', description: 'Output path for screenshot file writes.' },
   backend: {
     type: 'string',
@@ -353,12 +367,12 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   },
   follow: { type: 'boolean', description: 'Poll for entries before returning a bounded tool result.' },
   clear: { type: 'boolean', description: 'Clear captured entries after reading.' },
-  pollMs: { type: 'number', description: 'Follow polling interval in milliseconds.' },
+  pollMs: { type: 'integer', minimum: 1, description: 'Follow polling interval in milliseconds.' },
   area: { type: 'string', enum: ['local', 'session'], description: 'Storage area.' },
   url: { type: 'string', description: 'URL or path for SPA location push/replace actions.' },
-  timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
+  timeoutMs: { type: 'integer', minimum: 0, description: 'Maximum wait or follow duration in milliseconds.' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] },
-  since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' },
+  since: { type: 'integer', minimum: 0, description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' },
   lean: { type: 'boolean', description: 'Omit repeated semantic snapshots except for initial sync or dropped recovery.' },
   detail: { type: 'boolean', description: 'Include optional response detail.' },
   id: { type: 'string', description: 'Retained network/IPC entry id for redacted detail lookup.' },
@@ -387,7 +401,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   },
   fn: { type: 'string', description: 'wait: JS expression polled until it evaluates truthy (waitForFunction).' },
   networkIdle: { type: 'boolean', description: 'wait: resolve once no fetch/XHR request is in flight for idleMs.' },
-  idleMs: { type: 'number', description: 'wait: quiet window for networkIdle in milliseconds (default 500).' }
+  idleMs: { type: 'integer', minimum: 0, description: 'wait: quiet window for networkIdle in milliseconds (default 500).' }
 }
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -541,7 +555,7 @@ function windowControlSchema(): JsonSchema {
 function connectionProperties(): Record<string, unknown> {
   return {
     app: { type: 'string', description: 'Tauri app identifier for endpoint discovery.' },
-    port: { type: 'number', description: 'Debugger daemon TCP port.' },
+    port: { type: 'integer', minimum: 1, maximum: 65_535, description: 'Debugger daemon TCP port.' },
     host: { type: 'string', description: 'Debugger daemon host.' },
     html: { type: 'string', description: 'Inline static HTML for deterministic prototyping.' },
     fromHtml: { type: 'string', description: 'Path to a static HTML file.' }

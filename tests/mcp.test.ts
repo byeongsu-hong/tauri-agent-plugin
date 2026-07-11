@@ -126,11 +126,13 @@ describe('tauri-agent MCP server', () => {
         description: 'Poll for entries before returning a bounded tool result.'
       })
       expect(followTool.inputSchema.properties.pollMs).toEqual({
-        type: 'number',
+        type: 'integer',
+        minimum: 1,
         description: 'Follow polling interval in milliseconds.'
       })
       expect(followTool.inputSchema.properties.timeoutMs).toEqual({
-        type: 'number',
+        type: 'integer',
+        minimum: 0,
         description: 'Maximum wait or follow duration in milliseconds.'
       })
     }
@@ -306,6 +308,23 @@ describe('tauri-agent MCP server', () => {
     }))))).toEqual({
       jsonrpc: '2.0',
       id: 37,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
+    [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
+    [{ name: 'tauri_wait', arguments: { html: '<main></main>', idleMs: -1 } }, 'idleMs must be a non-negative safe integer'],
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', pollMs: 0 } }, 'pollMs must be a positive safe integer'],
+    [{ name: 'tauri_attach', arguments: { port: 65_536 } }, 'port must be an integer between 1 and 65535']
+  ])('rejects MCP numbers outside their advertised bounds %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 38, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 38,
       error: { code: -32602, message }
     })
   })
