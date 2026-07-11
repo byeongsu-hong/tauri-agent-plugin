@@ -113,13 +113,22 @@ fn rust_endpoint_descriptor_advertises_optional_vnc_surface() {
 #[test]
 fn rust_endpoint_descriptors_reject_invalid_numeric_and_optional_fields() {
     for descriptor in [
+        r#"{"appId":"","pid":1,"transport":"tcp","host":"127.0.0.1","port":1}"#,
+        r#"{"appId":"a","pid":0,"transport":"tcp","host":"127.0.0.1","port":1}"#,
         r#"{"appId":"a","pid":-1,"transport":"tcp","host":"127.0.0.1","port":1}"#,
         r#"{"appId":"a","pid":1.5,"transport":"tcp","host":"127.0.0.1","port":1}"#,
         r#"{"appId":"a","pid":4294967296,"transport":"tcp","host":"127.0.0.1","port":1}"#,
         r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":-1}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":0}"#,
         r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1.5}"#,
         r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":65536}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"","port":1}"#,
+        r#"{"appId":"a","pid":1,"transport":"unix","path":""}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"token":""}"#,
         r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"token":true}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"vnc":{"host":"","port":1}}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"vnc":{"host":"x","port":0}}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"vnc":{"host":"x","port":1,"novncUrl":""}}"#,
         r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"vnc":{"host":"x","port":1,"novncUrl":true}}"#,
     ] {
         assert!(

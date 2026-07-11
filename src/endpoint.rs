@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Discovery record for the human-facing VNC/noVNC visual surface. The plugin
 /// only advertises where the stream lives; the VNC server itself (for example
@@ -9,9 +9,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VncEndpoint {
+    #[serde(deserialize_with = "deserialize_non_empty_string")]
     pub host: String,
+    #[serde(deserialize_with = "deserialize_positive_u16")]
     pub port: u16,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_non_empty_string"
+    )]
     pub novnc_url: Option<String>,
 }
 
@@ -21,10 +27,17 @@ pub enum AgentEndpointDescriptor {
     #[serde(rename = "unix")]
     #[serde(rename_all = "camelCase")]
     Unix {
+        #[serde(deserialize_with = "deserialize_non_empty_string")]
         app_id: String,
+        #[serde(deserialize_with = "deserialize_positive_u32")]
         pid: u32,
+        #[serde(deserialize_with = "deserialize_non_empty_path")]
         path: PathBuf,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "deserialize_optional_non_empty_string"
+        )]
         token: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         vnc: Option<VncEndpoint>,
@@ -32,15 +45,83 @@ pub enum AgentEndpointDescriptor {
     #[serde(rename = "tcp")]
     #[serde(rename_all = "camelCase")]
     Tcp {
+        #[serde(deserialize_with = "deserialize_non_empty_string")]
         app_id: String,
+        #[serde(deserialize_with = "deserialize_positive_u32")]
         pid: u32,
+        #[serde(deserialize_with = "deserialize_non_empty_string")]
         host: String,
+        #[serde(deserialize_with = "deserialize_positive_u16")]
         port: u16,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "deserialize_optional_non_empty_string"
+        )]
         token: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         vnc: Option<VncEndpoint>,
     },
+}
+
+fn deserialize_non_empty_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if value.trim().is_empty() {
+        return Err(serde::de::Error::custom("expected a non-empty string"));
+    }
+    Ok(value)
+}
+
+fn deserialize_optional_non_empty_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    if value
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(serde::de::Error::custom("expected a non-empty string"));
+    }
+    Ok(value)
+}
+
+fn deserialize_positive_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = u16::deserialize(deserializer)?;
+    if value == 0 {
+        return Err(serde::de::Error::custom("expected a positive integer"));
+    }
+    Ok(value)
+}
+
+fn deserialize_positive_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = u32::deserialize(deserializer)?;
+    if value == 0 {
+        return Err(serde::de::Error::custom("expected a positive integer"));
+    }
+    Ok(value)
+}
+
+fn deserialize_non_empty_path<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = PathBuf::deserialize(deserializer)?;
+    if value.to_string_lossy().trim().is_empty() {
+        return Err(serde::de::Error::custom("expected a non-empty path"));
+    }
+    Ok(value)
 }
 
 impl AgentEndpointDescriptor {

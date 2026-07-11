@@ -137,13 +137,22 @@ describe('debugger endpoint discovery', () => {
 
   it('rejects endpoint fields that the Rust descriptor types reject', () => {
     for (const descriptor of [
+      { appId: '', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1 },
+      { appId: 'a', pid: 0, transport: 'tcp', host: '127.0.0.1', port: 1 },
       { appId: 'a', pid: -1, transport: 'tcp', host: '127.0.0.1', port: 1 },
       { appId: 'a', pid: 1.5, transport: 'tcp', host: '127.0.0.1', port: 1 },
       { appId: 'a', pid: 0x1_0000_0000, transport: 'tcp', host: '127.0.0.1', port: 1 },
       { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: -1 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 0 },
       { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1.5 },
       { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 0x1_0000 },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '', port: 1 },
+      { appId: 'a', pid: 1, transport: 'unix', path: '' },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, token: '' },
       { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, token: true },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, vnc: { host: '', port: 1 } },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, vnc: { host: 'x', port: 0 } },
+      { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, vnc: { host: 'x', port: 1, novncUrl: '' } },
       { appId: 'a', pid: 1, transport: 'tcp', host: '127.0.0.1', port: 1, vnc: { host: 'x', port: 1, novncUrl: true } }
     ]) {
       expect(() => parseEndpointDescriptor(JSON.stringify(descriptor))).toThrow(
