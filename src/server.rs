@@ -132,7 +132,8 @@ struct JsonRpcRequest {
     jsonrpc: String,
     id: Value,
     method: String,
-    params: Option<Value>,
+    #[serde(default = "empty_params")]
+    params: Value,
     #[serde(default)]
     token: Option<String>,
 }
@@ -158,14 +159,24 @@ pub(crate) fn respond_to_json_rpc_line(
         }
     }
 
+    if !AGENT_METHODS.contains(&request.method.as_str()) {
+        return error_response(
+            id,
+            "INVALID_REQUEST",
+            &format!("unknown agent method: {}", request.method),
+        );
+    }
+
+    if !request.params.is_object() {
+        return error_response(id, "INVALID_PARAMS", "params must be an object");
+    }
+
     let result = match request.method.as_str() {
         "attach" => handle_attach(backend, request.params),
         "windows" => Ok(json!(backend.windows())),
         "window" => handle_window(backend, request.params),
-        "shot" => handle_shot(backend, request.params.unwrap_or_else(|| json!({}))),
-        method if BRIDGE_METHODS.contains(&method) => {
-            backend.bridge_call(method, request.params.unwrap_or_else(|| json!({})))
-        }
+        "shot" => handle_shot(backend, request.params),
+        method if BRIDGE_METHODS.contains(&method) => backend.bridge_call(method, request.params),
         method => {
             return error_response(
                 id,
@@ -179,6 +190,10 @@ pub(crate) fn respond_to_json_rpc_line(
         Ok(result) => success_response(id, result),
         Err(error) => error_response(id, error_code(&error), &error.to_string()),
     }
+}
+
+fn empty_params() -> Value {
+    json!({})
 }
 
 pub(crate) fn start_line_json_rpc_server<B>(
@@ -413,25 +428,19 @@ fn parse_request(line: &str) -> Result<JsonRpcRequest, String> {
     Ok(request)
 }
 
-fn handle_attach(
-    backend: &impl InlineDebuggerBackend,
-    params: Option<Value>,
-) -> crate::Result<Value> {
+fn handle_attach(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentAttachRequest>(params)?;
     backend.ensure_window(request.window.as_deref())?;
     backend.attach_response()
 }
 
-fn handle_window(
-    backend: &impl InlineDebuggerBackend,
-    params: Option<Value>,
-) -> crate::Result<Value> {
+fn handle_window(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
     let request = parse_params::<AgentWindowRequest>(params)?;
     Ok(json!(backend.window_control(request)?))
 }
 
 fn handle_shot(backend: &impl InlineDebuggerBackend, params: Value) -> crate::Result<Value> {
-    let request = parse_params::<AgentScreenshotRequest>(Some(params.clone()))?;
+    let request = parse_params::<AgentScreenshotRequest>(params.clone())?;
     commands::resolve_screenshot(
         commands::effective_screenshot_backend(&request),
         || handle_bridge_shot(backend, params.clone()),
@@ -470,9 +479,8 @@ fn handle_bridge_shot(backend: &impl InlineDebuggerBackend, params: Value) -> cr
     Ok(Value::Object(response))
 }
 
-fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> crate::Result<T> {
-    serde_json::from_value(params.unwrap_or_else(|| json!({})))
-        .map_err(|error| Error::InvalidParams(error.to_string()))
+fn parse_params<T: DeserializeOwned>(params: Value) -> crate::Result<T> {
+    serde_json::from_value(params).map_err(|error| Error::InvalidParams(error.to_string()))
 }
 
 fn success_response(id: Value, result: Value) -> String {
@@ -577,6 +585,23 @@ mod tests {
             }),
             "LOCATOR_NOT_FOUND"
         );
+    }
+
+    #[test]
+    fn inline_server_rejects_non_object_params() {
+        for params in ["null", "[]", "true", "1", r#""text""#] {
+            let response = respond(
+                &FakeBackend,
+                &format!(r#"{{"jsonrpc":"2.0","id":1,"method":"windows","params":{params}}}"#),
+            );
+            assert_eq!(
+                serde_json::from_str::<Value>(&response).unwrap()["error"],
+                json!({
+                    "code": "INVALID_PARAMS",
+                    "message": "params must be an object"
+                })
+            );
+        }
     }
 
     #[test]
