@@ -15,8 +15,9 @@ per-session token:
   `endpoint.json`, written `0600` on Unix and via a pid-scoped temp file +
   atomic rename.
 - Every request must carry the token; the CLI and MCP read it automatically
-  during endpoint discovery. A client dialing a known `--port`/`--host` daemon
-  directly sends no token (it opted into a trusted local daemon).
+  during endpoint discovery. A client dialing a known `--port` daemon (with an
+  optional `--host`) directly sends no token; it opted into a trusted local
+  daemon.
 
 ## Network exposure
 

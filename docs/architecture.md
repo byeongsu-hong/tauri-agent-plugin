@@ -45,8 +45,9 @@ Consumers use those fields instead of guessing from the selected build variant.
   runtime directory.
 - Localhost TCP is the portable fallback and the current inline-server
   transport; a Unix socket variant is modeled in the descriptor and reserved.
-- CLI and MCP discover the endpoint by app id (`--app`), a known daemon
-  (`--port`/`--host`), or static HTML (`--from-html` / `html`).
+- CLI and MCP require exactly one connection source: app id (`--app`), a known
+  daemon (`--port`, optionally modified by `--host`), or static HTML
+  (`--from-html` / `html`).
 
 ## Two surfaces
 

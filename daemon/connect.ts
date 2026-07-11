@@ -14,12 +14,39 @@ export interface DebuggerTarget {
   resolveHtml?: () => Promise<string>
 }
 
+export function validateDebuggerTarget(target: DebuggerTarget): void {
+  if (
+    target.port !== undefined &&
+    (!Number.isInteger(target.port) || target.port < 1 || target.port > 65_535)
+  ) {
+    throw new Error('debugger port must be an integer between 1 and 65535')
+  }
+  if (target.app !== undefined && !target.app.trim()) {
+    throw new Error('debugger app id must be non-empty')
+  }
+  if (target.host !== undefined && !target.host.trim()) {
+    throw new Error('debugger host must be non-empty')
+  }
+  if (target.host !== undefined && target.port === undefined) {
+    throw new Error('debugger host requires a port connection source')
+  }
+  const sources = [
+    target.port !== undefined,
+    target.app !== undefined,
+    target.resolveHtml !== undefined
+  ].filter(Boolean).length
+  if (sources !== 1) {
+    throw new Error('debugger target requires exactly one connection source: port, app, or HTML')
+  }
+}
+
 /**
  * Build a {@link DebuggerClient} from a target. Shared by the CLI and the MCP
  * server so both discover endpoints, verify liveness, and fall back to a static
  * adapter identically. Returns null-free: throws with an actionable message.
  */
 export async function connectDebuggerClient(target: DebuggerTarget): Promise<DebuggerClient> {
+  validateDebuggerTarget(target)
   if (target.port !== undefined) {
     return new DebuggerClient(new SocketTransport({ port: target.port, host: target.host ?? '127.0.0.1' }))
   }

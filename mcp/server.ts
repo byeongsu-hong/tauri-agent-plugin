@@ -1,7 +1,13 @@
 import { readFile } from 'node:fs/promises'
 
 import type { DebuggerClient } from '../daemon/client'
-import { collectDiagnosis, connectDebuggerClient, pollFollow, type DebuggerTarget } from '../daemon/connect'
+import {
+  collectDiagnosis,
+  connectDebuggerClient,
+  pollFollow,
+  validateDebuggerTarget,
+  type DebuggerTarget
+} from '../daemon/connect'
 import { isJsonRpcId } from '../protocol/json-rpc'
 import type { AgentMethod } from '../protocol/types'
 
@@ -40,6 +46,7 @@ export interface McpServerOptions {
 }
 
 export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequestHandler {
+  if (options.target) validateDebuggerTarget(options.target)
   const definitions = toolDefinitions(options)
   const definitionsByName = new Map(definitions.map((definition) => [definition.name, definition]))
   return async (message: string) => {
@@ -492,11 +499,13 @@ async function callFollowableEntries(
 
 async function debuggerClient(args: ToolCallArgs, target?: DebuggerTarget): Promise<DebuggerClient> {
   if (target) return connectDebuggerClient(target)
+  const app = stringField(args, 'app') || undefined
   return connectDebuggerClient({
     port: numberField(args, 'port'),
-    host: stringField(args, 'host', '127.0.0.1'),
-    app: stringField(args, 'app'),
-    resolveHtml: () => htmlFromArgs(args)
+    host: args.host === undefined ? undefined : stringField(args, 'host'),
+    app,
+    resolveHtml:
+      args.html !== undefined || args.fromHtml !== undefined ? () => htmlFromArgs(args) : undefined
   })
 }
 

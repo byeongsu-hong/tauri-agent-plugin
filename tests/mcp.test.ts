@@ -11,6 +11,12 @@ import { StaticHtmlAppAdapter } from '../daemon/static-app'
 import { createMcpRequestHandler } from '../mcp/server'
 
 describe('tauri-agent MCP server', () => {
+  it('rejects malformed configured connection targets at startup', () => {
+    expect(() => createMcpRequestHandler({
+      target: { app: 'dev.example.app', port: 45127 }
+    })).toThrow('debugger target requires exactly one connection source')
+  })
+
   it('negotiates MCP initialization and lists debugger tools', async () => {
     const handler = createMcpRequestHandler()
 

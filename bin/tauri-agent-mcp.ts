@@ -9,14 +9,18 @@ const program = new Command()
   .name('tauri-agent-mcp')
   .option('--app <appId>', 'scope every tool to one app endpoint')
   .option('--port <port>', 'scope every tool to one debugger port', Number)
-  .option('--host <host>', 'debugger host', '127.0.0.1')
+  .option('--host <host>', 'debugger host (requires --port)')
   .option('--from-html <path>', 'scope every tool to one static HTML file')
   .option('--profile <profile>', 'tool profile: core or full', 'full')
 
 program.parse()
-const options = program.opts<{ app?: string; port?: number; host: string; fromHtml?: string; profile: string }>()
+const options = program.opts<{ app?: string; port?: number; host?: string; fromHtml?: string; profile: string }>()
 if (options.profile !== 'core' && options.profile !== 'full') throw new Error('profile must be core or full')
-const target = options.app || options.port !== undefined || options.fromHtml
+const target =
+  options.app !== undefined ||
+  options.port !== undefined ||
+  options.host !== undefined ||
+  options.fromHtml !== undefined
   ? {
       app: options.app,
       port: options.port,

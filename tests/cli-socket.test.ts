@@ -150,6 +150,21 @@ describe('tauri-agent CLI socket mode', () => {
     ).toThrow(/unknown option '--host'/)
   })
 
+  it('rejects malformed and ambiguous debugger connection sources', async () => {
+    await expect(runCliAsync(['windows', '--port', '0'])).rejects.toThrow(
+      'debugger port must be an integer between 1 and 65535'
+    )
+    await expect(
+      runCliAsync(['windows', '--port', '45127', '--from-html', htmlFile()])
+    ).rejects.toThrow('debugger target requires exactly one connection source')
+    await expect(
+      runCliAsync(['windows', '--from-html', htmlFile(), '--host', 'localhost'])
+    ).rejects.toThrow('debugger host requires a port connection source')
+    await expect(runCliAsync(['windows', '--host', 'localhost'])).rejects.toThrow(
+      'debugger host requires a port connection source'
+    )
+  })
+
   it('controls a persistent headless debugger daemon', async () => {
     const port = await unusedPort()
     await startServer(htmlFile(), port)

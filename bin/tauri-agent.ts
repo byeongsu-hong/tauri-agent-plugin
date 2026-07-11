@@ -132,7 +132,7 @@ function withConnectionOptions(command: Command, options: { scope?: boolean } = 
   command
     .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
     .option('--from-html <path>', 'prototype against a static HTML file')
-    .option('--host <host>', 'debug daemon host', '127.0.0.1')
+    .option('--host <host>', 'debug daemon host (requires --port)')
     .option('--port <port>', 'debug daemon port', Number)
     .option('--window <label>', 'Tauri window label')
   if (options.scope) {
@@ -241,7 +241,7 @@ program
   .description('List known Tauri windows.')
   .option('--app <appId>', 'Tauri app identifier for endpoint discovery')
   .option('--from-html <path>', 'prototype against a static HTML file')
-  .option('--host <host>', 'debug daemon host', '127.0.0.1')
+  .option('--host <host>', 'debug daemon host (requires --port)')
   .option('--port <port>', 'debug daemon port', Number)
   .action(async (options: ConnectionOptions) => printJson(await call(options, 'windows')))
 
@@ -795,7 +795,12 @@ function refActionParams(
 }
 
 async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClient> {
-  if (!options.port && !options.app && !options.fromHtml) {
+  if (
+    options.port === undefined &&
+    options.app === undefined &&
+    options.fromHtml === undefined &&
+    options.host === undefined
+  ) {
     exitBridgePending()
   }
   const fromHtml = options.fromHtml
@@ -803,7 +808,7 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
     port: options.port,
     host: options.host,
     app: options.app,
-    resolveHtml: fromHtml ? () => readFile(fromHtml, 'utf8') : undefined
+    resolveHtml: fromHtml !== undefined ? () => readFile(fromHtml, 'utf8') : undefined
   })
 }
 

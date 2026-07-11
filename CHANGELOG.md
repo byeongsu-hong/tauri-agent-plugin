@@ -38,6 +38,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - MCP uploads now advertise and enforce at least one file.
 - Per-call MCP tools now require exactly one connection source and reject
   ambiguous targets or `host` without `port`.
+- Shared CLI and configured MCP targets now enforce the same single-source rule,
+  reject invalid ports, and only accept `host` alongside `port`.
 - MCP window and atomic-action tools now reject missing action-specific values
   and locators before opening a debugger connection.
 - MCP capture tools now reject conflicting follow, detail, and list options
