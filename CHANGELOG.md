@@ -81,6 +81,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   malformed peer cannot grow the receive buffer until timeout.
 - TypeScript endpoint registries now match Rust's integer and optional-field
   validation and use atomic owner-only file replacement.
+- Rust and TypeScript endpoint parsers now reject zero pid/port values and
+  empty app ids, transport addresses, paths, tokens, and VNC fields.
 - MCP requests now reject invalid JSON-RPC ids plus malformed initialize and
   tools/list params instead of accepting or ignoring them.
 - MCP stdio now caps newline-delimited requests by UTF-8 byte length and

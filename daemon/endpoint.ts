@@ -83,16 +83,16 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
 
 export function parseEndpointDescriptor(json: string): EndpointDescriptor {
   const parsed = JSON.parse(json) as unknown
-  if (!isObject(parsed) || typeof parsed.appId !== 'string' || !isU32(parsed.pid)) {
+  if (!isObject(parsed) || !isNonEmptyString(parsed.appId) || !isPositiveU32(parsed.pid)) {
     throw new Error('invalid endpoint descriptor')
   }
 
   const vnc = parseVnc(parsed.vnc)
-  const token = optionalString(parsed.token, 'token')
+  const token = optionalNonEmptyString(parsed.token, 'token')
 
   if (
     parsed.transport === 'unix' &&
-    typeof parsed.path === 'string'
+    isNonEmptyString(parsed.path)
   ) {
     return {
       appId: parsed.appId,
@@ -106,8 +106,8 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
 
   if (
     parsed.transport === 'tcp' &&
-    typeof parsed.host === 'string' &&
-    isU16(parsed.port)
+    isNonEmptyString(parsed.host) &&
+    isPositiveU16(parsed.port)
   ) {
     return {
       appId: parsed.appId,
@@ -127,11 +127,11 @@ function parseVnc(value: unknown): { vnc?: VncEndpoint } {
   if (value === undefined || value === null) {
     return {}
   }
-  if (!isObject(value) || typeof value.host !== 'string' || !isU16(value.port)) {
+  if (!isObject(value) || !isNonEmptyString(value.host) || !isPositiveU16(value.port)) {
     throw new Error('invalid endpoint descriptor')
   }
   const vnc: VncEndpoint = { host: value.host, port: value.port }
-  Object.assign(vnc, optionalString(value.novncUrl, 'novncUrl'))
+  Object.assign(vnc, optionalNonEmptyString(value.novncUrl, 'novncUrl'))
   return { vnc }
 }
 
@@ -199,17 +199,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isU32(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff_ffff
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
-function isU16(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff
+function isPositiveU32(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 0xffff_ffff
 }
 
-function optionalString(value: unknown, key: string): Record<string, string> {
+function isPositiveU16(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 0xffff
+}
+
+function optionalNonEmptyString(value: unknown, key: string): Record<string, string> {
   if (value === undefined || value === null) return {}
-  if (typeof value !== 'string') throw new Error('invalid endpoint descriptor')
+  if (!isNonEmptyString(value)) throw new Error('invalid endpoint descriptor')
   return { [key]: value }
 }
 
