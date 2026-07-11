@@ -1,6 +1,6 @@
 import { createConnection } from 'node:net'
 
-import type { LineTransport } from './server'
+import { parseResponse, type LineTransport } from './server'
 import { createRequest } from '../protocol/json-rpc'
 import type { AgentMethod } from '../protocol/types'
 import { AgentProtocolError } from '../protocol/error'
@@ -18,7 +18,14 @@ export class DebuggerClient {
     // The inline server authenticates each request with the per-session token
     // published in the (0600) endpoint registry.
     const message = this.token ? { ...request, token: this.token } : request
-    const response = JSON.parse(await this.sendWithRetry(JSON.stringify(message), method, params))
+    const response = parseResponse(await this.sendWithRetry(JSON.stringify(message), method, params))
+
+    if (response.id !== request.id) {
+      throw new AgentProtocolError(
+        'INVALID_RESPONSE',
+        `mismatched JSON-RPC response id: expected ${request.id}, got ${String(response.id)}`
+      )
+    }
 
     if ('error' in response) {
       throw new AgentProtocolError(response.error.code, response.error.message)
