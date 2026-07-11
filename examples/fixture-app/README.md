@@ -28,4 +28,5 @@ TAURI_AGENT_SELF_TEST=1 xvfb-run -a src-tauri/target/release/tauri-agent-fixture
 CI runs this in the `e2e` job, then launches the fixture again and runs
 `tests/live-fixture.ts`. That second pass discovers the published authenticated
 endpoint and drives both windows through the built CLI, including correlated
-diagnosis and network/IPC detail redaction.
+diagnosis and network/IPC detail redaction. It then requests a normal fixture
+exit and verifies that plugin lifecycle cleanup removes the endpoint registry.

@@ -108,6 +108,7 @@ jobs:
       - name: Drive the live fixture through endpoint discovery and CLI
         env:
           XDG_RUNTIME_DIR: ${{ runner.temp }}/tauri-agent-runtime
+          TAURI_AGENT_EXTERNAL_TEST: "1"
         run: |
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"

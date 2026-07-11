@@ -6,7 +6,8 @@ use tauri::{Manager, Runtime};
 /// exits with a code (0 pass, 1 fail, 2 timeout) — the cheapest real end-to-end
 /// check that a live WKWebView/webkit2gtk webview answers the agent bridge.
 const SELF_TEST_ENV: &str = "TAURI_AGENT_SELF_TEST";
-const SELF_TEST_TIMEOUT: Duration = Duration::from_secs(30);
+const EXTERNAL_TEST_ENV: &str = "TAURI_AGENT_EXTERNAL_TEST";
+const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn run() {
     tauri::Builder::default()
@@ -30,7 +31,9 @@ pub fn run() {
         })
         .setup(|app| {
             if std::env::var(SELF_TEST_ENV).is_ok() {
-                spawn_self_test_watcher(app.handle().clone());
+                spawn_test_watcher(app.handle().clone(), "SELFTEST");
+            } else if std::env::var(EXTERNAL_TEST_ENV).is_ok() {
+                spawn_test_watcher(app.handle().clone(), "EXTERNALTEST");
             }
             Ok(())
         })
@@ -38,27 +41,29 @@ pub fn run() {
         .expect("failed to run tauri-agent fixture app");
 }
 
-/// Poll the main window title (which mirrors `document.title`) for the sentinel
-/// the frontend writes when the self-test finishes, then exit with its code.
-fn spawn_self_test_watcher<R: Runtime>(app: tauri::AppHandle<R>) {
+/// Poll the main window title for a test sentinel, then exit normally so plugin
+/// lifecycle cleanup (including endpoint removal) runs.
+fn spawn_test_watcher<R: Runtime>(app: tauri::AppHandle<R>, prefix: &'static str) {
     std::thread::spawn(move || {
-        let deadline = Instant::now() + SELF_TEST_TIMEOUT;
+        let deadline = Instant::now() + TEST_TIMEOUT;
+        let pass = format!("{prefix}:PASS");
+        let fail = format!("{prefix}:FAIL");
         loop {
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(title) = window.title() {
-                    if title.contains("SELFTEST:PASS") {
+                    if title.contains(&pass) {
                         app.exit(0);
                         return;
                     }
-                    if title.contains("SELFTEST:FAIL") {
-                        eprintln!("fixture self-test reported failure");
+                    if title.contains(&fail) {
+                        eprintln!("fixture {prefix} reported failure");
                         app.exit(1);
                         return;
                     }
                 }
             }
             if Instant::now() >= deadline {
-                eprintln!("fixture self-test timed out after {SELF_TEST_TIMEOUT:?}");
+                eprintln!("fixture {prefix} timed out after {TEST_TIMEOUT:?}");
                 app.exit(2);
                 return;
             }
