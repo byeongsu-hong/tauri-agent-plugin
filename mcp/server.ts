@@ -155,7 +155,34 @@ function validateToolArguments(
   for (const [field, fieldSchema] of Object.entries(definition.inputSchema.properties)) {
     if (args[field] !== undefined) validateSchemaValue(args[field], fieldSchema, field)
   }
+  validateToolSemantics(args, definition.name)
   if (!hasConfiguredTarget) validateConnectionArguments(args)
+}
+
+function validateToolSemantics(args: ToolCallArgs, tool: string): void {
+  if (tool === 'tauri_window') {
+    if (args.action === 'setSize') {
+      if (args.width === undefined) throw new McpRequestError(-32602, 'window setSize requires positive width')
+      if (args.height === undefined) throw new McpRequestError(-32602, 'window setSize requires positive height')
+    }
+    if (args.action === 'setPosition') {
+      if (args.x === undefined) throw new McpRequestError(-32602, 'window setPosition requires x')
+      if (args.y === undefined) throw new McpRequestError(-32602, 'window setPosition requires y')
+    }
+  }
+  if (tool === 'tauri_act') {
+    const action = args.action
+    if (['fill', 'type', 'press', 'select'].includes(action as string) && typeof args.value !== 'string') {
+      throw new McpRequestError(-32602, `${String(action)} requires a string value`)
+    }
+    if (action === 'check' && args.value !== undefined && typeof args.value !== 'boolean') {
+      throw new McpRequestError(-32602, 'check value must be a boolean')
+    }
+    const hasLocator = ['scope', 'role', 'name', 'text'].some(
+      (field) => typeof args[field] === 'string' && args[field].length > 0
+    )
+    if (action !== 'press' && !hasLocator) throw new McpRequestError(-32602, 'act requires a locator')
+  }
 }
 
 function validateConnectionArguments(args: ToolCallArgs): void {
