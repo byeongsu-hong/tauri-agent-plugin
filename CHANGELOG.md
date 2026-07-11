@@ -39,6 +39,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `params` envelopes consistently with the TypeScript daemon.
 - Debugger clients now reject malformed, ambiguous, and mismatched JSON-RPC
   response envelopes instead of trusting unchecked response casts.
+- TypeScript socket transports now preserve UTF-8 characters split across TCP
+  chunks and enforce request limits per byte-counted line.
 
 ## [0.0.2] - 2026-07-11
 

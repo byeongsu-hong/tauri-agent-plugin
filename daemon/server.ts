@@ -56,23 +56,22 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
   }
   // Without an error handler a client reset (ECONNRESET) raises an unhandled
   // 'error' event and crashes the daemon process.
+  socket.setEncoding('utf8')
   socket.on('error', stop)
   socket.on('close', stop)
   socket.on('data', (chunk) => {
     if (closed) {
       return
     }
-    buffer += chunk.toString('utf8')
-    if (buffer.length > MAX_REQUEST_LINE_BYTES) {
-      // A client that never sends a newline would otherwise grow the buffer
-      // without bound.
-      socket.destroy()
-      closed = true
-      return
-    }
+    buffer += chunk.toString()
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
     for (const line of lines) {
+      if (Buffer.byteLength(line, 'utf8') + 1 > MAX_REQUEST_LINE_BYTES) {
+        socket.destroy()
+        closed = true
+        return
+      }
       if (!line.trim()) {
         continue
       }
@@ -83,6 +82,12 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
           }
         })
         .catch(() => {})
+    }
+    if (Buffer.byteLength(buffer, 'utf8') > MAX_REQUEST_LINE_BYTES) {
+      // A client that never sends a newline would otherwise grow the buffer
+      // without bound.
+      socket.destroy()
+      closed = true
     }
   })
 }
