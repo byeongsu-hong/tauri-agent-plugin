@@ -86,6 +86,22 @@ describe('socket JSON-RPC transport', () => {
 
     await expect(client.call('tree')).rejects.toThrow('debugger response exceeded 32 bytes')
   })
+
+  it('returns INVALID_REQUEST before closing an oversized request', async () => {
+    server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' })),
+      32
+    )
+    const port = await listen(server)
+
+    const response = JSON.parse(await rawCall(port, Buffer.from('x'.repeat(33)), Buffer.alloc(0)))
+
+    expect(response).toEqual({
+      jsonrpc: '2.0',
+      id: 0,
+      error: { code: 'INVALID_REQUEST', message: 'request line exceeds the maximum length' }
+    })
+  })
 })
 
 async function listen(target: Server): Promise<number> {

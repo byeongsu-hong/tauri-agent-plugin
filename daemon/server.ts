@@ -43,12 +43,15 @@ export interface LineTransport {
 
 const MAX_REQUEST_LINE_BYTES = 4 * 1024 * 1024
 
-export function createLineJsonRpcServer(session: DebuggerSession): Server {
+export function createLineJsonRpcServer(
+  session: DebuggerSession,
+  maxRequestLineBytes: number = MAX_REQUEST_LINE_BYTES
+): Server {
   const handler = createDebuggerRpcHandler(session)
-  return createServer((socket) => handleLineSocket(socket, handler))
+  return createServer((socket) => handleLineSocket(socket, handler, maxRequestLineBytes))
 }
 
-async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<void> {
+async function handleLineSocket(socket: Socket, handler: RpcHandler, maxRequestLineBytes: number): Promise<void> {
   let buffer = ''
   let closed = false
   const stop = (): void => {
@@ -59,6 +62,13 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
   socket.setEncoding('utf8')
   socket.on('error', stop)
   socket.on('close', stop)
+  const rejectOversizedRequest = (): void => {
+    if (closed) return
+    closed = true
+    const response = createErrorResponse(0, 'INVALID_REQUEST', 'request line exceeds the maximum length')
+    if (socket.writable) socket.end(`${JSON.stringify(response)}\n`)
+    else socket.destroy()
+  }
   socket.on('data', (chunk) => {
     if (closed) {
       return
@@ -67,9 +77,8 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
     for (const line of lines) {
-      if (Buffer.byteLength(line, 'utf8') + 1 > MAX_REQUEST_LINE_BYTES) {
-        socket.destroy()
-        closed = true
+      if (Buffer.byteLength(line, 'utf8') + 1 > maxRequestLineBytes) {
+        rejectOversizedRequest()
         return
       }
       if (!line.trim()) {
@@ -83,11 +92,10 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler): Promise<vo
         })
         .catch(() => {})
     }
-    if (Buffer.byteLength(buffer, 'utf8') > MAX_REQUEST_LINE_BYTES) {
+    if (Buffer.byteLength(buffer, 'utf8') > maxRequestLineBytes) {
       // A client that never sends a newline would otherwise grow the buffer
       // without bound.
-      socket.destroy()
-      closed = true
+      rejectOversizedRequest()
     }
   })
 }
