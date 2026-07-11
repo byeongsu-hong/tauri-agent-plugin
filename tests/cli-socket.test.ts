@@ -233,6 +233,22 @@ describe('tauri-agent CLI socket mode', () => {
     expect(requests).toEqual([{ method: 'act', params: { role: 'button', name: 'Save', action: 'click' } }])
   })
 
+  it('validates an entire recording before replaying any action', async () => {
+    const { port, requests } = await startCapturingRpcServer({ act: { ok: true } })
+    const path = join(mkdtempSync(join(tmpdir(), 'tauri-agent-invalid-replay-')), 'replay.json')
+    const valid = { method: 'act', params: { role: 'button', name: 'Save', action: 'click' } }
+
+    writeFileSync(path, JSON.stringify({ entries: [valid, { method: 'missing', params: {} }] }))
+    await expect(runCliAsync(['replay', path, '--port', String(port)]))
+      .rejects.toThrow('recording contains unsupported method: missing')
+
+    writeFileSync(path, JSON.stringify({ entries: [valid, { method: 'click', params: [] }] }))
+    await expect(runCliAsync(['replay', path, '--port', String(port)]))
+      .rejects.toThrow('recording entry 2 params must be an object')
+
+    expect(requests).toEqual([])
+  })
+
   it('forwards state keys to protocol calls', async () => {
     const { port, requests } = await startCapturingRpcServer({
       state: { 'Agent name': 'worker-a' }

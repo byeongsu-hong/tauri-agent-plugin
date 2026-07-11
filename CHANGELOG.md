@@ -47,6 +47,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tools/list params instead of accepting or ignoring them.
 - MCP stdio now caps newline-delimited requests by UTF-8 byte length and
   recovers cleanly after discarding an oversized line.
+- CLI replay now validates every recording method and params object before
+  executing any action, preventing partial or defaulted replays.
 
 ## [0.0.2] - 2026-07-11
 
