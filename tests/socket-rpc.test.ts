@@ -76,6 +76,16 @@ describe('socket JSON-RPC transport', () => {
 
     await expect(client.call('tree')).resolves.toEqual({ text: '서울 작업자' })
   })
+
+  it('rejects responses that exceed the configured byte limit before a newline', async () => {
+    server = createNetServer((socket) => {
+      socket.once('data', () => socket.write('x'.repeat(33)))
+    })
+    const port = await listen(server)
+    const client = new DebuggerClient(new SocketTransport({ port, host: '127.0.0.1' }, 1_000, 32))
+
+    await expect(client.call('tree')).rejects.toThrow('debugger response exceeded 32 bytes')
+  })
 })
 
 async function listen(target: Server): Promise<number> {
