@@ -326,7 +326,8 @@ describe('tauri-agent MCP server', () => {
     [{ name: 'tauri_press', arguments: { html: '<main></main>', key: 'k', modifiers: 'Meta' } }, 'modifiers must be an array'],
     [{ name: 'tauri_press', arguments: { html: '<main></main>', key: 'k', modifiers: ['Hyper'] } }, 'modifiers[0] must be one of Alt, Control, Meta, Shift'],
     [{ name: 'tauri_upload', arguments: { html: '<main></main>', ref: '@1', files: [{ text: 'body' }] } }, 'files[0].name is required'],
-    [{ name: 'tauri_upload', arguments: { html: '<main></main>', ref: '@1', files: [{ name: 'a.txt', text: 42 }] } }, 'files[0].text must be a string']
+    [{ name: 'tauri_upload', arguments: { html: '<main></main>', ref: '@1', files: [{ name: 'a.txt', text: 42 }] } }, 'files[0].text must be a string'],
+    [{ name: 'tauri_act', arguments: { html: '<main></main>', action: 'fill', value: 42 } }, 'value must match one of these types: string, boolean']
   ])('rejects MCP arguments that violate scalar schemas %#', async (params, message) => {
     expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
       jsonrpc: '2.0', id: 39, method: 'tools/call', params
