@@ -61,6 +61,5 @@ This table is the single source for what each does.
   `html` (deterministic static prototyping). Targeting a specific window uses
   `--window <label>`.
 - **Canonical params.** `fill`/`type` take `text`, `press` takes `key`,
-  `select` takes `value`, `check` takes `checked`. The guest also accepts a
-  legacy `value` alias for `fill`/`press`, but every first-party surface and all
-  recordings emit the canonical names.
+  `select` takes `value`, `check` takes `checked`. The guest rejects legacy
+  `value` aliases for `fill`/`press`, and recordings use only canonical names.
