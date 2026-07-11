@@ -102,11 +102,15 @@ export type SocketTransportOptions =
 // while still comfortably covering long-poll methods (the Rust bridge caps its
 // own response at 60s).
 const DEFAULT_RESPONSE_TIMEOUT_MS = 120_000
+// Screenshot responses can be much larger than ordinary JSON-RPC results, but
+// a peer must not be able to grow the client buffer without bound.
+const DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 export class SocketTransport implements LineTransport {
   constructor(
     private readonly options: SocketTransportOptions,
-    private readonly timeoutMs: number = DEFAULT_RESPONSE_TIMEOUT_MS
+    private readonly timeoutMs: number = DEFAULT_RESPONSE_TIMEOUT_MS,
+    private readonly maxResponseBytes: number = DEFAULT_MAX_RESPONSE_BYTES
   ) {}
 
   async send(message: string): Promise<string> {
@@ -119,6 +123,7 @@ export class SocketTransport implements LineTransport {
               host: this.options.host ?? '127.0.0.1'
             })
       let buffer = ''
+      let responseBytes = 0
       let settled = false
 
       const finish = (action: () => void): void => {
@@ -139,13 +144,19 @@ export class SocketTransport implements LineTransport {
       socket.setEncoding('utf8')
       socket.on('connect', () => socket.write(`${message}\n`))
       socket.on('data', (chunk) => {
-        buffer += chunk.toString()
-        const newlineIndex = buffer.indexOf('\n')
+        const text = chunk.toString()
+        const newlineIndex = text.indexOf('\n')
+        const fragment = newlineIndex === -1 ? text : text.slice(0, newlineIndex)
+        responseBytes += Buffer.byteLength(fragment, 'utf8') + (newlineIndex === -1 ? 0 : 1)
+        if (responseBytes > this.maxResponseBytes) {
+          finish(() => reject(new Error(`debugger response exceeded ${this.maxResponseBytes} bytes`)))
+          return
+        }
+        buffer += fragment
         if (newlineIndex === -1) {
           return
         }
-        const response = buffer.slice(0, newlineIndex)
-        finish(() => resolve(response))
+        finish(() => resolve(buffer))
       })
       socket.on('error', (error) => finish(() => reject(error)))
       // A close before any newline means the server hung up mid-response;
