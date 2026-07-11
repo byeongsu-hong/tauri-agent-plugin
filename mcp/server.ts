@@ -179,6 +179,12 @@ function validateConnectionArguments(args: ToolCallArgs): void {
 function validateSchemaValue(value: unknown, schema: unknown, path: string): void {
   if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) return
   const rule = schema as Record<string, unknown>
+  if (Array.isArray(rule.type)) {
+    const types = rule.type.filter((type): type is string => typeof type === 'string')
+    if (types.length > 0 && !types.some((type) => matchesSchemaType(value, type))) {
+      throw new McpRequestError(-32602, `${path} must match one of these types: ${types.join(', ')}`)
+    }
+  }
   switch (rule.type) {
     case 'string':
       if (typeof value !== 'string') throw new McpRequestError(-32602, `${path} must be a string`)
@@ -224,6 +230,18 @@ function validateSchemaValue(value: unknown, schema: unknown, path: string): voi
   }
   if (Array.isArray(rule.enum) && !rule.enum.includes(value)) {
     throw new McpRequestError(-32602, `${path} must be one of ${rule.enum.join(', ')}`)
+  }
+}
+
+function matchesSchemaType(value: unknown, type: string): boolean {
+  switch (type) {
+    case 'string': return typeof value === 'string'
+    case 'boolean': return typeof value === 'boolean'
+    case 'number': return typeof value === 'number' && Number.isFinite(value)
+    case 'integer': return Number.isSafeInteger(value)
+    case 'array': return Array.isArray(value)
+    case 'object': return typeof value === 'object' && value !== null && !Array.isArray(value)
+    default: return false
   }
 }
 
