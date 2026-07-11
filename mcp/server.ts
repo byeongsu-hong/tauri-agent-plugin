@@ -85,12 +85,12 @@ async function callTool(
   target?: DebuggerTarget,
   profile?: 'core' | 'full'
 ): Promise<Record<string, unknown>> {
-  const request = objectParam(params)
+  const request = objectParam(params, 'tools/call params')
   const name = stringField(request, 'name')
   if (!names.has(name)) {
     throw new McpRequestError(-32602, `unknown MCP tool: ${name}`)
   }
-  const args = objectParam(request.arguments ?? {})
+  const args = objectParam(request.arguments, 'tool arguments')
   const client = await debuggerClient(args, target)
   const result = await executeTool(client, name, args, profile)
   const response: Record<string, unknown> = {
@@ -283,7 +283,7 @@ async function htmlFromArgs(args: ToolCallArgs): Promise<string> {
 }
 
 function initializeResult(params: unknown): Record<string, unknown> {
-  const requested = objectParam(params).protocolVersion
+  const requested = objectParam(params, 'initialize params').protocolVersion
   return {
     protocolVersion: requested === MCP_PROTOCOL_VERSION ? requested : MCP_PROTOCOL_VERSION,
     capabilities: { tools: { listChanged: false } },
@@ -571,20 +571,28 @@ function parseJsonRpcRequest(message: string): JsonRpcRequest {
   return parsed
 }
 
-function objectParam(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {}
+function objectParam(value: unknown, name: string): Record<string, unknown> {
+  if (value === undefined) return {}
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new McpRequestError(-32602, `${name} must be an object`)
+  }
+  return value as Record<string, unknown>
 }
 
 function stringField(value: Record<string, unknown>, field: string, fallback = ''): string {
   const fieldValue = value[field]
-  return typeof fieldValue === 'string' ? fieldValue : fallback
+  if (fieldValue === undefined) return fallback
+  if (typeof fieldValue !== 'string') throw new McpRequestError(-32602, `${field} must be a string`)
+  return fieldValue
 }
 
 function numberField(value: Record<string, unknown>, field: string): number | undefined {
   const fieldValue = value[field]
-  return typeof fieldValue === 'number' ? fieldValue : undefined
+  if (fieldValue === undefined) return undefined
+  if (typeof fieldValue !== 'number' || !Number.isFinite(fieldValue)) {
+    throw new McpRequestError(-32602, `${field} must be a finite number`)
+  }
+  return fieldValue
 }
 
 function jsonRpcResult(id: string | number, result: unknown): string {
