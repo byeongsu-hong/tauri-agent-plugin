@@ -35,6 +35,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   generic actions to `text`/`key` before reaching the strict guest bridge.
 - Ref and atomic actions now reject missing or action-incompatible values
   instead of converting them to empty text or a checked state.
+- The Rust inline JSON-RPC server now rejects explicit null, array, and scalar
+  `params` envelopes consistently with the TypeScript daemon.
 
 ## [0.0.2] - 2026-07-11
 
