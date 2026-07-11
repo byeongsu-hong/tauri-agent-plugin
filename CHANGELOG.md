@@ -6,6 +6,22 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-07-11
+
+### Added
+
+- **Runtime selection.** Wry remains the default; CEF apps can disable default
+  features and enable the `cef` feature without pulling in Wry.
+
+### Fixed
+
+- Adding a second webview no longer makes a healthy guest registration disappear
+  from bridge targeting and window discovery.
+- Guest instrumentation now keeps installing when Tauri exposes its optional IPC
+  tracing hook as read-only, as Wry does.
+
+## [0.0.1] - 2026-07-08
+
 ### Added
 
 - **VNC advertise-only surface.** Optional `vnc` plugin config published into the
@@ -54,4 +70,6 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - macOS-only native-screenshot helpers are `cfg`-gated so clippy is clean on
   Linux/Windows.
 
-[Unreleased]: https://github.com/byeongsu-hong/tauri-agent-plugin/commits/main
+[Unreleased]: https://github.com/byeongsu-hong/tauri-agent-plugin/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/byeongsu-hong/tauri-agent-plugin/compare/v0.0.1...v0.0.2
+[0.0.1]: https://github.com/byeongsu-hong/tauri-agent-plugin/releases/tag/v0.0.1

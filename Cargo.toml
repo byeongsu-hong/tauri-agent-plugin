@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-agent"
-version = "0.0.1"
+version = "0.0.2"
 description = "Agent-facing control surface for live Tauri apps using compact semantic trees."
 edition = "2021"
 rust-version = "1.77.2"
@@ -25,6 +25,12 @@ include = [
 crate-type = ["lib"]
 
 [features]
+# Preserve the normal Tauri experience for existing adopters. CEF apps opt out
+# of this default and enable `cef`; the app owns its concrete CEF runtime while
+# this plugin stays generic over `tauri::Runtime`.
+default = ["wry"]
+wry = ["tauri/wry"]
+cef = []
 # Address individual child webviews within a window (tree/find/click/etc. by
 # webview label, and child webviews listed by `windows`). Requires Tauri's
 # `unstable` API surface, so it is opt-in rather than on by default.
@@ -37,14 +43,14 @@ tauri-plugin = { version = "2", features = ["build"] }
 serde_json = "1"
 # `unstable` lets tests exercise the multiwebview `add_child` path (#39); it
 # only affects test builds via feature unification, not the published crate.
-tauri = { version = "2", features = ["test", "unstable"] }
+tauri = { version = "2", default-features = false, features = ["test", "unstable"] }
 
 [dependencies]
 base64 = "0.22"
 getrandom = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = "2"
+tauri = { version = "2", default-features = false }
 thiserror = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies.objc2-app-kit]

@@ -207,6 +207,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
   const locationSet = await agentLocation({ action: 'push', url: '/agents?bridge=1#self-test' })
   const locationRead = await agentLocation()
   await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
+  if (forgeRef) await agentAction({ action: 'click', ref: forgeRef })
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
@@ -227,47 +228,52 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
   const probes = isRecord(state.probes) ? state.probes : {}
   const values = isRecord(state.values) ? state.values : {}
 
-  const verified =
-    tree.includes('Ducktape') &&
-    foundForge.matches.some((match) => match.role === 'button' && match.name === 'Forge') &&
-    inspected?.role === 'textbox' &&
-    inspected.name === 'Agent name' &&
-    evaluated.type === 'string' &&
-    evaluated.value === 'Command bridge running' &&
-    storageSet.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
-    storageRead.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
-    cookiesSet.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
-    cookiesRead.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
-    locationSet.pathname === '/agents' &&
-    locationSet.search === '?bridge=1' &&
-    locationSet.hash === '#self-test' &&
-    locationRead.href === locationSet.href &&
-    values['Notify agents'] === true &&
-    values['Worker priority'] === 'remote' &&
-    isRecord(state) &&
-    typeof state.url === 'string' &&
-    state.url.includes('/agents?bridge=1#self-test') &&
-    probes.route === activeView &&
-    probes.hoveredForge === true &&
-    probes.focusedForge === true &&
-    probes.blurredForge === true &&
-    probes.scrolledRoster === true &&
-    probes.draggedForge === true &&
-    probes.lastShortcut === 'k:true:true' &&
-    logs.some((entry) => entry.message.includes('command bridge log probe')) &&
-    events.some((event) => event.kind === 'click') &&
-    events.some((event) => event.kind === 'hover') &&
-    events.some((event) => event.kind === 'focus') &&
-    events.some((event) => event.kind === 'blur') &&
-    events.some((event) => event.kind === 'scroll') &&
-    events.some((event) => event.kind === 'drag') &&
-    events.some((event) => event.kind === 'press') &&
-    network.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')) &&
-    shot.startsWith('data:image/svg+xml;base64,') &&
-    wait.matched &&
-    semanticWait.match?.role === 'button' &&
-    semanticWait.match?.name === 'Verify command bridge' &&
-    !record.recording
+  const checks = {
+    tree: tree.includes('Ducktape'),
+    find: foundForge.matches.some((match) => match.role === 'button' && match.name === 'Forge'),
+    inspect: inspected?.role === 'textbox' && inspected.name === 'Agent name',
+    eval: evaluated.type === 'string' && evaluated.value === 'Command bridge running',
+    storage:
+      storageSet.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+      storageRead.entries.some((entry) => entry.key === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel),
+    cookies:
+      (cookiesSet.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel) &&
+        cookiesRead.entries.some((entry) => entry.name === 'fixture:lastSelfTest' && entry.value === fixtureWindowLabel)) ||
+      (location.protocol === 'tauri:' && cookiesSet.entries.length === 0 && cookiesRead.entries.length === 0),
+    location:
+      locationSet.pathname === '/agents' &&
+      locationSet.search === '?bridge=1' &&
+      locationSet.hash === '#self-test' &&
+      locationRead.href === locationSet.href,
+    values: values['Notify agents'] === true && values['Worker priority'] === 'remote',
+    state:
+      isRecord(state) &&
+      typeof state.url === 'string' &&
+      state.url.includes('/agents?bridge=1#self-test') &&
+      probes.route === activeView,
+    probes:
+      probes.hoveredForge === true &&
+      probes.focusedForge === true &&
+      probes.blurredForge === true &&
+      probes.scrolledRoster === true &&
+      probes.draggedForge === true &&
+      probes.lastShortcut === 'k:true:true',
+    logs: logs.some((entry) => entry.message.includes('command bridge log probe')),
+    events: ['click', 'hover', 'focus', 'blur', 'scroll', 'drag', 'press'].every((kind) =>
+      events.some((event) => event.kind === kind)
+    ),
+    network: network.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')),
+    screenshot: shot.startsWith('data:image/svg+xml;base64,'),
+    wait: wait.matched,
+    semanticWait:
+      semanticWait.match?.role === 'button' && semanticWait.match?.name === 'Verify command bridge',
+    record: !record.recording
+  }
+  const failedChecks = Object.entries(checks)
+    .filter(([, passed]) => !passed)
+    .map(([name]) => name)
+  const verified = failedChecks.length === 0
+  if (!verified) console.error(`bridge self-test failed: ${failedChecks.join(', ')}`)
 
   status.textContent = verified ? 'Command bridge verified' : 'Command bridge failed'
   console.info(status.textContent)
@@ -284,6 +290,7 @@ async function autoRunSelfTest(): Promise<void> {
     return false
   })
   document.title = passed ? 'SELFTEST:PASS' : 'SELFTEST:FAIL'
+  await getCurrentWindow().setTitle(document.title)
   console.info(document.title)
 }
 

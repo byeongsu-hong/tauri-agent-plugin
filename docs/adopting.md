@@ -7,6 +7,13 @@ can drive it.
 
 1. **Add the crate** to `src-tauri/Cargo.toml` and register the plugin:
 
+   Wry is the default. CEF apps disable it and select the CEF feature while the
+   app supplies its concrete CEF runtime:
+
+   ```toml
+   tauri-plugin-agent = { version = "0.0.2", default-features = false, features = ["cef"] }
+   ```
+
    ```rust
    tauri::Builder::default()
      .plugin(tauri_plugin_agent::init())

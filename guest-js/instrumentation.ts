@@ -979,10 +979,9 @@ export class WebviewAgentInstrumentation {
     if (!internals || typeof internals.invoke !== 'function' || this.originalInvoke) {
       return
     }
+    const originalInvoke = internals.invoke
     const original = internals.invoke.bind(internals)
-    this.ipcTarget = internals
-    this.originalInvoke = internals.invoke
-    internals.invoke = (command: string, args?: unknown, options?: unknown): Promise<unknown> => {
+    const wrappedInvoke = (command: string, args?: unknown, options?: unknown): Promise<unknown> => {
       const promise = original(command, args, options)
       // Skip the agent's own bridge traffic so tracing stays signal, not noise.
       if (typeof command === 'string' && !command.startsWith('plugin:agent|')) {
@@ -1003,6 +1002,15 @@ export class WebviewAgentInstrumentation {
       }
       return promise
     }
+    try {
+      internals.invoke = wrappedInvoke
+    } catch {
+      // Tauri may expose this security-sensitive hook as read-only. IPC tracing
+      // is optional, so do not prevent the rest of the agent from installing.
+      return
+    }
+    this.ipcTarget = internals
+    this.originalInvoke = originalInvoke
   }
 
   private recordAction(action: InstrumentedAction): void {
