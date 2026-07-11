@@ -304,6 +304,30 @@ describe('tauri-agent MCP server', () => {
     })
   })
 
+  it.each([
+    ['null', -32600],
+    [JSON.stringify({ jsonrpc: '2.0', id: null, method: 'tools/list' }), -32600],
+    [JSON.stringify({ jsonrpc: '2.0', id: true, method: 'tools/list' }), -32600],
+    ['{"jsonrpc":"2.0","id":1e400,"method":"tools/list"}', -32600]
+  ])('rejects malformed MCP request envelopes %#', async (request, code) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(request)))).toMatchObject({
+      id: null,
+      error: { code }
+    })
+  })
+
+  it.each([
+    [{ jsonrpc: '2.0', id: 34, method: 'tools/list', params: [] }, 'tools/list params must be an object'],
+    [{ jsonrpc: '2.0', id: 35, method: 'initialize', params: { protocolVersion: 1 } }, 'protocolVersion must be a string'],
+    [{ jsonrpc: '2.0', id: 36, method: 'initialize', params: {} }, 'protocolVersion must be a string']
+  ])('rejects malformed MCP method params %#', async (request, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify(request))))).toEqual({
+      jsonrpc: '2.0',
+      id: request.id,
+      error: { code: -32602, message }
+    })
+  })
+
   it('polls followed log tools and returns accumulated entries', async () => {
     const fakeServer = await startFakeRpcServer({
       logs: (callIndex: number) =>
