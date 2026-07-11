@@ -338,6 +338,21 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_attach', arguments: {} }, 'MCP tool call requires exactly one connection source: app, port, html, or fromHtml'],
+    [{ name: 'tauri_attach', arguments: { app: 'fleet', html: '<main></main>' } }, 'MCP tool call requires exactly one connection source: app, port, html, or fromHtml'],
+    [{ name: 'tauri_attach', arguments: { html: '<main></main>', host: 'localhost' } }, 'host requires a port connection source'],
+    [{ name: 'tauri_attach', arguments: { app: '   ' } }, 'MCP tool call requires exactly one connection source: app, port, html, or fromHtml']
+  ])('requires one unambiguous per-call MCP connection source %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 40, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 40,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],

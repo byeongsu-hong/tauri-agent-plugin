@@ -35,6 +35,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   bounds for cursors, limits, timeouts, polling intervals, and ports.
 - MCP tool calls now enforce advertised scalar, enum, array, and upload-object
   schemas before opening a debugger connection.
+- Per-call MCP tools now require exactly one connection source and reject
+  ambiguous targets or `host` without `port`.
 - Static daemon and MCP window controls now enforce the same `i32` position and
   positive `u32` size bounds as the Rust plugin.
 - Live bridge requests now return `INVALID_PARAMS` for malformed scalar,

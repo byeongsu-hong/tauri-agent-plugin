@@ -97,7 +97,7 @@ async function callTool(
     throw new McpRequestError(-32602, `unknown MCP tool: ${name}`)
   }
   const args = objectParam(request.arguments, 'tool arguments')
-  validateToolArguments(args, definition)
+  validateToolArguments(args, definition, target !== undefined)
   const client = await debuggerClient(args, target)
   const result = await executeTool(client, name, args, profile)
   const response: Record<string, unknown> = {
@@ -108,7 +108,11 @@ async function callTool(
   return response
 }
 
-function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): void {
+function validateToolArguments(
+  args: ToolCallArgs,
+  definition: ToolDefinition,
+  hasConfiguredTarget: boolean
+): void {
   const allowed = new Set(Object.keys(definition.inputSchema.properties))
   for (const key of Object.keys(args)) {
     if (!allowed.has(key)) {
@@ -150,6 +154,25 @@ function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): 
   }
   for (const [field, fieldSchema] of Object.entries(definition.inputSchema.properties)) {
     if (args[field] !== undefined) validateSchemaValue(args[field], fieldSchema, field)
+  }
+  if (!hasConfiguredTarget) validateConnectionArguments(args)
+}
+
+function validateConnectionArguments(args: ToolCallArgs): void {
+  const sources = [
+    typeof args.app === 'string' && args.app.trim() ? 'app' : undefined,
+    args.port !== undefined ? 'port' : undefined,
+    typeof args.html === 'string' && args.html ? 'html' : undefined,
+    typeof args.fromHtml === 'string' && args.fromHtml.trim() ? 'fromHtml' : undefined
+  ].filter((source): source is string => source !== undefined)
+  if (sources.length !== 1) {
+    throw new McpRequestError(
+      -32602,
+      'MCP tool call requires exactly one connection source: app, port, html, or fromHtml'
+    )
+  }
+  if (args.host !== undefined && sources[0] !== 'port') {
+    throw new McpRequestError(-32602, 'host requires a port connection source')
   }
 }
 
