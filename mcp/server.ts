@@ -290,6 +290,9 @@ function validateSchemaValue(value: unknown, schema: unknown, path: string): voi
       break
     case 'array':
       if (!Array.isArray(value)) throw new McpRequestError(-32602, `${path} must be an array`)
+      if (typeof rule.minItems === 'number' && value.length < rule.minItems) {
+        throw new McpRequestError(-32602, `${path} must contain at least ${rule.minItems} item`)
+      }
       for (const [index, item] of value.entries()) validateSchemaValue(item, rule.items, `${path}[${index}]`)
       break
     case 'object': {
@@ -579,6 +582,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   hasState: { type: 'string', description: 'expect: state flag the matched element must have (e.g. disabled, checked).' },
   files: {
     type: 'array',
+    minItems: 1,
     description: 'upload: synthetic files to set on a file input.',
     items: {
       type: 'object',
