@@ -715,7 +715,7 @@ export class WebviewAgentInstrumentation {
           role: stringParam(params, 'role'),
           name: stringParam(params, 'name'),
           text: stringParam(params, 'text'),
-          limit: numberParam(params, 'limit')
+          limit: unsignedIntegerParam(params, 'limit')
         })
       case 'act':
         return this.act({
@@ -727,7 +727,7 @@ export class WebviewAgentInstrumentation {
           value: stringOrBooleanParam(params, 'value'),
           x: numberParam(params, 'x'),
           y: numberParam(params, 'y'),
-          timeoutMs: numberParam(params, 'timeoutMs'),
+          timeoutMs: unsignedIntegerParam(params, 'timeoutMs'),
           detail: booleanParam(params, 'detail')
         })
       case 'click':
@@ -809,11 +809,11 @@ export class WebviewAgentInstrumentation {
           scope: stringParam(params, 'scope'),
           role: stringParam(params, 'role'),
           name: stringParam(params, 'name'),
-          timeoutMs: numberParam(params, 'timeoutMs'),
+          timeoutMs: unsignedIntegerParam(params, 'timeoutMs'),
           state: enumParam(params, 'state', ['present', 'absent'], 'wait state'),
           fn: stringParam(params, 'fn'),
           networkIdle: booleanParam(params, 'networkIdle'),
-          idleMs: numberParam(params, 'idleMs')
+          idleMs: unsignedIntegerParam(params, 'idleMs')
         })
       case 'expect':
         return this.expect({
@@ -837,8 +837,8 @@ export class WebviewAgentInstrumentation {
         return this.record(recordActionParam(params))
       case 'stream':
         return this.stream({
-          since: numberParam(params, 'since'),
-          timeoutMs: numberParam(params, 'timeoutMs'),
+          since: unsignedIntegerParam(params, 'since'),
+          timeoutMs: unsignedIntegerParam(params, 'timeoutMs'),
           lean: booleanParam(params, 'lean')
         })
       default:
@@ -1299,6 +1299,15 @@ function numberParam(params: Record<string, unknown>, key: string): number | und
   return value
 }
 
+function unsignedIntegerParam(params: Record<string, unknown>, key: string): number | undefined {
+  const value = params[key]
+  if (value === undefined) return undefined
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    return invalidParam(`${key} must be a non-negative safe integer`)
+  }
+  return value as number
+}
+
 function booleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
   const value = params[key]
   if (value === undefined) return undefined
@@ -1315,8 +1324,8 @@ function stringOrBooleanParam(params: Record<string, unknown>, key: string): str
 function captureParams(params: Record<string, unknown>): NetworkParams {
   return {
     clear: booleanParam(params, 'clear'),
-    since: numberParam(params, 'since'),
-    limit: numberParam(params, 'limit'),
+    since: unsignedIntegerParam(params, 'since'),
+    limit: unsignedIntegerParam(params, 'limit'),
     id: stringParam(params, 'id')
   }
 }
