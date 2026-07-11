@@ -111,6 +111,25 @@ fn rust_endpoint_descriptor_advertises_optional_vnc_surface() {
 }
 
 #[test]
+fn rust_endpoint_descriptors_reject_invalid_numeric_and_optional_fields() {
+    for descriptor in [
+        r#"{"appId":"a","pid":-1,"transport":"tcp","host":"127.0.0.1","port":1}"#,
+        r#"{"appId":"a","pid":1.5,"transport":"tcp","host":"127.0.0.1","port":1}"#,
+        r#"{"appId":"a","pid":4294967296,"transport":"tcp","host":"127.0.0.1","port":1}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":-1}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1.5}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":65536}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"token":true}"#,
+        r#"{"appId":"a","pid":1,"transport":"tcp","host":"127.0.0.1","port":1,"vnc":{"host":"x","port":1,"novncUrl":true}}"#,
+    ] {
+        assert!(
+            serde_json::from_str::<AgentEndpointDescriptor>(descriptor).is_err(),
+            "accepted invalid descriptor: {descriptor}"
+        );
+    }
+}
+
+#[test]
 fn rust_endpoint_registry_round_trips_app_scoped_files() {
     let runtime_base =
         std::env::temp_dir().join(format!("tauri-agent-rust-endpoint-{}", std::process::id()));

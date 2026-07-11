@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -83,12 +83,12 @@ export function createEndpointDescriptor(options: EndpointDescriptorOptions): En
 
 export function parseEndpointDescriptor(json: string): EndpointDescriptor {
   const parsed = JSON.parse(json) as unknown
-  if (!isObject(parsed) || typeof parsed.appId !== 'string' || typeof parsed.pid !== 'number') {
+  if (!isObject(parsed) || typeof parsed.appId !== 'string' || !isU32(parsed.pid)) {
     throw new Error('invalid endpoint descriptor')
   }
 
   const vnc = parseVnc(parsed.vnc)
-  const token = typeof parsed.token === 'string' ? { token: parsed.token } : {}
+  const token = optionalString(parsed.token, 'token')
 
   if (
     parsed.transport === 'unix' &&
@@ -107,7 +107,7 @@ export function parseEndpointDescriptor(json: string): EndpointDescriptor {
   if (
     parsed.transport === 'tcp' &&
     typeof parsed.host === 'string' &&
-    typeof parsed.port === 'number'
+    isU16(parsed.port)
   ) {
     return {
       appId: parsed.appId,
@@ -127,13 +127,11 @@ function parseVnc(value: unknown): { vnc?: VncEndpoint } {
   if (value === undefined || value === null) {
     return {}
   }
-  if (!isObject(value) || typeof value.host !== 'string' || typeof value.port !== 'number') {
+  if (!isObject(value) || typeof value.host !== 'string' || !isU16(value.port)) {
     throw new Error('invalid endpoint descriptor')
   }
   const vnc: VncEndpoint = { host: value.host, port: value.port }
-  if (typeof value.novncUrl === 'string') {
-    vnc.novncUrl = value.novncUrl
-  }
+  Object.assign(vnc, optionalString(value.novncUrl, 'novncUrl'))
   return { vnc }
 }
 
@@ -142,12 +140,20 @@ export async function writeEndpointRegistry(
   options: { env?: EndpointPathOptions['env'] } = {}
 ): Promise<void> {
   const runtimeDir = endpointRuntimeDir({ appId: descriptor.appId, env: options.env })
+  const path = endpointRegistryPath({ appId: descriptor.appId, env: options.env })
+  const temporaryPath = join(runtimeDir, `endpoint.tmp.${process.pid}`)
   await mkdir(runtimeDir, { recursive: true })
-  await writeFile(
-    endpointRegistryPath({ appId: descriptor.appId, env: options.env }),
-    `${JSON.stringify(descriptor, null, 2)}\n`,
-    'utf8'
-  )
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(descriptor, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600
+    })
+    await chmod(temporaryPath, 0o600)
+    await rename(temporaryPath, path)
+  } catch (error) {
+    await rm(temporaryPath, { force: true }).catch(() => {})
+    throw error
+  }
 }
 
 export async function readEndpointRegistry(
@@ -191,6 +197,20 @@ function safeAppId(appId: string): string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isU32(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff_ffff
+}
+
+function isU16(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff
+}
+
+function optionalString(value: unknown, key: string): Record<string, string> {
+  if (value === undefined || value === null) return {}
+  if (typeof value !== 'string') throw new Error('invalid endpoint descriptor')
+  return { [key]: value }
 }
 
 function isNotFound(error: unknown): boolean {
