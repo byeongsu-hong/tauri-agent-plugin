@@ -160,8 +160,13 @@ export type AgentActionRequest =
   | {
       window?: string
       ref: string
-      action: 'click' | 'fill'
-      value?: string
+      action: 'click'
+    }
+  | {
+      window?: string
+      ref: string
+      action: 'fill'
+      value: string
     }
   | {
       window?: string

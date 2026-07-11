@@ -75,7 +75,7 @@ export class DebuggerSession {
           toRef: stringParam(params.toRef)
         })
       case 'type':
-        return this.app.type(requiredString(params.ref, 'ref'), stringParam(params.text) ?? '')
+        return this.app.type(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'fill':
         return this.app.fill(requiredString(params.ref, 'ref'), requiredString(params.text, 'text'))
       case 'select':

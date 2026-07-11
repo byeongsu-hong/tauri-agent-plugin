@@ -144,11 +144,15 @@ pub async fn agent_action<R: Runtime>(
         AgentAction::Click => serde_json::json!({ "ref": request.ref_id }),
         AgentAction::Fill => serde_json::json!({
             "ref": request.ref_id,
-            "text": request.value.as_deref().unwrap_or_default()
+            "text": request.value.as_deref().ok_or_else(|| {
+                Error::InvalidParams("fill requires a string value".into())
+            })?
         }),
         AgentAction::Press => serde_json::json!({
             "ref": request.ref_id,
-            "key": request.value,
+            "key": request.value.as_deref().ok_or_else(|| {
+                Error::InvalidParams("press requires a string value".into())
+            })?,
             "modifiers": request.modifiers
         }),
     };

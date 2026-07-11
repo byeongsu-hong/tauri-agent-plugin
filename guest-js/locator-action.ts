@@ -41,8 +41,11 @@ export async function locateActionable(
 }
 
 function validateAction(params: ActParams): void {
-  if (['fill', 'type', 'press'].includes(params.action) && typeof params.value !== 'string') {
+  if (['fill', 'type', 'press', 'select'].includes(params.action) && typeof params.value !== 'string') {
     throw new AgentProtocolError('INVALID_PARAMS', `${params.action} requires a string value`)
+  }
+  if (params.action === 'check' && params.value !== undefined && typeof params.value !== 'boolean') {
+    throw new AgentProtocolError('INVALID_PARAMS', 'check value must be a boolean')
   }
 }
 
