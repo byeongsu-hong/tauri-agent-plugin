@@ -282,6 +282,18 @@ describe('DebuggerSession', () => {
     )
   })
 
+  it('rejects missing or malformed action values', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
+
+    await expect(session.execute('type', { ref: '@2' })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('act', {
+      role: 'combobox', name: 'Worker', action: 'select'
+    })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(session.execute('act', {
+      role: 'checkbox', name: 'Notify', action: 'check', value: 'true'
+    })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+  })
+
   it('controls static window state and bounds', async () => {
     const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html, title: 'Ducktape' }))
 

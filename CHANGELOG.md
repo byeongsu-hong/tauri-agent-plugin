@@ -33,6 +33,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enum, upload, and modifier fields; legacy `value` aliases are removed.
 - Typed Tauri commands now omit absent/null bridge fields and canonicalize
   generic actions to `text`/`key` before reaching the strict guest bridge.
+- Ref and atomic actions now reject missing or action-incompatible values
+  instead of converting them to empty text or a checked state.
 
 ## [0.0.2] - 2026-07-11
 

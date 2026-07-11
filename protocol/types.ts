@@ -130,11 +130,7 @@ export interface RefActionParams extends WindowTarget {
   ref: string
 }
 
-/**
- * Set a control's value in one shot. Canonical payload param is `text`; the
- * guest bridge also accepts a legacy `value` alias, but recordings and all
- * first-party surfaces emit `text`.
- */
+/** Set a control's value in one shot. Canonical payload param is `text`. */
 export interface FillParams extends RefActionParams {
   text: string
 }

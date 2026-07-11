@@ -338,6 +338,23 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('rejects missing or malformed atomic action values', async () => {
+    document.body.innerHTML = [
+      '<select aria-label="Worker"><option value="local">Local</option></select>',
+      '<input type="checkbox" aria-label="Notify" />'
+    ].join('')
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    try {
+      await expect(instrumentation.act({ role: 'combobox', name: 'Worker', action: 'select' }))
+        .rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+      await expect(instrumentation.act({ role: 'checkbox', name: 'Notify', action: 'check', value: 'true' }))
+        .rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('correlates action-caused logs, network, IPC, and events', async () => {
     type Internals = { invoke: (command: string, args?: unknown) => Promise<unknown> }
     const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }
