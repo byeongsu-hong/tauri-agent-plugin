@@ -868,8 +868,35 @@ export class WebviewAgentInstrumentation {
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const startedAtMs = Date.now()
       const url = fetchUrl(input)
-      if (isTauriIpcUrl(url)) {
-        return originalFetch.call(window, input, init)
+      const ipcCommand = tauriIpcCommand(url)
+      if (ipcCommand !== undefined) {
+        // ponytail: Tauri isolation/postMessage stays opaque; add a native interceptor if that mode needs tracing.
+        if (!ipcCommand || ipcCommand.startsWith('plugin:agent|') || this.originalInvoke) {
+          return originalFetch.call(window, input, init)
+        }
+        const entry: IpcEntry = {
+          id: `ipc-${++this.ipcEntryId}`,
+          command: ipcCommand,
+          startedAt: new Date(startedAtMs).toISOString(),
+          ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
+        }
+        const detail: IpcDetailRecord = { entry }
+        setCapped(this.ipcDetails, entry.id, detail)
+        this.capturedIpc.push(entry)
+        void fetchRequestDetail(input, init).then(({ body }) => {
+          if (body !== undefined) detail.args = body
+        })
+        try {
+          const response = await originalFetch.call(window, input, init)
+          const captured = await clonedResponseDetail(response)
+          if (captured.body !== undefined) detail.result = captured.body
+          finishIpcEntry(entry, startedAtMs, response.ok && response.headers.get('Tauri-Response') !== 'error')
+          return response
+        } catch (error) {
+          entry.error = error instanceof Error ? error.message : String(error)
+          finishIpcEntry(entry, startedAtMs, false)
+          throw error
+        }
       }
       const entry: NetworkEntry = {
         id: `fetch-${++this.networkEntryId}`,
@@ -961,7 +988,7 @@ export class WebviewAgentInstrumentation {
       body?: Document | XMLHttpRequestBodyInit | null
     ) {
       const meta = this.__agentNet
-      if (meta && !isTauriIpcUrl(meta.url)) {
+      if (meta && tauriIpcCommand(meta.url) === undefined) {
         const startedAtMs = Date.now()
         const entry: NetworkEntry = {
           id: `xhr-${++capture.networkEntryId}`,
@@ -1559,8 +1586,17 @@ function isRequest(value: RequestInfo | URL): value is Request {
   return typeof Request !== 'undefined' && value instanceof Request
 }
 
-function isTauriIpcUrl(url: string): boolean {
-  return url.startsWith('ipc://localhost/')
+function tauriIpcCommand(value: string): string | undefined {
+  try {
+    const url = new URL(value)
+    if (!(
+      (url.protocol === 'ipc:' && url.hostname === 'localhost') ||
+      ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname === 'ipc.localhost')
+    )) return undefined
+    return decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+  } catch {
+    return undefined
+  }
 }
 
 function storageAreaParam(params: Record<string, unknown>, key: string): 'local' | 'session' | undefined {

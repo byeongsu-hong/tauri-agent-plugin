@@ -25,4 +25,7 @@ bun run tauri:build -- --no-bundle  # produce the binary
 TAURI_AGENT_SELF_TEST=1 xvfb-run -a src-tauri/target/release/tauri-agent-fixture
 ```
 
-CI runs exactly this in the `e2e` job (`.github/workflows/ci.yml`).
+CI runs this in the `e2e` job, then launches the fixture again and runs
+`tests/live-fixture.ts`. That second pass discovers the published authenticated
+endpoint and drives both windows through the built CLI, including correlated
+diagnosis and network/IPC detail redaction.

@@ -21,6 +21,11 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Agent protocol v2 makes logs/events/network/IPC consistently return
   `{ entries, cursor, dropped }`; legacy bare-array capture responses are removed.
 
+### Fixed
+
+- IPC tracing now captures Tauri v2's immutable custom-protocol invoke path
+  instead of depending on replacing the read-only `__TAURI_INTERNALS__.invoke`.
+
 ## [0.0.2] - 2026-07-11
 
 ### Added
