@@ -33,6 +33,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   typed connection fields instead of silently applying defaults.
 - MCP numeric schemas and request validation now enforce protocol-safe integer
   bounds for cursors, limits, timeouts, polling intervals, and ports.
+- MCP tool calls now enforce advertised scalar, enum, array, and upload-object
+  schemas before opening a debugger connection.
 - Static daemon and MCP window controls now enforce the same `i32` position and
   positive `u32` size bounds as the Rust plugin.
 - Live bridge requests now return `INVALID_PARAMS` for malformed scalar,

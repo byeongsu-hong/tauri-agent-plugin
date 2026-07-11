@@ -320,6 +320,24 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_tree', arguments: { html: '<main></main>', mode: true } }, 'mode must be a string'],
+    [{ name: 'tauri_logs', arguments: { html: '<main></main>', follow: 'yes' } }, 'follow must be a boolean'],
+    [{ name: 'tauri_window', arguments: { html: '<main></main>', action: 'teleport' } }, 'action must be one of get, focus, show, hide, minimize, unminimize, maximize, unmaximize, setSize, setPosition'],
+    [{ name: 'tauri_press', arguments: { html: '<main></main>', key: 'k', modifiers: 'Meta' } }, 'modifiers must be an array'],
+    [{ name: 'tauri_press', arguments: { html: '<main></main>', key: 'k', modifiers: ['Hyper'] } }, 'modifiers[0] must be one of Alt, Control, Meta, Shift'],
+    [{ name: 'tauri_upload', arguments: { html: '<main></main>', ref: '@1', files: [{ text: 'body' }] } }, 'files[0].name is required'],
+    [{ name: 'tauri_upload', arguments: { html: '<main></main>', ref: '@1', files: [{ name: 'a.txt', text: 42 }] } }, 'files[0].text must be a string']
+  ])('rejects MCP arguments that violate scalar schemas %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 39, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 39,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],

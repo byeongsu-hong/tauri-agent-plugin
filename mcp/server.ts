@@ -148,6 +148,60 @@ function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): 
       }
     }
   }
+  for (const [field, fieldSchema] of Object.entries(definition.inputSchema.properties)) {
+    if (args[field] !== undefined) validateSchemaValue(args[field], fieldSchema, field)
+  }
+}
+
+function validateSchemaValue(value: unknown, schema: unknown, path: string): void {
+  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) return
+  const rule = schema as Record<string, unknown>
+  switch (rule.type) {
+    case 'string':
+      if (typeof value !== 'string') throw new McpRequestError(-32602, `${path} must be a string`)
+      break
+    case 'boolean':
+      if (typeof value !== 'boolean') throw new McpRequestError(-32602, `${path} must be a boolean`)
+      break
+    case 'number':
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new McpRequestError(-32602, `${path} must be a finite number`)
+      }
+      break
+    case 'integer':
+      if (!Number.isSafeInteger(value)) throw new McpRequestError(-32602, `${path} must be a safe integer`)
+      if (typeof rule.minimum === 'number' && (value as number) < rule.minimum) {
+        throw new McpRequestError(-32602, `${path} must be at least ${rule.minimum}`)
+      }
+      if (typeof rule.maximum === 'number' && (value as number) > rule.maximum) {
+        throw new McpRequestError(-32602, `${path} must be at most ${rule.maximum}`)
+      }
+      break
+    case 'array':
+      if (!Array.isArray(value)) throw new McpRequestError(-32602, `${path} must be an array`)
+      for (const [index, item] of value.entries()) validateSchemaValue(item, rule.items, `${path}[${index}]`)
+      break
+    case 'object': {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new McpRequestError(-32602, `${path} must be an object`)
+      }
+      const record = value as Record<string, unknown>
+      for (const required of Array.isArray(rule.required) ? rule.required : []) {
+        if (typeof required === 'string' && record[required] === undefined) {
+          throw new McpRequestError(-32602, `${path}.${required} is required`)
+        }
+      }
+      if (typeof rule.properties === 'object' && rule.properties !== null && !Array.isArray(rule.properties)) {
+        for (const [field, fieldSchema] of Object.entries(rule.properties as Record<string, unknown>)) {
+          if (record[field] !== undefined) validateSchemaValue(record[field], fieldSchema, `${path}.${field}`)
+        }
+      }
+      break
+    }
+  }
+  if (Array.isArray(rule.enum) && !rule.enum.includes(value)) {
+    throw new McpRequestError(-32602, `${path} must be one of ${rule.enum.join(', ')}`)
+  }
 }
 
 /**
