@@ -39,6 +39,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ambiguous targets or `host` without `port`.
 - MCP window and atomic-action tools now reject missing action-specific values
   and locators before opening a debugger connection.
+- MCP capture tools now reject conflicting follow, detail, and list options
+  instead of silently ignoring them or failing after connection.
 - Static daemon and MCP window controls now enforce the same `i32` position and
   positive `u32` size bounds as the Rust plugin.
 - Live bridge requests now return `INVALID_PARAMS` for malformed scalar,

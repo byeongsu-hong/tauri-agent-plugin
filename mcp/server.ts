@@ -183,6 +183,22 @@ function validateToolSemantics(args: ToolCallArgs, tool: string): void {
     )
     if (action !== 'press' && !hasLocator) throw new McpRequestError(-32602, 'act requires a locator')
   }
+  if (['tauri_logs', 'tauri_events', 'tauri_network', 'tauri_ipc'].includes(tool)) {
+    if (args.follow === true) {
+      if (args.id !== undefined) throw new McpRequestError(-32602, 'id cannot be combined with follow')
+      if (args.clear === true || args.limit !== undefined) {
+        throw new McpRequestError(-32602, 'follow cannot be combined with clear or limit')
+      }
+    } else if (args.pollMs !== undefined || args.timeoutMs !== undefined) {
+      throw new McpRequestError(-32602, 'pollMs and timeoutMs require follow=true')
+    }
+    if (typeof args.id === 'string') {
+      if (!args.id.trim()) throw new McpRequestError(-32602, 'id must be a non-empty string')
+      if (args.clear === true || args.since !== undefined || args.limit !== undefined) {
+        throw new McpRequestError(-32602, 'id cannot be combined with capture list options')
+      }
+    }
+  }
 }
 
 function validateConnectionArguments(args: ToolCallArgs): void {
