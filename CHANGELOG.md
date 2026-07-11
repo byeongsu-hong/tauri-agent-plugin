@@ -70,6 +70,9 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   response writes to flush instead of growing the writable buffer unchecked.
 - TypeScript JSON-RPC errors now preserve valid request ids for unknown methods,
   matching the Rust inline server.
+- Agent, MCP, and Rust JSON-RPC boundaries now require numeric ids to be safe
+  integers, preventing fractional, infinite, or precision-losing ids from
+  changing during parsing and serialization.
 - Static `serve` mode now binds only to `127.0.0.1`; its unauthenticated daemon
   can no longer be exposed through a configurable host.
 - TypeScript socket clients now cap newline-delimited responses at 64 MiB so a

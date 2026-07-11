@@ -4,6 +4,7 @@ import type { DebuggerSession } from './session'
 import {
   createErrorResponse,
   createSuccessResponse,
+  isJsonRpcId,
   parseJsonRpcMessage,
   UnknownAgentMethodError
 } from '../protocol/json-rpc'
@@ -144,7 +145,7 @@ export function parseResponse(message: string): JsonRpcResponse {
   } catch {
     return invalidResponse('invalid JSON-RPC response')
   }
-  if (!isObject(parsed) || parsed.jsonrpc !== '2.0' || !validId(parsed.id)) {
+  if (!isObject(parsed) || parsed.jsonrpc !== '2.0' || !isJsonRpcId(parsed.id)) {
     return invalidResponse('invalid JSON-RPC response')
   }
   const hasResult = Object.hasOwn(parsed, 'result')
@@ -159,10 +160,6 @@ export function parseResponse(message: string): JsonRpcResponse {
     }
   }
   return parsed as unknown as JsonRpcResponse
-}
-
-function validId(value: unknown): value is string | number {
-  return typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

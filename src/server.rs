@@ -519,7 +519,11 @@ fn error_code(error: &Error) -> &str {
 }
 
 fn is_valid_id(id: &Value) -> bool {
-    id.is_string() || id.is_number()
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    id.is_string()
+        || id.as_f64().is_some_and(|number| {
+            number.is_finite() && number.fract() == 0.0 && number.abs() <= MAX_SAFE_INTEGER
+        })
 }
 
 #[cfg(test)]
@@ -599,6 +603,31 @@ mod tests {
                 json!({
                     "code": "INVALID_PARAMS",
                     "message": "params must be an object"
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn inline_server_rejects_non_safe_integer_ids() {
+        for id in ["1.5", "9007199254740992", "1e400"] {
+            let response = respond(
+                &FakeBackend,
+                &format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"windows"}}"#),
+            );
+            assert_eq!(
+                serde_json::from_str::<Value>(&response).unwrap(),
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 0,
+                    "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": if id == "1e400" {
+                            "invalid JSON-RPC message"
+                        } else {
+                            "invalid JSON-RPC 2.0 message"
+                        }
+                    }
                 })
             );
         }

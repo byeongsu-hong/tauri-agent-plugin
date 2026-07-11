@@ -78,6 +78,8 @@ describe('debugger JSON-RPC transport', () => {
       JSON.stringify({ jsonrpc: '2.0', id: 1 }),
       JSON.stringify({ jsonrpc: '2.0', id: 1, result: null, error: { code: 'NOPE', message: 'bad' } }),
       JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 1, message: 'bad' } }),
+      '{"jsonrpc":"2.0","id":1.5,"result":null}',
+      '{"jsonrpc":"2.0","id":9007199254740992,"result":null}',
       JSON.stringify({ jsonrpc: '2.0', id: 2, result: null })
     ]) {
       const client = new DebuggerClient({ send: async () => response })
