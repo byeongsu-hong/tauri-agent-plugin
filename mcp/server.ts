@@ -199,6 +199,25 @@ function validateToolSemantics(args: ToolCallArgs, tool: string): void {
       }
     }
   }
+  if (tool === 'tauri_storage') {
+    if (['set', 'remove'].includes(args.action as string) && !args.key) {
+      throw new McpRequestError(-32602, 'storage action requires key')
+    }
+    if (args.action === 'set' && args.value === undefined) {
+      throw new McpRequestError(-32602, 'storage set requires value')
+    }
+  }
+  if (tool === 'tauri_cookies') {
+    if (['set', 'remove'].includes(args.action as string) && !args.name) {
+      throw new McpRequestError(-32602, 'cookie action requires name')
+    }
+    if (args.action === 'set' && args.value === undefined) {
+      throw new McpRequestError(-32602, 'cookie set requires value')
+    }
+  }
+  if (tool === 'tauri_location' && ['push', 'replace'].includes(args.action as string) && !args.url) {
+    throw new McpRequestError(-32602, 'location action requires url')
+  }
 }
 
 function validateConnectionArguments(args: ToolCallArgs): void {

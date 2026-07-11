@@ -387,6 +387,23 @@ describe('tauri-agent MCP server', () => {
   })
 
   it.each([
+    [{ name: 'tauri_storage', arguments: { html: '<main></main>', action: 'set', value: 'fleet' } }, 'storage action requires key'],
+    [{ name: 'tauri_storage', arguments: { html: '<main></main>', action: 'set', key: 'agent' } }, 'storage set requires value'],
+    [{ name: 'tauri_storage', arguments: { html: '<main></main>', action: 'remove' } }, 'storage action requires key'],
+    [{ name: 'tauri_cookies', arguments: { html: '<main></main>', action: 'set', name: 'agent' } }, 'cookie set requires value'],
+    [{ name: 'tauri_cookies', arguments: { html: '<main></main>', action: 'remove' } }, 'cookie action requires name'],
+    [{ name: 'tauri_location', arguments: { html: '<main></main>', action: 'push' } }, 'location action requires url']
+  ])('requires MCP action-specific storage, cookie, and location fields %#', async (params, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
+      jsonrpc: '2.0', id: 43, method: 'tools/call', params
+    }))))).toEqual({
+      jsonrpc: '2.0',
+      id: 43,
+      error: { code: -32602, message }
+    })
+  })
+
+  it.each([
     [{ name: 'tauri_find', arguments: { html: '<main></main>', limit: -1 } }, 'limit must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', since: 1.5 } }, 'since must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
