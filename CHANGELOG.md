@@ -35,6 +35,7 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   bounds for cursors, limits, timeouts, polling intervals, and ports.
 - MCP tool calls now enforce advertised scalar, union, enum, array, and
   upload-object schemas before opening a debugger connection.
+- MCP uploads now advertise and enforce at least one file.
 - Per-call MCP tools now require exactly one connection source and reject
   ambiguous targets or `host` without `port`.
 - MCP window and atomic-action tools now reject missing action-specific values
