@@ -102,6 +102,18 @@ describe('socket JSON-RPC transport', () => {
       error: { code: 'INVALID_REQUEST', message: 'request line exceeds the maximum length' }
     })
   })
+
+  it('caps concurrent connections and closes idle sockets', async () => {
+    server = createLineJsonRpcServer(
+      new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' })),
+      1024,
+      20
+    )
+    expect(server.maxConnections).toBe(64)
+    const port = await listen(server)
+
+    await expect(waitForSocketClose(port)).resolves.toBeUndefined()
+  })
 })
 
 async function listen(target: Server): Promise<number> {
@@ -129,5 +141,23 @@ async function rawCall(port: number, first: Buffer, second: Buffer): Promise<str
       }
     })
     socket.on('error', reject)
+  })
+}
+
+async function waitForSocketClose(port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ port, host: '127.0.0.1' })
+    const timer = setTimeout(() => {
+      socket.destroy()
+      reject(new Error('socket did not close after idle timeout'))
+    }, 1_000)
+    socket.on('close', () => {
+      clearTimeout(timer)
+      resolve()
+    })
+    socket.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
   })
 }

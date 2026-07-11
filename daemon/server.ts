@@ -42,16 +42,26 @@ export interface LineTransport {
 }
 
 const MAX_REQUEST_LINE_BYTES = 4 * 1024 * 1024
+const CONNECTION_IDLE_TIMEOUT_MS = 30_000
+const MAX_CONCURRENT_CONNECTIONS = 64
 
 export function createLineJsonRpcServer(
   session: DebuggerSession,
-  maxRequestLineBytes: number = MAX_REQUEST_LINE_BYTES
+  maxRequestLineBytes: number = MAX_REQUEST_LINE_BYTES,
+  idleTimeoutMs: number = CONNECTION_IDLE_TIMEOUT_MS
 ): Server {
   const handler = createDebuggerRpcHandler(session)
-  return createServer((socket) => handleLineSocket(socket, handler, maxRequestLineBytes))
+  const server = createServer((socket) => handleLineSocket(socket, handler, maxRequestLineBytes, idleTimeoutMs))
+  server.maxConnections = MAX_CONCURRENT_CONNECTIONS
+  return server
 }
 
-async function handleLineSocket(socket: Socket, handler: RpcHandler, maxRequestLineBytes: number): Promise<void> {
+async function handleLineSocket(
+  socket: Socket,
+  handler: RpcHandler,
+  maxRequestLineBytes: number,
+  idleTimeoutMs: number
+): Promise<void> {
   let buffer = ''
   let closed = false
   const stop = (): void => {
@@ -60,6 +70,7 @@ async function handleLineSocket(socket: Socket, handler: RpcHandler, maxRequestL
   // Without an error handler a client reset (ECONNRESET) raises an unhandled
   // 'error' event and crashes the daemon process.
   socket.setEncoding('utf8')
+  socket.setTimeout(idleTimeoutMs, () => socket.destroy())
   socket.on('error', stop)
   socket.on('close', stop)
   const rejectOversizedRequest = (): void => {

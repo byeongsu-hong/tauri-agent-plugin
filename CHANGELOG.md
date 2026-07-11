@@ -62,6 +62,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   chunks and enforce request limits per byte-counted line.
 - TypeScript line servers now match Rust by returning `INVALID_REQUEST` before
   closing an oversized request connection.
+- TypeScript line servers now match Rust's 30-second idle timeout and 64-client
+  concurrent connection cap.
 - TypeScript socket clients now cap newline-delimited responses at 64 MiB so a
   malformed peer cannot grow the receive buffer until timeout.
 - TypeScript endpoint registries now match Rust's integer and optional-field
