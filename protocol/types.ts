@@ -184,10 +184,7 @@ export interface EvalParams extends WindowTarget {
   code: string
 }
 
-/**
- * Dispatch a keyboard press. Canonical payload param is `key`; the guest bridge
- * also accepts a legacy `value` alias. `ref` optionally focuses a target first.
- */
+/** Dispatch a keyboard press. `ref` optionally focuses a target first. */
 export interface PressParams extends WindowTarget {
   key: string
   ref?: string
