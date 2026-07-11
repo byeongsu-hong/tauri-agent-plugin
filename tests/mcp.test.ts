@@ -279,6 +279,18 @@ describe('tauri-agent MCP server', () => {
     })
   })
 
+  it.each([
+    [{ jsonrpc: '2.0', id: 31, method: 'tools/call', params: [] }, 'tools/call params must be an object'],
+    [{ jsonrpc: '2.0', id: 32, method: 'tools/call', params: { name: 'tauri_attach', arguments: [] } }, 'tool arguments must be an object'],
+    [{ jsonrpc: '2.0', id: 33, method: 'tools/call', params: { name: 'tauri_attach', arguments: { port: '1234' } } }, 'port must be a finite number']
+  ])('rejects malformed MCP tool params %#', async (request, message) => {
+    expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify(request))))).toEqual({
+      jsonrpc: '2.0',
+      id: request.id,
+      error: { code: -32602, message }
+    })
+  })
+
   it('returns JSON-RPC parse errors for malformed MCP input', async () => {
     const response = JSON.parse(await requiredResponse(createMcpRequestHandler()('{not-json')))
 
