@@ -343,7 +343,16 @@ describe('WebviewAgentInstrumentation', () => {
     const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }
     const originalFetch = window.fetch
     window.fetch = async () => new Response('{"saved":true}', { headers: { 'content-type': 'application/json' } })
-    withInternals.__TAURI_INTERNALS__ = { invoke: async () => ({ saved: true }) }
+    const internals: Internals = {
+      invoke: async (command, args) => {
+        await window.fetch(`http://ipc.localhost/${encodeURIComponent(command)}`, {
+          method: 'POST', body: JSON.stringify(args)
+        })
+        return { saved: true }
+      }
+    }
+    Object.defineProperty(internals, 'invoke', { writable: false })
+    withInternals.__TAURI_INTERNALS__ = internals
     document.body.innerHTML = '<button>Save</button>'
     document.querySelector('button')?.addEventListener('click', () => {
       console.info('saving')
@@ -360,7 +369,9 @@ describe('WebviewAgentInstrumentation', () => {
         kind: 'click', traceId: result.traceId
       }))
       expect(instrumentation.network().entries).toContainEqual(expect.objectContaining({ traceId: result.traceId }))
-      expect(instrumentation.ipc().entries).toContainEqual(expect.objectContaining({ traceId: result.traceId }))
+      const ipc = instrumentation.ipc().entries.find((entry) => entry.traceId === result.traceId)
+      expect(ipc).toEqual(expect.objectContaining({ command: 'save_item', traceId: result.traceId }))
+      expect(instrumentation.ipc({ id: ipc!.id }).detail.args).toEqual({ token: '[REDACTED]' })
     } finally {
       instrumentation.dispose()
       window.fetch = originalFetch

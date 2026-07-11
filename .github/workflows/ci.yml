@@ -105,3 +105,21 @@ jobs:
           test -x "$bin" || { echo "fixture binary not found at $bin"; ls -la examples/fixture-app/src-tauri/target/release; exit 1; }
           TAURI_AGENT_SELF_TEST=1 xvfb-run -a "$bin"
           echo "fixture self-test passed"
+      - name: Drive the live fixture through endpoint discovery and CLI
+        env:
+          XDG_RUNTIME_DIR: ${{ runner.temp }}/tauri-agent-runtime
+        run: |
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          bin="examples/fixture-app/src-tauri/target/release/tauri-agent-fixture"
+          setsid xvfb-run -a "$bin" > fixture-external.log 2>&1 &
+          wrapper_pid=$!
+          cleanup() {
+            status=$?
+            kill -- "-$wrapper_pid" 2>/dev/null || true
+            wait "$wrapper_pid" 2>/dev/null || true
+            if [ "$status" -ne 0 ]; then sed -n '1,240p' fixture-external.log; fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          bun tests/live-fixture.ts

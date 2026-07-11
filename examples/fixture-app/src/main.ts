@@ -160,6 +160,12 @@ function render(): void {
     if (!name || !status) return
     status.textContent = `Registered ${name}`
     console.info(`registered ${name}`)
+    void fetch('/register?token=fixture-secret', {
+      method: 'POST',
+      headers: { authorization: 'Bearer fixture-secret' },
+      body: JSON.stringify({ name, token: 'fixture-secret' })
+    }).catch(() => undefined)
+    void getCurrentWindow().isVisible().catch(() => undefined)
   })
 
   appRoot.querySelector<HTMLButtonElement>('[data-action="bridge-self-test"]')?.addEventListener('click', () => {
