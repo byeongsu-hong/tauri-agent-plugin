@@ -334,6 +334,24 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('installs when Tauri exposes a read-only IPC invoke hook', () => {
+    type Internals = { invoke: (command: string, args?: unknown) => Promise<unknown> }
+    const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }
+    const internals = {} as Internals
+    Object.defineProperty(internals, 'invoke', {
+      value: async () => 'ok',
+      writable: false
+    })
+    withInternals.__TAURI_INTERNALS__ = internals
+    const instrumentation = new WebviewAgentInstrumentation()
+
+    expect(() => instrumentation.install()).not.toThrow()
+    expect(instrumentation.snapshot().text).toBeDefined()
+
+    instrumentation.dispose()
+    delete withInternals.__TAURI_INTERNALS__
+  })
+
   it('auto-handles alert/confirm/prompt per policy and records them', () => {
     document.body.innerHTML = '<main></main>'
     const instrumentation = new WebviewAgentInstrumentation()

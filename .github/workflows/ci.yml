@@ -64,7 +64,13 @@ jobs:
             librsvg2-dev
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      # The default build compiles the Wry feature. Run it where the hosted
+      # runtime loader is usable, then exercise the CEF feature without Wry on
+      # every platform (including Windows, whose runner cannot load WebView2 in
+      # a unit-test process: STATUS_ENTRYPOINT_NOT_FOUND).
+      - if: runner.os != 'Windows'
+        run: cargo test
+      - run: cargo test --no-default-features --features cef
 
   e2e:
     name: Fixture self-test (webkit2gtk under xvfb)

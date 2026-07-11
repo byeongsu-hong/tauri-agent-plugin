@@ -20,7 +20,7 @@ export default defineConfig([
     format: ['esm'],
     dts: false,
     sourcemap: true,
-    clean: false,
+    clean: true,
     outDir: 'dist-cli'
   }
 ])

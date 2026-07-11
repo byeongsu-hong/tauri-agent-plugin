@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default fixture permissions for tauri-agent testing.",
   "windows": ["main", "secondary"],
-  "permissions": ["core:default", "agent:default", "agent:allow-agent-eval"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "agent:default",
+    "agent:allow-agent-eval"
+  ]
 }

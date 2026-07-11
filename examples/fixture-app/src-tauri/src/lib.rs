@@ -12,7 +12,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_agent::init())
         .on_page_load(|webview, payload| {
-            if std::env::var(SELF_TEST_ENV).is_err() {
+            if std::env::var(SELF_TEST_ENV).is_err() || webview.label() != "main" {
                 return;
             }
             // Nudge the frontend into autorun mode by adding the `selfTest`

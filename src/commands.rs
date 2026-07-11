@@ -1,6 +1,9 @@
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State, WebviewWindow};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, Runtime, State, Webview, WebviewWindow,
+    Window,
+};
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
@@ -16,6 +19,7 @@ use crate::models::{
     AgentTypeRequest, AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
     ScreenshotBackend, WindowAction, WindowInfo,
 };
+use crate::registry::WebviewRegistry;
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
 use crate::{Error, Result};
 
@@ -475,7 +479,7 @@ pub(crate) fn capture_native_screenshot_for_request<R: Runtime>(
     app: &AppHandle<R>,
     request: &AgentScreenshotRequest,
 ) -> Result<Value> {
-    let window = target_webview_window(app, request.window.as_deref())?;
+    let (_, window) = target_window(app, request.window.as_deref())?;
     capture_native_screenshot(&window, request.path.as_deref())
 }
 
@@ -494,6 +498,18 @@ pub(crate) fn collect_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<WindowInfo>
     // that is not itself a webview-window so agents can address it by label.
     // Without the feature this adds nothing and the listing is unchanged.
     windows.extend(child_webview_infos(app));
+    // Registry fallback: tauri evicts a window from `webview_windows()` the
+    // moment it hosts a second webview, which would make every webview on it
+    // (including a healthy guest) vanish from this listing (#39).
+    if let Some(registry) = app.try_state::<WebviewRegistry<R>>() {
+        let seen: std::collections::HashSet<String> =
+            windows.iter().map(|info| info.label.clone()).collect();
+        for (label, window) in registry.entries() {
+            if !seen.contains(&label) {
+                windows.push(window_info_for(&label, &window));
+            }
+        }
+    }
     windows.sort_by(|a, b| a.label.cmp(&b.label));
     windows
 }
@@ -511,13 +527,25 @@ pub(crate) fn resolve_bridge_event_target<R: Runtime>(
         if app.webview_windows().contains_key(label) {
             return Ok(tauri::EventTarget::window(label));
         }
+        // A webview tauri evicted from `webview_windows()` because its window
+        // hosts more than one webview (#39). Guests listen with a
+        // `Window { label }` event target, so keep emitting to the window
+        // target the guest registered with.
+        if registry_contains(app, label) {
+            return Ok(tauri::EventTarget::window(label));
+        }
         if child_webview_label_exists(app, label) {
             return Ok(tauri::EventTarget::webview(label));
         }
         return Err(Error::WindowNotFound(label.to_string()));
     }
-    let target = target_webview_window(app, None)?;
-    Ok(tauri::EventTarget::window(target.label().to_string()))
+    let (label, _) = target_window(app, None)?;
+    Ok(tauri::EventTarget::window(label))
+}
+
+fn registry_contains<R: Runtime>(app: &AppHandle<R>, label: &str) -> bool {
+    app.try_state::<WebviewRegistry<R>>()
+        .is_some_and(|registry| registry.contains(label))
 }
 
 #[cfg(feature = "unstable-multiwebview")]
@@ -565,7 +593,7 @@ pub(crate) fn control_window<R: Runtime>(
     app: &AppHandle<R>,
     request: AgentWindowRequest,
 ) -> Result<WindowInfo> {
-    let window = target_webview_window(app, request.window.as_deref())?;
+    let (label, window) = target_window(app, request.window.as_deref())?;
     match request.action.unwrap_or(WindowAction::Get) {
         WindowAction::Get => {}
         WindowAction::Focus => window.set_focus()?,
@@ -578,7 +606,7 @@ pub(crate) fn control_window<R: Runtime>(
         WindowAction::SetSize => window.set_size(required_window_size(&request)?)?,
         WindowAction::SetPosition => window.set_position(required_window_position(&request)?)?,
     }
-    Ok(window_info(&window))
+    Ok(window_info_for(&label, &window))
 }
 
 /// Resolve the target webview window. With an explicit label, that window or an
@@ -614,6 +642,49 @@ pub(crate) fn target_webview_window<R: Runtime>(
         .ok_or_else(|| Error::WindowNotFound("main".into()))
 }
 
+/// Resolve the target as a `(webview label, host window)` pair. Prefers
+/// `target_webview_window`, then falls back to the plugin's webview registry —
+/// tauri evicts a window from `webview_windows()` once it hosts a second
+/// webview, which must not make the original webview unaddressable (#39).
+pub(crate) fn target_window<R: Runtime>(
+    app: &AppHandle<R>,
+    label: Option<&str>,
+) -> Result<(String, Window<R>)> {
+    match target_webview_window(app, label) {
+        Ok(webview_window) => {
+            let webview: &Webview<R> = webview_window.as_ref();
+            Ok((webview_window.label().to_string(), webview.window()))
+        }
+        Err(error) => registry_target(app, label).ok_or(error),
+    }
+}
+
+fn registry_target<R: Runtime>(
+    app: &AppHandle<R>,
+    label: Option<&str>,
+) -> Option<(String, Window<R>)> {
+    let registry = app.try_state::<WebviewRegistry<R>>()?;
+    if let Some(label) = label {
+        return registry
+            .window(label)
+            .map(|window| (label.to_string(), window));
+    }
+    // Mirror target_webview_window's default preference: `main`, then the
+    // focused entry, then the lexicographically-first label.
+    let mut entries = registry.entries();
+    if let Some(main) = entries.iter().find(|(label, _)| label == "main") {
+        return Some(main.clone());
+    }
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    if let Some(focused) = entries
+        .iter()
+        .find(|(_, window)| window.is_focused().unwrap_or(false))
+    {
+        return Some(focused.clone());
+    }
+    entries.into_iter().next()
+}
+
 fn required_window_size(request: &AgentWindowRequest) -> Result<PhysicalSize<u32>> {
     let width = request
         .width
@@ -637,8 +708,13 @@ fn required_window_position(request: &AgentWindowRequest) -> Result<PhysicalPosi
 }
 
 fn window_info<R: Runtime>(window: &WebviewWindow<R>) -> WindowInfo {
+    let webview: &Webview<R> = window.as_ref();
+    window_info_for(window.label(), &webview.window())
+}
+
+fn window_info_for<R: Runtime>(label: &str, window: &Window<R>) -> WindowInfo {
     WindowInfo {
-        label: window.label().to_string(),
+        label: label.to_string(),
         title: window.title().ok(),
         focused: window.is_focused().unwrap_or(false),
         visible: window.is_visible().unwrap_or(false),
@@ -665,9 +741,13 @@ fn window_bounds(
 
 pub(crate) fn ensure_window<R: Runtime>(app: &AppHandle<R>, label: Option<&str>) -> Result<()> {
     if let Some(label) = label {
-        // Accept webview-window labels, plus bare child-webview labels when the
+        // Accept webview-window labels, registry-tracked webviews on
+        // multi-webview windows (#39), plus bare child-webview labels when the
         // `unstable-multiwebview` feature is enabled.
-        if !app.webview_windows().contains_key(label) && !child_webview_label_exists(app, label) {
+        if !app.webview_windows().contains_key(label)
+            && !registry_contains(app, label)
+            && !child_webview_label_exists(app, label)
+        {
             return Err(Error::WindowNotFound(label.to_string()));
         }
     }
@@ -826,6 +906,74 @@ mod tests {
                 .map(|window| window.label)
                 .collect();
             assert_eq!(labels, vec!["about", "main"]);
+        }
+
+        fn app_with_plugin_and_windows(labels: &[&str]) -> tauri::App<tauri::test::MockRuntime> {
+            let app = mock_builder()
+                .plugin(crate::init())
+                .build(mock_context(noop_assets()))
+                .expect("mock app builds");
+            for label in labels {
+                WebviewWindowBuilder::new(&app, *label, WebviewUrl::default())
+                    .build()
+                    .expect("window builds");
+            }
+            app
+        }
+
+        // Regression test for #39: adding a second webview to a window makes
+        // tauri's `webview_windows()` evict that window, which used to drop
+        // the guest registration for the original webview.
+        #[test]
+        fn add_child_webview_keeps_existing_registrations() {
+            let app = app_with_plugin_and_windows(&["main"]);
+            let window = app.get_window("main").expect("window exists");
+            window
+                .add_child(
+                    tauri::webview::WebviewBuilder::new(
+                        "gateway-inline",
+                        WebviewUrl::App("index.html".into()),
+                    ),
+                    tauri::LogicalPosition::new(0.0, 0.0),
+                    tauri::LogicalSize::new(200.0, 200.0),
+                )
+                .expect("child webview builds");
+
+            // The upstream eviction this fix guards against: tauri no longer
+            // reports `main` as a webview window once it hosts two webviews.
+            assert!(app.get_webview_window("main").is_none());
+
+            // The plugin still resolves, targets, and lists the registration.
+            assert!(resolve_bridge_event_target(app.handle(), Some("main")).is_ok());
+            assert!(resolve_bridge_event_target(app.handle(), None).is_ok());
+            ensure_window(app.handle(), Some("main")).unwrap();
+            let (label, window) = target_window(app.handle(), Some("main")).unwrap();
+            assert_eq!(label, "main");
+            assert_eq!(window.label(), "main");
+            let (label, _) = target_window(app.handle(), None).unwrap();
+            assert_eq!(label, "main");
+
+            let labels: Vec<_> = collect_windows(app.handle())
+                .into_iter()
+                .map(|window| window.label)
+                .collect();
+            assert!(labels.contains(&"main".to_string()));
+            assert!(labels.contains(&"gateway-inline".to_string()));
+        }
+
+        #[test]
+        fn registry_eviction_is_scoped_to_the_destroyed_window() {
+            let app = app_with_plugin_and_windows(&["main", "other"]);
+            let registry = app
+                .try_state::<WebviewRegistry<tauri::test::MockRuntime>>()
+                .expect("plugin manages the registry");
+            assert!(registry.contains("main"));
+            assert!(registry.contains("other"));
+
+            registry.remove_window("other");
+
+            assert!(registry.contains("main"));
+            assert!(!registry.contains("other"));
         }
 
         #[test]
