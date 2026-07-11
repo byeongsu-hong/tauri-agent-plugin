@@ -10,7 +10,7 @@ import { createDebuggerRpcHandler, createLineJsonRpcServer } from '../daemon/ser
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
 import { isRecordableMethod } from '../protocol/json-rpc'
-import type { AgentMethod, KeyModifier, LocatorAction, RecordingEntry, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
+import type { AgentMethod, KeyModifier, LocatorAction, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -589,10 +589,7 @@ withConnectionOptions(
   const entries = recordingEntries(parsed)
   const client = await debuggerClient(options)
   for (const entry of entries) {
-    if (!isRecordableMethod(entry.method)) throw new Error(`recording contains unsupported method: ${entry.method}`)
-    const params = entry.params && typeof entry.params === 'object' && !Array.isArray(entry.params)
-      ? entry.params as Record<string, unknown>
-      : {}
+    const params = entry.params
     if (entry.method !== 'act' && 'ref' in params) {
       await client.call('tree', { window: options.window ?? params.window, scope: params.scope })
     }
@@ -844,18 +841,34 @@ function parseLocatorAction(value: string): LocatorAction {
   throw new Error(`invalid locator action: ${value}`)
 }
 
-function recordingEntries(value: unknown): RecordingEntry[] {
+function recordingEntries(value: unknown): Array<{ method: AgentMethod; params: Record<string, unknown> }> {
   const entries = Array.isArray(value)
     ? value
     : value && typeof value === 'object' && Array.isArray((value as { entries?: unknown }).entries)
       ? (value as { entries: unknown[] }).entries
       : undefined
   if (!entries) throw new Error('recording must be an array or an object with entries')
-  return entries.map((entry) => {
-    if (!entry || typeof entry !== 'object' || typeof (entry as { method?: unknown }).method !== 'string') {
+  return entries.map((entry, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       throw new Error('recording entry requires a method')
     }
-    return entry as RecordingEntry
+    const record = entry as Record<string, unknown>
+    if (typeof record.method !== 'string') {
+      throw new Error('recording entry requires a method')
+    }
+    if (!isRecordableMethod(record.method)) {
+      throw new Error(`recording contains unsupported method: ${record.method}`)
+    }
+    if (
+      record.params !== undefined &&
+      (typeof record.params !== 'object' || record.params === null || Array.isArray(record.params))
+    ) {
+      throw new Error(`recording entry ${index + 1} params must be an object`)
+    }
+    return {
+      method: record.method,
+      params: (record.params ?? {}) as Record<string, unknown>
+    }
   })
 }
 
