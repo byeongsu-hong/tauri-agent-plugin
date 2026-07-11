@@ -22,15 +22,29 @@ export class DebuggerSession {
         return this.app.attach()
       case 'windows':
         return this.app.windows()
-      case 'window':
+      case 'window': {
+        const action = windowActionParam(params.action)
+        const x = boundedIntegerParam(params.x, 'x', -2_147_483_648, 2_147_483_647)
+        const y = boundedIntegerParam(params.y, 'y', -2_147_483_648, 2_147_483_647)
+        const width = boundedIntegerParam(params.width, 'width', 0, 4_294_967_295)
+        const height = boundedIntegerParam(params.height, 'height', 0, 4_294_967_295)
+        if (action === 'setSize') {
+          if (!width) invalidParam('window setSize requires positive width')
+          if (!height) invalidParam('window setSize requires positive height')
+        }
+        if (action === 'setPosition') {
+          if (x === undefined) invalidParam('window setPosition requires x')
+          if (y === undefined) invalidParam('window setPosition requires y')
+        }
         return this.app.window({
           window: stringParam(params.window),
-          action: windowActionParam(params.action),
-          x: numberParam(params.x),
-          y: numberParam(params.y),
-          width: numberParam(params.width),
-          height: numberParam(params.height)
+          action,
+          x,
+          y,
+          width,
+          height
         })
+      }
       case 'tree':
         return this.app.tree({
           scope: stringParam(params.scope),
@@ -226,6 +240,14 @@ function unsignedIntegerParam(value: unknown, name: string): number | undefined 
     return invalidParam(`${name} must be a non-negative safe integer`)
   }
   return value as number
+}
+
+function boundedIntegerParam(value: unknown, name: string, minimum: number, maximum: number): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    return invalidParam(`${name} must be an integer between ${minimum} and ${maximum}`)
+  }
+  return value
 }
 
 function booleanParam(value: unknown): boolean | undefined {

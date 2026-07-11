@@ -134,6 +134,20 @@ function validateToolArguments(args: ToolCallArgs, definition: ToolDefinition): 
   if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
     throw new McpRequestError(-32602, 'port must be an integer between 1 and 65535')
   }
+  if (definition.name === 'tauri_window') {
+    for (const field of ['x', 'y']) {
+      const value = numberField(args, field)
+      if (value !== undefined && (!Number.isInteger(value) || value < -2_147_483_648 || value > 2_147_483_647)) {
+        throw new McpRequestError(-32602, `${field} must be an integer between -2147483648 and 2147483647`)
+      }
+    }
+    for (const field of ['width', 'height']) {
+      const value = numberField(args, field)
+      if (value !== undefined && (!Number.isInteger(value) || value < 1 || value > 4_294_967_295)) {
+        throw new McpRequestError(-32602, `${field} must be an integer between 1 and 4294967295`)
+      }
+    }
+  }
 }
 
 /**
@@ -547,8 +561,30 @@ function windowControlSchema(): JsonSchema {
     type: 'string',
     enum: ['get', 'focus', 'show', 'hide', 'minimize', 'unminimize', 'maximize', 'unmaximize', 'setSize', 'setPosition']
   }
-  inputSchema.properties.x = { type: 'number', description: 'Window x position for setPosition.' }
-  inputSchema.properties.y = { type: 'number', description: 'Window y position for setPosition.' }
+  inputSchema.properties.x = {
+    type: 'integer',
+    minimum: -2_147_483_648,
+    maximum: 2_147_483_647,
+    description: 'Window x position for setPosition.'
+  }
+  inputSchema.properties.y = {
+    type: 'integer',
+    minimum: -2_147_483_648,
+    maximum: 2_147_483_647,
+    description: 'Window y position for setPosition.'
+  }
+  inputSchema.properties.width = {
+    type: 'integer',
+    minimum: 1,
+    maximum: 4_294_967_295,
+    description: 'Width in physical pixels for setSize.'
+  }
+  inputSchema.properties.height = {
+    type: 'integer',
+    minimum: 1,
+    maximum: 4_294_967_295,
+    description: 'Height in physical pixels for setSize.'
+  }
   return inputSchema
 }
 

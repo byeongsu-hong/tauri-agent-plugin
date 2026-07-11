@@ -119,6 +119,13 @@ describe('tauri-agent MCP server', () => {
       enum: ['dom', 'native', 'auto'],
       description: 'Screenshot backend. dom preserves the SVG bridge path, native captures app-window pixels, auto tries native then falls back to dom.'
     })
+    const windowTool = list.result.tools.find((tool: { name: string }) => tool.name === 'tauri_window')
+    expect(windowTool.inputSchema.properties.x).toMatchObject({
+      type: 'integer', minimum: -2_147_483_648, maximum: 2_147_483_647
+    })
+    expect(windowTool.inputSchema.properties.width).toMatchObject({
+      type: 'integer', minimum: 1, maximum: 4_294_967_295
+    })
     for (const toolName of ['tauri_logs', 'tauri_events', 'tauri_network']) {
       const followTool = list.result.tools.find((tool: { name: string }) => tool.name === toolName)
       expect(followTool.inputSchema.properties.follow).toEqual({
@@ -318,7 +325,9 @@ describe('tauri-agent MCP server', () => {
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', timeoutMs: Number.MAX_SAFE_INTEGER + 1 } }, 'timeoutMs must be a non-negative safe integer'],
     [{ name: 'tauri_wait', arguments: { html: '<main></main>', idleMs: -1 } }, 'idleMs must be a non-negative safe integer'],
     [{ name: 'tauri_logs', arguments: { html: '<main></main>', pollMs: 0 } }, 'pollMs must be a positive safe integer'],
-    [{ name: 'tauri_attach', arguments: { port: 65_536 } }, 'port must be an integer between 1 and 65535']
+    [{ name: 'tauri_attach', arguments: { port: 65_536 } }, 'port must be an integer between 1 and 65535'],
+    [{ name: 'tauri_window', arguments: { html: '<main></main>', x: 1.5 } }, 'x must be an integer between -2147483648 and 2147483647'],
+    [{ name: 'tauri_window', arguments: { html: '<main></main>', width: 4_294_967_296 } }, 'width must be an integer between 1 and 4294967295']
   ])('rejects MCP numbers outside their advertised bounds %#', async (params, message) => {
     expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(JSON.stringify({
       jsonrpc: '2.0', id: 38, method: 'tools/call', params
