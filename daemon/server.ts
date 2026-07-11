@@ -4,7 +4,8 @@ import type { DebuggerSession } from './session'
 import {
   createErrorResponse,
   createSuccessResponse,
-  parseJsonRpcMessage
+  parseJsonRpcMessage,
+  UnknownAgentMethodError
 } from '../protocol/json-rpc'
 import type { JsonRpcRequest, JsonRpcResponse } from '../protocol/types'
 import { AgentProtocolError } from '../protocol/error'
@@ -17,7 +18,8 @@ export function createDebuggerRpcHandler(session: DebuggerSession): RpcHandler {
     try {
       request = parseJsonRpcMessage(message)
     } catch (error) {
-      return JSON.stringify(createErrorResponse(0, 'INVALID_REQUEST', errorMessage(error)))
+      const id = error instanceof UnknownAgentMethodError ? error.id : 0
+      return JSON.stringify(createErrorResponse(id, 'INVALID_REQUEST', errorMessage(error)))
     }
 
     try {

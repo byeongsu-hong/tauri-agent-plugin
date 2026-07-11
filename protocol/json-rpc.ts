@@ -39,6 +39,15 @@ export const AGENT_METHODS = [
 
 const AGENT_METHOD_SET = new Set<string>(AGENT_METHODS)
 
+export class UnknownAgentMethodError extends Error {
+  constructor(
+    readonly id: JsonRpcId,
+    method: string
+  ) {
+    super(`unknown agent method: ${method}`)
+  }
+}
+
 export function isAgentMethod(method: string): method is AgentMethod {
   return AGENT_METHOD_SET.has(method)
 }
@@ -111,13 +120,13 @@ export function parseJsonRpcMessage(message: string): JsonRpcRequest {
     throw new Error('invalid JSON-RPC 2.0 message')
   }
 
-  if (!isAgentMethod(parsed.method)) {
-    throw new Error(`unknown agent method: ${parsed.method}`)
-  }
-
   const id = parsed.id
   if (typeof id !== 'string' && typeof id !== 'number') {
     throw new Error('invalid JSON-RPC 2.0 message')
+  }
+
+  if (!isAgentMethod(parsed.method)) {
+    throw new UnknownAgentMethodError(id, parsed.method)
   }
 
   const request: JsonRpcRequest = {
