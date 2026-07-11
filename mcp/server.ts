@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 
 import type { DebuggerClient } from '../daemon/client'
-import { connectDebuggerClient, pollFollow } from '../daemon/connect'
+import { connectDebuggerClient, pollFollow, type DebuggerTarget } from '../daemon/connect'
 import type { AgentMethod } from '../protocol/types'
 
 const MCP_PROTOCOL_VERSION = '2025-11-25'
@@ -33,7 +33,14 @@ type JsonSchema = {
 type ToolCallArgs = Record<string, unknown>
 type FollowMethod = 'logs' | 'events' | 'network' | 'ipc'
 
-export function createMcpRequestHandler(): McpRequestHandler {
+export interface McpServerOptions {
+  target?: DebuggerTarget
+  profile?: 'core' | 'full'
+}
+
+export function createMcpRequestHandler(options: McpServerOptions = {}): McpRequestHandler {
+  const definitions = toolDefinitions(options)
+  const names = new Set(definitions.map((definition) => definition.name))
   return async (message: string) => {
     let request: JsonRpcRequest
     try {
@@ -54,9 +61,9 @@ export function createMcpRequestHandler(): McpRequestHandler {
         case 'initialize':
           return jsonRpcResult(request.id, initializeResult(request.params))
         case 'tools/list':
-          return jsonRpcResult(request.id, { tools: TOOL_DEFINITIONS })
+          return jsonRpcResult(request.id, { tools: definitions })
         case 'tools/call':
-          return jsonRpcResult(request.id, await callTool(request.params))
+          return jsonRpcResult(request.id, await callTool(request.params, names, options.target, options.profile))
         default:
           return jsonRpcError(request.id, -32601, `unsupported MCP method: ${request.method}`)
       }
@@ -72,20 +79,26 @@ export function createMcpRequestHandler(): McpRequestHandler {
   }
 }
 
-async function callTool(params: unknown): Promise<Record<string, unknown>> {
+async function callTool(
+  params: unknown,
+  names: Set<string>,
+  target?: DebuggerTarget,
+  profile?: 'core' | 'full'
+): Promise<Record<string, unknown>> {
   const request = objectParam(params)
   const name = stringField(request, 'name')
-  if (!TOOL_NAMES.has(name)) {
+  if (!names.has(name)) {
     throw new McpRequestError(-32602, `unknown MCP tool: ${name}`)
   }
   const args = objectParam(request.arguments ?? {})
-  const client = await debuggerClient(args)
-  const result = await executeTool(client, name, args)
-  return {
+  const client = await debuggerClient(args, target)
+  const result = await executeTool(client, name, args, profile)
+  const response: Record<string, unknown> = {
     content: toolContent(name, result),
-    structuredContent: structuredContent(result),
     isError: false
   }
+  if (!LARGE_RESULT_TOOLS.has(name)) response.structuredContent = structuredContent(result)
+  return response
 }
 
 /**
@@ -108,7 +121,8 @@ function toolContent(name: string, result: unknown): Array<Record<string, unknow
 async function executeTool(
   client: DebuggerClient,
   name: string,
-  args: ToolCallArgs
+  args: ToolCallArgs,
+  profile?: 'core' | 'full'
 ): Promise<unknown> {
   switch (name) {
     case 'tauri_attach':
@@ -121,6 +135,8 @@ async function executeTool(
       return client.call('tree', pick(args, ['window', 'scope', 'mode']))
     case 'tauri_find':
       return client.call('find', pick(args, ['window', 'scope', 'role', 'name', 'text', 'limit']))
+    case 'tauri_act':
+      return client.call('act', pick(args, ['window', 'scope', 'role', 'name', 'text', 'action', 'value', 'x', 'y', 'timeoutMs', 'detail']))
     case 'tauri_click':
       await client.call('tree', pick(args, ['window', 'scope']))
       return client.call('click', pick(args, ['window', 'ref']))
@@ -208,7 +224,10 @@ async function executeTool(
     case 'tauri_record':
       return client.call('record', pick(args, ['window', 'action']))
     case 'tauri_stream':
-      return client.call('stream', pick(args, ['window', 'since', 'timeoutMs']))
+      return client.call('stream', {
+        ...pick(args, ['window', 'since', 'timeoutMs', 'lean']),
+        ...(profile === 'core' ? { lean: true } : {})
+      })
     default:
       throw new Error(`unknown tool: ${name}`)
   }
@@ -220,7 +239,7 @@ async function callFollowableEntries(
   args: ToolCallArgs
 ): Promise<unknown> {
   if (args.follow !== true) {
-    return client.call(method, pick(args, ['window', 'follow', 'clear']))
+    return client.call(method, pick(args, ['window', 'follow', 'clear', 'since', 'limit']))
   }
 
   const entries: unknown[] = []
@@ -234,7 +253,8 @@ async function callFollowableEntries(
   return entries
 }
 
-async function debuggerClient(args: ToolCallArgs): Promise<DebuggerClient> {
+async function debuggerClient(args: ToolCallArgs, target?: DebuggerTarget): Promise<DebuggerClient> {
+  if (target) return connectDebuggerClient(target)
   return connectDebuggerClient({
     port: numberField(args, 'port'),
     host: stringField(args, 'host', '127.0.0.1'),
@@ -307,6 +327,8 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   timeoutMs: { type: 'number', description: 'Maximum wait or follow duration in milliseconds.' },
   action: { type: 'string', enum: ['start', 'stop', 'get', 'clear'] },
   since: { type: 'number', description: 'Stream cursor; return semantic-tree diff frames with a higher seq.' },
+  lean: { type: 'boolean', description: 'Omit repeated semantic snapshots except for initial sync or dropped recovery.' },
+  detail: { type: 'boolean', description: 'Include optional response detail.' },
   state: {
     type: 'string',
     enum: ['present', 'absent'],
@@ -340,6 +362,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_window', 'Window', 'Inspect or control one Tauri window.', windowControlSchema()),
   tool('tauri_tree', 'Tree', 'Return a compact semantic tree.', schema(['window', 'scope', 'mode'])),
   tool('tauri_find', 'Find', 'Find current snapshot refs by semantic role, name, or text.', schema(['window', 'scope', 'role', 'name', 'text', 'limit'])),
+  tool('tauri_act', 'Act', 'Locate, wait for actionability, and act in one request.', locatorActionSchema()),
   tool('tauri_click', 'Click', 'Click a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_hover', 'Hover', 'Hover a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
   tool('tauri_focus', 'Focus', 'Focus a snapshot-local ref.', schema(['window', 'scope', 'ref'], ['ref'])),
@@ -355,10 +378,10 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_eval', 'Eval', 'Evaluate JavaScript in the app webview.', schema(['window', 'code'], ['code'])),
   tool('tauri_press', 'Press', 'Dispatch a keyboard key.', schema(['window', 'scope', 'ref', 'key', 'modifiers'], ['key'])),
   tool('tauri_shot', 'Screenshot', 'Capture a DOM or native screenshot; pass ref to scope the capture to one element (forces the DOM backend).', schema(['window', 'path', 'backend', 'ref'])),
-  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
-  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
-  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
-  tool('tauri_ipc', 'IPC', 'Return captured Tauri IPC invoke traces (command, timing, ok/error).', schema(['window', 'follow', 'clear', 'pollMs', 'timeoutMs'])),
+  tool('tauri_logs', 'Logs', 'Return captured app logs.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
+  tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
+  tool('tauri_network', 'Network', 'Return captured fetch network entries.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
+  tool('tauri_ipc', 'IPC', 'Return captured Tauri IPC invoke traces (command, timing, ok/error).', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),
@@ -371,11 +394,12 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     'tauri_stream',
     'Stream',
     'Drain mutation-driven semantic-tree diff frames since a cursor, long-polling up to timeoutMs for the next change.',
-    schema(['window', 'since', 'timeoutMs'])
+    schema(['window', 'since', 'timeoutMs', 'lean'])
   )
 ]
 
-const TOOL_NAMES = new Set(TOOL_DEFINITIONS.map((toolDefinition) => toolDefinition.name))
+const CORE_TOOLS = new Set(['tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_expect', 'tauri_state', 'tauri_stream', 'tauri_ipc', 'tauri_shot'])
+const LARGE_RESULT_TOOLS = new Set(['tauri_tree', 'tauri_logs', 'tauri_events', 'tauri_network', 'tauri_ipc', 'tauri_stream'])
 
 class McpRequestError extends Error {
   constructor(
@@ -406,6 +430,34 @@ function schema(fields: string[], required: string[] = []): JsonSchema {
     ...(required.length > 0 ? { required } : {}),
     additionalProperties: false
   }
+}
+
+function locatorActionSchema(): JsonSchema {
+  const inputSchema = schema(['window', 'scope', 'role', 'name', 'text', 'value', 'x', 'y', 'timeoutMs', 'detail'], ['action'])
+  inputSchema.properties.action = {
+    type: 'string',
+    enum: ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check']
+  }
+  inputSchema.properties.value = { type: ['string', 'boolean'] }
+  return inputSchema
+}
+
+function toolDefinitions(options: McpServerOptions): ToolDefinition[] {
+  const selected = options.profile === 'core'
+    ? TOOL_DEFINITIONS.filter((definition) => CORE_TOOLS.has(definition.name))
+    : TOOL_DEFINITIONS
+  const omitted = new Set(options.target ? Object.keys(connectionProperties()) : [])
+  if (options.profile === 'core') omitted.add('detail')
+  if (omitted.size === 0) return selected
+  return selected.map((definition) => ({
+    ...definition,
+    inputSchema: {
+      ...definition.inputSchema,
+      properties: Object.fromEntries(
+        Object.entries(definition.inputSchema.properties).filter(([key]) => !omitted.has(key))
+      )
+    }
+  }))
 }
 
 function storageSchema(): JsonSchema {
@@ -473,7 +525,7 @@ function toolText(result: unknown): string {
   if (typeof result === 'object' && result !== null && 'text' in result && typeof result.text === 'string') {
     return result.text
   }
-  return JSON.stringify(result, null, 2)
+  return JSON.stringify(result)
 }
 
 function structuredContent(result: unknown): Record<string, unknown> {

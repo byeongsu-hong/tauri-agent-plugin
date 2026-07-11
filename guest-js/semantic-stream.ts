@@ -69,23 +69,29 @@ export class SemanticStream {
   }
 
   /** Return buffered frames after `since` immediately. */
-  pull(since = 0): StreamResult {
+  pull(since: number | undefined = undefined, lean = false): StreamResult {
     if (!this.started) {
       this.prime()
     }
-    const frames = this.frames.filter((frame) => frame.seq > since)
+    const cursor = since ?? 0
+    const frames = this.frames.filter((frame) => frame.seq > cursor)
     const oldestSeq = this.frames.length > 0 ? this.frames[0].seq : 0
     // A gap exists when frames between the cursor and the buffer were evicted.
-    const dropped = since < this.seq && since + 1 < oldestSeq
-    return { frames, cursor: this.seq, snapshot: this.lastText, dropped }
+    const dropped = cursor < this.seq && cursor + 1 < oldestSeq
+    return {
+      frames,
+      cursor: this.seq,
+      ...(!lean || since === undefined || dropped ? { snapshot: this.lastText } : {}),
+      dropped
+    }
   }
 
   /**
    * Wait up to `timeoutMs` for the next frame after `since`. Resolves
    * immediately if frames are already buffered or `timeoutMs <= 0`.
    */
-  async wait(since = 0, timeoutMs = 0): Promise<StreamResult> {
-    const immediate = this.pull(since)
+  async wait(since: number | undefined = undefined, timeoutMs = 0, lean = false): Promise<StreamResult> {
+    const immediate = this.pull(since, lean)
     if (immediate.frames.length > 0 || timeoutMs <= 0) {
       return immediate
     }
@@ -104,7 +110,7 @@ export class SemanticStream {
       const entry: Waiter = { resolve: done }
       this.waiters.push(entry)
     })
-    return this.pull(since)
+    return this.pull(since, lean)
   }
 
   private wake(): void {

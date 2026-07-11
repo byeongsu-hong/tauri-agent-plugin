@@ -1,5 +1,6 @@
 import {
   WebviewAgentInstrumentation,
+  agentAct,
   agentAction,
   agentBlur,
   agentCheck,
@@ -21,6 +22,7 @@ import {
   agentSnapshot,
   agentState,
   agentStorage,
+  agentStream,
   agentWait
 } from '../../../dist-js/index.js'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -207,7 +209,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
   const locationSet = await agentLocation({ action: 'push', url: '/agents?bridge=1#self-test' })
   const locationRead = await agentLocation()
   await fetch('/network-smoke?source=bridge-self-test').catch(() => undefined)
-  if (forgeRef) await agentAction({ action: 'click', ref: forgeRef })
+  const atomic = await agentAct({ role: 'button', name: 'Forge', action: 'click', timeoutMs: 500 })
   if (forgeRef) await agentFocus({ ref: forgeRef })
   if (forgeRef) await agentBlur({ ref: forgeRef })
   if (forgeRef) await agentHover({ ref: forgeRef })
@@ -218,9 +220,10 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
   if (agentNameRef) await agentAction({ action: 'press', ref: agentNameRef, value: 'k', modifiers: ['Meta', 'Shift'] })
   const state = await agentState()
   console.info('command bridge log probe')
-  const logs = await agentLogs({ clear: true })
-  const events = await agentEvents({ clear: true })
-  const network = await agentNetwork()
+  const logs = await agentLogs({ since: 0, limit: 1000 })
+  const events = await agentEvents({ since: 0, limit: 1000 })
+  const network = await agentNetwork({ since: 0, limit: 1000 })
+  const stream = await agentStream({ lean: true })
   const shot = await agentScreenshot()
   const wait = await agentWait({ text: 'Command bridge running', timeoutMs: 500 })
   const semanticWait = await agentWait({ role: 'button', name: 'Verify command bridge', timeoutMs: 500 })
@@ -231,6 +234,7 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
   const checks = {
     tree: tree.includes('Ducktape'),
     find: foundForge.matches.some((match) => match.role === 'button' && match.name === 'Forge'),
+    atomic: atomic.ok,
     inspect: inspected?.role === 'textbox' && inspected.name === 'Agent name',
     eval: evaluated.type === 'string' && evaluated.value === 'Command bridge running',
     storage:
@@ -258,11 +262,12 @@ async function runCommandBridgeSelfTest(status: HTMLElement | null): Promise<boo
       probes.scrolledRoster === true &&
       probes.draggedForge === true &&
       probes.lastShortcut === 'k:true:true',
-    logs: logs.some((entry) => entry.message.includes('command bridge log probe')),
+    logs: logs.entries.some((entry) => entry.message.includes('command bridge log probe')),
     events: ['click', 'hover', 'focus', 'blur', 'scroll', 'drag', 'press'].every((kind) =>
-      events.some((event) => event.kind === kind)
+      events.entries.some((event) => event.kind === kind)
     ),
-    network: network.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')),
+    network: network.entries.some((entry) => entry.type === 'fetch' && entry.url.includes('/network-smoke')),
+    stream: typeof stream.snapshot === 'string' && stream.cursor >= 0,
     screenshot: shot.startsWith('data:image/svg+xml;base64,'),
     wait: wait.matched,
     semanticWait:

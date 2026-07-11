@@ -33,6 +33,9 @@ import {
 import { screenshotDocument } from '../guest-js/screenshot'
 import { evalResult, evalResultAsync } from '../guest-js/evaluate'
 import { SemanticStream } from '../guest-js/semantic-stream'
+import { CaptureBuffer } from '../guest-js/capture-buffer'
+import { locateActionable } from '../guest-js/locator-action'
+import { AGENT_METHODS } from '../protocol/json-rpc'
 import {
   applyCookieAction,
   applyStorageAction,
@@ -51,8 +54,12 @@ import {
   type DialogWindow
 } from '../guest-js/dom-actions'
 import type {
+  ActParams,
+  ActResult,
   AgentEvent,
   AgentWindow,
+  AttachResult,
+  CaptureResult,
   CookieParams,
   CookieResult,
   DialogParams,
@@ -60,15 +67,19 @@ import type {
   EvalResult,
   ExpectParams,
   ExpectResult,
+  EventsParams,
   FindParams,
   FindResult,
   InspectResult,
   IpcEntry,
+  IpcParams,
   LocationParams,
   LocationResult,
   LogEntry,
+  LogsParams,
   KeyModifier,
   NetworkEntry,
+  NetworkParams,
   ShotParams,
   ScreenshotResult,
   StorageParams,
@@ -93,9 +104,10 @@ export class StaticHtmlAppAdapter {
   readonly url: string
 
   private dom: JSDOM
-  private logs: LogEntry[] = []
-  private events: AgentEvent[] = []
-  private network: NetworkEntry[] = []
+  private logs = new CaptureBuffer<LogEntry>(1000)
+  private events = new CaptureBuffer<AgentEvent>(1000)
+  private network = new CaptureBuffer<NetworkEntry>(1000)
+  private readonly sessionId = crypto.randomUUID()
   private readonly dialogController = new DialogController((entry) =>
     this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
   )
@@ -152,7 +164,7 @@ export class StaticHtmlAppAdapter {
   }
 
   async stream(params: StreamParams = {}): Promise<StreamResult> {
-    return this.semanticStream.wait(params.since ?? 0, params.timeoutMs ?? 0)
+    return this.semanticStream.wait(params.since, params.timeoutMs ?? 0, params.lean ?? false)
   }
 
   private installSemanticStream(): void {
@@ -169,10 +181,17 @@ export class StaticHtmlAppAdapter {
     })
   }
 
-  async attach(): Promise<{ attached: true; windows: AgentWindow[] }> {
+  async attach(): Promise<AttachResult> {
     this.pushEvent('attach')
     return {
       attached: true,
+      protocolVersion: 1,
+      sessionId: this.sessionId,
+      platform: staticPlatform(),
+      runtime: 'unknown',
+      methods: [...AGENT_METHODS],
+      features: ['locator-action', 'lean-stream', 'capture-cursors'],
+      screenshotBackends: ['dom'],
       windows: await this.windows()
     }
   }
@@ -285,6 +304,27 @@ export class StaticHtmlAppAdapter {
     this.bindGlobals()
     const snapshot = snapshotDocument(this.dom.window.document, { scope: options.scope })
     return { matches: findRefs(options, snapshot.refs) }
+  }
+
+  async act(params: ActParams): Promise<ActResult> {
+    const match = await locateActionable(params, (locator) => {
+      this.bindGlobals()
+      const snapshot = snapshotDocument(this.dom.window.document, { scope: locator.scope })
+      return findRefs(locator, snapshot.refs)
+    })
+    switch (params.action) {
+      case 'click': await this.click(match!.ref); break
+      case 'hover': await this.hover(match!.ref); break
+      case 'focus': await this.focus(match!.ref); break
+      case 'blur': await this.blur(match!.ref); break
+      case 'fill': await this.fill(match!.ref, stringActionValue(params)); break
+      case 'type': await this.type(match!.ref, stringActionValue(params)); break
+      case 'press': await this.press(stringActionValue(params), { ref: match?.ref }); break
+      case 'scroll': await this.scroll(match!.ref, { x: params.x, y: params.y }); break
+      case 'select': await this.select(match!.ref, stringActionValue(params)); break
+      case 'check': await this.check(match!.ref, typeof params.value === 'boolean' ? params.value : true); break
+    }
+    return { ok: true, ...(params.detail && match ? { match } : {}) }
   }
 
   async expect(options: ExpectParams): Promise<ExpectResult> {
@@ -498,34 +538,24 @@ export class StaticHtmlAppAdapter {
     throw new Error(`wait timed out for function: ${fn}`)
   }
 
-  getLogs(clear = false): LogEntry[] {
-    const entries = [...this.logs]
-    if (clear) {
-      this.logs = []
-    }
-    return entries
+  getLogs(params: LogsParams = {}): LogEntry[] | CaptureResult<LogEntry> {
+    return this.logs.read(params)
   }
 
-  getEvents(clear = false): AgentEvent[] {
-    const entries = [...this.events]
-    if (clear) {
-      this.events = []
-    }
-    return entries
+  getEvents(params: EventsParams = {}): AgentEvent[] | CaptureResult<AgentEvent> {
+    return this.events.read(params)
   }
 
-  getNetwork(clear = false): NetworkEntry[] {
-    const entries = [...this.network]
-    if (clear) {
-      this.network = []
-    }
-    return entries
+  getNetwork(params: NetworkParams = {}): NetworkEntry[] | CaptureResult<NetworkEntry> {
+    return this.network.read(params)
   }
 
   // The static jsdom adapter has no Tauri IPC channel, so it captures nothing;
   // the method exists for surface parity with the live guest instrumentation.
-  async ipc(_clear = false): Promise<IpcEntry[]> {
-    return []
+  async ipc(params: IpcParams = {}): Promise<IpcEntry[] | CaptureResult<IpcEntry>> {
+    return params.since !== undefined || params.limit !== undefined
+      ? { entries: [], cursor: params.since ?? 0, dropped: false }
+      : []
   }
 
   storage(options: StorageParams = {}): StorageResult {
@@ -703,5 +733,18 @@ function applyLocationAction(dom: JSDOM, options: LocationParams): void {
       dom.window.dispatchEvent(new dom.window.PopStateEvent('popstate'))
       return
     }
+  }
+}
+
+function stringActionValue(params: ActParams): string {
+  return typeof params.value === 'string' ? params.value : ''
+}
+
+function staticPlatform(): AttachResult['platform'] {
+  switch (process.platform) {
+    case 'linux': return 'linux'
+    case 'darwin': return 'macos'
+    case 'win32': return 'windows'
+    default: return 'unknown'
   }
 }

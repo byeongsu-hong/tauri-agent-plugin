@@ -7,20 +7,22 @@ use tauri::{
 
 use crate::bridge::{AgentBridge, AgentBridgeResponse};
 use crate::models::{
-    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentCookiesRequest, AgentCookiesResponse, AgentDialogRequest,
-    AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest,
-    AgentExpectResponse, AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
-    AgentInspectRequest, AgentInspectResponse, AgentIpcEntry, AgentIpcRequest,
-    AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry,
-    AgentNetworkRequest, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
-    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
-    AgentStorageRequest, AgentStorageResponse, AgentStreamRequest, AgentStreamResponse,
-    AgentTypeRequest, AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
-    ScreenshotBackend, WindowAction, WindowInfo,
+    AgentActRequest, AgentActResponse, AgentAction, AgentActionRequest, AgentAttachRequest,
+    AgentAttachResponse, AgentBlurRequest, AgentCaptureResponse, AgentCheckRequest,
+    AgentCookiesRequest, AgentCookiesResponse, AgentDialogRequest, AgentDragRequest,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
+    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
+    AgentInspectResponse, AgentIpcEntry, AgentIpcRequest, AgentLocationRequest,
+    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
+    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
+    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
+    AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
+    AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend,
+    WindowAction, WindowInfo,
 };
 use crate::registry::WebviewRegistry;
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
+use crate::AgentSession;
 use crate::{Error, Result};
 
 #[tauri::command]
@@ -38,10 +40,49 @@ pub async fn agent_attach<R: Runtime>(
     request: AgentAttachRequest,
 ) -> Result<AgentAttachResponse> {
     ensure_window(&app, request.window.as_deref())?;
-    Ok(AgentAttachResponse {
+    Ok(attach_response(&app))
+}
+
+pub(crate) fn attach_response<R: Runtime>(app: &AppHandle<R>) -> AgentAttachResponse {
+    AgentAttachResponse {
         attached: true,
-        windows: collect_windows(&app),
-    })
+        protocol_version: 1,
+        session_id: app.state::<AgentSession>().0.clone(),
+        platform: agent_platform().into(),
+        runtime: agent_runtime().into(),
+        methods: crate::server::AGENT_METHODS
+            .iter()
+            .map(|method| (*method).into())
+            .collect(),
+        features: ["locator-action", "lean-stream", "capture-cursors"]
+            .map(String::from)
+            .into(),
+        screenshot_backends: if cfg!(target_os = "macos") {
+            vec![ScreenshotBackend::Dom, ScreenshotBackend::Native]
+        } else {
+            vec![ScreenshotBackend::Dom]
+        },
+        windows: collect_windows(app),
+    }
+}
+
+pub(crate) fn agent_platform() -> &'static str {
+    match std::env::consts::OS {
+        "linux" => "linux",
+        "macos" => "macos",
+        "windows" => "windows",
+        _ => "unknown",
+    }
+}
+
+fn agent_runtime() -> &'static str {
+    if cfg!(all(feature = "wry", not(feature = "cef"))) {
+        "wry"
+    } else if cfg!(all(feature = "cef", not(feature = "wry"))) {
+        "cef"
+    } else {
+        "unknown"
+    }
 }
 
 #[tauri::command]
@@ -96,6 +137,16 @@ pub async fn agent_action<R: Runtime>(
     };
     request_bridge(&bridge, &app, request.window.as_deref(), method, &request)?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_act<R: Runtime>(
+    app: AppHandle<R>,
+    bridge: State<'_, AgentBridge>,
+    request: AgentActRequest,
+) -> Result<AgentActResponse> {
+    let result = request_bridge(&bridge, &app, request.window.as_deref(), "act", &request)?;
+    decode_bridge_result(result)
 }
 
 #[tauri::command]
@@ -275,7 +326,7 @@ pub async fn agent_logs<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentLogRequest,
-) -> Result<Vec<AgentLogEntry>> {
+) -> Result<AgentCaptureResponse<AgentLogEntry>> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "logs", &request)?;
     decode_bridge_result(result)
 }
@@ -285,7 +336,7 @@ pub async fn agent_events<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentEventsRequest,
-) -> Result<Vec<AgentEventEntry>> {
+) -> Result<AgentCaptureResponse<AgentEventEntry>> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "events", &request)?;
     decode_bridge_result(result)
 }
@@ -295,7 +346,7 @@ pub async fn agent_network<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentNetworkRequest,
-) -> Result<Vec<AgentNetworkEntry>> {
+) -> Result<AgentCaptureResponse<AgentNetworkEntry>> {
     let result = request_bridge(
         &bridge,
         &app,
@@ -311,7 +362,7 @@ pub async fn agent_ipc<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentIpcRequest,
-) -> Result<Vec<AgentIpcEntry>> {
+) -> Result<AgentCaptureResponse<AgentIpcEntry>> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "ipc", &request)?;
     decode_bridge_result(result)
 }

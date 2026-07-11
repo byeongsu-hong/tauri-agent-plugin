@@ -22,6 +22,7 @@ pub struct AgentBridgeResponse {
     pub id: String,
     pub result: Option<serde_json::Value>,
     pub error: Option<String>,
+    pub error_code: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -32,7 +33,13 @@ struct AgentBridgeRequest {
     params: serde_json::Value,
 }
 
-pub type BridgeResult = Result<serde_json::Value, String>;
+pub type BridgeResult = Result<serde_json::Value, BridgeFailure>;
+
+#[derive(Debug)]
+pub struct BridgeFailure {
+    code: Option<String>,
+    message: String,
+}
 
 #[derive(Default)]
 pub(crate) struct AgentBridge {
@@ -76,7 +83,13 @@ impl AgentBridge {
 
         match pending.recv_timeout(response_timeout) {
             Ok(Ok(result)) => Ok(result),
-            Ok(Err(error)) => Err(Error::BridgeUnavailable(error)),
+            Ok(Err(error)) => match error.code {
+                Some(code) => Err(Error::Protocol {
+                    code,
+                    message: error.message,
+                }),
+                None => Err(Error::BridgeUnavailable(error.message)),
+            },
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 self.remove_pending(&id);
                 Err(Error::Timeout(
@@ -109,7 +122,10 @@ impl AgentBridge {
         };
 
         let result = match response.error {
-            Some(error) => Err(error),
+            Some(message) => Err(BridgeFailure {
+                code: response.error_code,
+                message,
+            }),
             None => Ok(response.result.unwrap_or(serde_json::Value::Null)),
         };
         sender.send(result).is_ok()
@@ -126,7 +142,7 @@ impl AgentBridge {
 fn bridge_response_timeout(method: &str, params: &serde_json::Value) -> Duration {
     // `wait` and `stream` both long-poll in the guest for up to a caller-
     // supplied `timeoutMs`, so the bridge must outlast that budget.
-    if method != "wait" && method != "stream" {
+    if method != "wait" && method != "stream" && method != "act" {
         return DEFAULT_BRIDGE_RESPONSE_TIMEOUT;
     }
 
@@ -155,6 +171,7 @@ mod tests {
             id: "req-1".into(),
             result: Some(serde_json::json!({"ok": true})),
             error: None,
+            error_code: None,
         }));
 
         assert_eq!(

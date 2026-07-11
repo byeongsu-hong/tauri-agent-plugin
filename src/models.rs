@@ -65,6 +65,13 @@ pub struct AgentAttachRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentAttachResponse {
     pub attached: bool,
+    pub protocol_version: u8,
+    pub session_id: String,
+    pub platform: String,
+    pub runtime: String,
+    pub methods: Vec<String>,
+    pub features: Vec<String>,
+    pub screenshot_backends: Vec<ScreenshotBackend>,
     pub windows: Vec<WindowInfo>,
 }
 
@@ -130,6 +137,55 @@ pub struct AgentFindRequest {
     pub name: Option<String>,
     pub text: Option<String>,
     pub limit: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentActRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    pub action: LocatorAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LocatorAction {
+    Click,
+    Hover,
+    Focus,
+    Blur,
+    Fill,
+    Type,
+    Press,
+    Scroll,
+    Select,
+    Check,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentActResponse {
+    pub ok: bool,
+    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
+    pub match_entry: Option<AgentInspectResponse>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -309,6 +365,10 @@ pub struct AgentLogRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
     pub clear: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -326,6 +386,10 @@ pub struct AgentEventsRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
     pub clear: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -334,6 +398,10 @@ pub struct AgentNetworkRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
     pub clear: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -361,6 +429,21 @@ pub struct AgentIpcRequest {
     pub window: Option<String>,
     pub follow: Option<bool>,
     pub clear: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum AgentCaptureResponse<T> {
+    Legacy(Vec<T>),
+    Cursor {
+        entries: Vec<T>,
+        cursor: u64,
+        dropped: bool,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -558,6 +641,8 @@ pub struct AgentStreamRequest {
     pub window: Option<String>,
     pub since: Option<u64>,
     pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lean: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -573,7 +658,8 @@ pub struct AgentStreamFrame {
 pub struct AgentStreamResponse {
     pub frames: Vec<AgentStreamFrame>,
     pub cursor: u64,
-    pub snapshot: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
     pub dropped: bool,
 }
 
@@ -947,6 +1033,8 @@ mod tests {
             window: Some("main".into()),
             follow: Some(true),
             clear: Some(true),
+            since: None,
+            limit: None,
         };
         assert_eq!(
             serde_json::to_value(logs).unwrap(),
@@ -957,6 +1045,8 @@ mod tests {
             window: Some("main".into()),
             follow: Some(true),
             clear: Some(true),
+            since: None,
+            limit: None,
         };
         assert_eq!(
             serde_json::to_value(events).unwrap(),
@@ -967,6 +1057,8 @@ mod tests {
             window: Some("main".into()),
             follow: Some(true),
             clear: Some(true),
+            since: None,
+            limit: None,
         };
         assert_eq!(
             serde_json::to_value(network).unwrap(),
@@ -1139,6 +1231,30 @@ mod tests {
                 "action": "press",
                 "value": "Enter",
                 "modifiers": ["Meta", "Shift"]
+            })
+        );
+
+        let act = AgentActRequest {
+            window: Some("main".into()),
+            scope: None,
+            role: Some("button".into()),
+            name: Some("Save".into()),
+            text: None,
+            action: LocatorAction::Click,
+            value: None,
+            x: None,
+            y: None,
+            timeout_ms: Some(1_000),
+            detail: None,
+        };
+        assert_eq!(
+            serde_json::to_value(act).unwrap(),
+            serde_json::json!({
+                "window": "main",
+                "role": "button",
+                "name": "Save",
+                "action": "click",
+                "timeoutMs": 1_000
             })
         );
     }

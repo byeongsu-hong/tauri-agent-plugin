@@ -3,6 +3,7 @@ const COMMANDS: &[&str] = &[
     "agent_attach",
     "agent_snapshot",
     "agent_find",
+    "agent_act",
     "agent_action",
     "agent_inspect",
     "agent_eval",

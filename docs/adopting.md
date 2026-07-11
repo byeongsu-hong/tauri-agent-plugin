@@ -113,7 +113,7 @@ const agent = new WebviewAgentInstrumentation({
 agent.install()
 agent.snapshot()
 agent.find({ role: 'button', name: 'Forge', limit: 1 })
-agent.action({ action: 'click', ref: '@3' })
+await agent.act({ role: 'button', name: 'Forge', action: 'click' })
 ```
 
 The `agent<Method>` helpers (`agentSnapshot`, `agentFind`, …) call the same Rust

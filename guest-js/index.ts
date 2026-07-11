@@ -40,10 +40,13 @@ import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult } from './evaluate'
 import { waitForBridgeResponseTurn } from './bridge-gate'
 import type {
+  ActParams,
+  ActResult,
   AgentWindow,
   AgentEvent,
   CookieParams,
   CookieResult,
+  CaptureResult,
   DialogParams,
   DialogResult,
   EvalResult,
@@ -58,6 +61,8 @@ import type {
   KeyModifier,
   IpcEntry,
   NetworkEntry,
+  NetworkParams,
+  IpcParams,
   RecordingEntry,
   StorageParams,
   StorageResult,
@@ -139,6 +144,10 @@ export interface AgentFindRequest {
   name?: string
   text?: string
   limit?: number
+}
+
+export interface AgentActRequest extends ActParams {
+  window?: string
 }
 
 export type AgentActionRequest =
@@ -234,17 +243,12 @@ export interface AgentEventsRequest extends EventsParams {
   window?: string
 }
 
-export interface AgentNetworkRequest {
-  window?: string
-  follow?: boolean
-  clear?: boolean
-}
+export interface AgentNetworkRequest extends NetworkParams {}
 
-export interface AgentIpcRequest {
-  window?: string
-  follow?: boolean
-  clear?: boolean
-}
+export interface AgentIpcRequest extends IpcParams {}
+
+type LegacyCaptureRequest<T> = T & { since?: undefined; limit?: undefined }
+type CursorCaptureRequest<T> = T & ({ since: number } | { limit: number })
 
 export interface AgentStorageRequest extends StorageParams {
   window?: string
@@ -322,6 +326,11 @@ export async function agentFind(request: AgentFindRequest = {}): Promise<FindRes
   return invokeAgentCommand('plugin:agent|agent_find', { request: withCurrentWindow(request) })
 }
 
+/** Locate, wait for actionability, and act in one guest turn. */
+export async function agentAct(request: AgentActRequest): Promise<ActResult> {
+  return invokeAgentCommand('plugin:agent|agent_act', { request: withCurrentWindow(request) })
+}
+
 /** Perform a ref-targeted action (click/fill) or a keyboard press on the window. */
 export async function agentAction(request: AgentActionRequest): Promise<void> {
   return invokeAgentCommand('plugin:agent|agent_action', { request: withCurrentWindow(request) })
@@ -388,24 +397,36 @@ export async function agentScreenshot(request: AgentScreenshotRequest = {}): Pro
 }
 
 /** Return captured `console` log entries, optionally clearing the buffer. */
-export async function agentLogs(request: AgentLogRequest = {}): Promise<LogEntry[]> {
+export function agentLogs(request?: LegacyCaptureRequest<AgentLogRequest>): Promise<LogEntry[]>
+export function agentLogs(request: CursorCaptureRequest<AgentLogRequest>): Promise<CaptureResult<LogEntry>>
+export function agentLogs(request: AgentLogRequest): Promise<LogEntry[] | CaptureResult<LogEntry>>
+export async function agentLogs(request: AgentLogRequest = {}): Promise<LogEntry[] | CaptureResult<LogEntry>> {
   return invokeAgentCommand('plugin:agent|agent_logs', { request: withCurrentWindow(request) })
 }
 
 /** Return captured lifecycle/runtime events; a bare string is treated as a window label. */
-export async function agentEvents(request: AgentEventsRequest | string = {}): Promise<AgentEvent[]> {
+export function agentEvents(request?: LegacyCaptureRequest<AgentEventsRequest> | string): Promise<AgentEvent[]>
+export function agentEvents(request: CursorCaptureRequest<AgentEventsRequest>): Promise<CaptureResult<AgentEvent>>
+export function agentEvents(request: AgentEventsRequest | string): Promise<AgentEvent[] | CaptureResult<AgentEvent>>
+export async function agentEvents(request: AgentEventsRequest | string = {}): Promise<AgentEvent[] | CaptureResult<AgentEvent>> {
   return invokeAgentCommand('plugin:agent|agent_events', {
     request: withCurrentWindow(typeof request === 'string' ? { window: request } : request)
   })
 }
 
 /** Return captured network (fetch/XHR/WebSocket) entries, optionally clearing the buffer. */
-export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<NetworkEntry[]> {
+export function agentNetwork(request?: LegacyCaptureRequest<AgentNetworkRequest>): Promise<NetworkEntry[]>
+export function agentNetwork(request: CursorCaptureRequest<AgentNetworkRequest>): Promise<CaptureResult<NetworkEntry>>
+export function agentNetwork(request: AgentNetworkRequest): Promise<NetworkEntry[] | CaptureResult<NetworkEntry>>
+export async function agentNetwork(request: AgentNetworkRequest = {}): Promise<NetworkEntry[] | CaptureResult<NetworkEntry>> {
   return invokeAgentCommand('plugin:agent|agent_network', { request: withCurrentWindow(request) })
 }
 
 /** Return captured Tauri IPC invoke entries (command, timing, ok/error). */
-export async function agentIpc(request: AgentIpcRequest = {}): Promise<IpcEntry[]> {
+export function agentIpc(request?: LegacyCaptureRequest<AgentIpcRequest>): Promise<IpcEntry[]>
+export function agentIpc(request: CursorCaptureRequest<AgentIpcRequest>): Promise<CaptureResult<IpcEntry>>
+export function agentIpc(request: AgentIpcRequest): Promise<IpcEntry[] | CaptureResult<IpcEntry>>
+export async function agentIpc(request: AgentIpcRequest = {}): Promise<IpcEntry[] | CaptureResult<IpcEntry>> {
   return invokeAgentCommand('plugin:agent|agent_ipc', { request: withCurrentWindow(request) })
 }
 

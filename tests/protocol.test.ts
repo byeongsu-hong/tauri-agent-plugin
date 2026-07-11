@@ -17,6 +17,7 @@ describe('agent debug protocol', () => {
       'window',
       'tree',
       'find',
+      'act',
       'click',
       'hover',
       'focus',

@@ -27,6 +27,13 @@ describe('DebuggerSession', () => {
 
     await expect(session.execute('attach', {})).resolves.toEqual({
       attached: true,
+      protocolVersion: 1,
+      sessionId: expect.any(String),
+      platform: expect.stringMatching(/^(linux|macos|windows|unknown)$/),
+      runtime: 'unknown',
+      methods: expect.arrayContaining(['attach', 'act', 'stream', 'ipc']),
+      features: ['locator-action', 'lean-stream', 'capture-cursors'],
+      screenshotBackends: expect.arrayContaining(['dom']),
       windows: [staticWindowInfo('Ducktape')]
     })
     await expect(session.execute('windows', {})).resolves.toEqual([
@@ -71,6 +78,9 @@ describe('DebuggerSession', () => {
     })
 
     await expect(session.execute('record', { action: 'start' })).resolves.toEqual({ recording: true })
+    await expect(session.execute('act', {
+      role: 'textbox', name: 'Agent name', action: 'fill', value: 'fleet', timeoutMs: 100
+    })).resolves.toEqual({ ok: true })
     await expect(session.execute('click', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('hover', { ref: '@1' })).resolves.toEqual({ ok: true })
     await expect(session.execute('focus', { ref: '@2' })).resolves.toEqual({ ok: true })
@@ -245,6 +255,7 @@ describe('DebuggerSession', () => {
     await expect(session.execute('record', { action: 'get' })).resolves.toEqual({
       recording: true,
       entries: [
+        expect.objectContaining({ method: 'act', params: { role: 'textbox', name: 'Agent name', action: 'fill', value: 'fleet', timeoutMs: 100 } }),
         expect.objectContaining({ method: 'click', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'hover', params: { ref: '@1' } }),
         expect.objectContaining({ method: 'focus', params: { ref: '@2' } }),
@@ -442,7 +453,7 @@ describe('DebuggerSession', () => {
       await StaticHtmlAppAdapter.create({ html: '<main aria-label="Scene"><button>One</button></main>' })
     )
 
-    const base = (await session.execute('stream', {})) as StreamResult
+    const base = (await session.execute('stream', { lean: true })) as StreamResult
     expect(base.frames).toEqual([])
     expect(base.snapshot).toContain('button "One"')
 
@@ -453,13 +464,31 @@ describe('DebuggerSession', () => {
     })
     const next = (await session.execute('stream', {
       since: base.cursor,
-      timeoutMs: 1000
+      timeoutMs: 1000,
+      lean: true
     })) as StreamResult
 
     expect(next.cursor).toBeGreaterThan(base.cursor)
     expect(next.dropped).toBe(false)
     expect(next.frames.flatMap((frame) => frame.added).join('\n')).toContain('button "Two"')
-    expect(next.snapshot).toContain('button "Two"')
+    expect(next.snapshot).toBeUndefined()
+  })
+
+  it('returns cursor capture results without skipping limited entries', async () => {
+    const adapter = await StaticHtmlAppAdapter.create({ html: '<main></main>' })
+    adapter.addLog('info', 'one')
+    adapter.addLog('info', 'two')
+    const session = new DebuggerSession(adapter)
+
+    const first = await session.execute('logs', { since: 0, limit: 1 })
+    expect(first).toMatchObject({ entries: [expect.objectContaining({ message: 'one' })], cursor: 1, dropped: false })
+    await session.execute('logs', { clear: true })
+    adapter.addLog('info', 'three')
+    await expect(session.execute('logs', { since: 1 })).resolves.toMatchObject({
+      entries: [expect.objectContaining({ message: 'three' })],
+      cursor: 3,
+      dropped: true
+    })
   })
 })
 

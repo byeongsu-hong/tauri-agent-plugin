@@ -301,6 +301,24 @@ describe('WebviewAgentInstrumentation', () => {
     }
   })
 
+  it('locates after a rerender and acts only when the target is actionable', async () => {
+    document.body.innerHTML = '<main><button disabled>Save</button></main>'
+    let clicked = false
+    document.addEventListener('click', () => { clicked = true }, { once: true })
+    const instrumentation = new WebviewAgentInstrumentation()
+    instrumentation.install()
+    setTimeout(() => {
+      document.querySelector('button')?.replaceWith(Object.assign(document.createElement('button'), { textContent: 'Save' }))
+    }, 10)
+    try {
+      await expect(instrumentation.act({ role: 'button', name: 'Save', action: 'click', timeoutMs: 200 }))
+        .resolves.toEqual({ ok: true })
+      expect(clicked).toBe(true)
+    } finally {
+      instrumentation.dispose()
+    }
+  })
+
   it('traces Tauri IPC invokes and skips its own bridge traffic', async () => {
     type Internals = { invoke: (command: string, args?: unknown) => Promise<unknown> }
     const withInternals = window as typeof window & { __TAURI_INTERNALS__?: Internals }

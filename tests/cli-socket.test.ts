@@ -71,12 +71,21 @@ async function startServer(path: string, port: number): Promise<void> {
   })
 
   const startedAt = Date.now()
-  while (!output.includes('"listening": true')) {
+  while (!output.includes('"listening":true')) {
     if (Date.now() - startedAt > 3000) {
       throw new Error(`server did not start: ${output}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
+}
+
+async function unusedPort(): Promise<number> {
+  const probe = createServer()
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve))
+  const address = probe.address()
+  if (!address || typeof address === 'string') throw new Error('port probe did not bind')
+  await new Promise<void>((resolve) => probe.close(() => resolve()))
+  return address.port
 }
 
 async function startCapturingRpcServer(responses: Record<string, RpcResponse>): Promise<{
@@ -136,7 +145,7 @@ function staticWindowInfo(title: string): Record<string, unknown> {
 
 describe('tauri-agent CLI socket mode', () => {
   it('controls a persistent headless debugger daemon', async () => {
-    const port = 45138
+    const port = await unusedPort()
     await startServer(htmlFile(), port)
 
     expect(runCli(['tree', '--port', String(port)])).toBe(
@@ -153,7 +162,7 @@ describe('tauri-agent CLI socket mode', () => {
   }, PROCESS_SPAWNING_TEST_TIMEOUT_MS)
 
   it('discovers a persistent debugger daemon from an app endpoint registry', async () => {
-    const port = 45139
+    const port = await unusedPort()
     const appId = 'dev.byeongsu.fixture'
     const runtimeDir = mkdtempSync(join(tmpdir(), 'tauri-agent-cli-registry-'))
     const env = { ...process.env, XDG_RUNTIME_DIR: runtimeDir }
@@ -198,6 +207,30 @@ describe('tauri-agent CLI socket mode', () => {
       values: {}
     })
     expect(requests).toEqual([{ method: 'state', params: { window: 'secondary' } }])
+  })
+
+  it('forwards atomic locator actions without a ref refresh', async () => {
+    const result = { ok: true, match: { ref: '@3', name: 'Save' } }
+    const { port, requests } = await startCapturingRpcServer({ act: result })
+
+    expect(JSON.parse(await runCliAsync([
+      'act', 'click', '--port', String(port), '--window', 'secondary', '--role', 'button', '--name', 'Save', '--timeout-ms', '250'
+    ]))).toEqual(result)
+    expect(requests).toEqual([{
+      method: 'act',
+      params: { window: 'secondary', role: 'button', name: 'Save', action: 'click', timeoutMs: 250 }
+    }])
+  })
+
+  it('replays recorded protocol actions sequentially', async () => {
+    const { port, requests } = await startCapturingRpcServer({ act: { ok: true } })
+    const path = join(mkdtempSync(join(tmpdir(), 'tauri-agent-replay-')), 'replay.json')
+    writeFileSync(path, JSON.stringify({ entries: [
+      { method: 'act', params: { role: 'button', name: 'Save', action: 'click' }, timestamp: new Date().toISOString() }
+    ] }))
+
+    expect(JSON.parse(await runCliAsync(['replay', path, '--port', String(port)]))).toEqual({ replayed: 1 })
+    expect(requests).toEqual([{ method: 'act', params: { role: 'button', name: 'Save', action: 'click' } }])
   })
 
   it('forwards state keys to protocol calls', async () => {

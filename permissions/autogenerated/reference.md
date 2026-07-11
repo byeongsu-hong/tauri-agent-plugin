@@ -8,6 +8,7 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 - `allow-agent-attach`
 - `allow-agent-snapshot`
 - `allow-agent-find`
+- `allow-agent-act`
 - `allow-agent-action`
 - `allow-agent-inspect`
 - `allow-agent-type`
@@ -44,6 +45,32 @@ Allows the dev-only Tauri Agent bridge commands for compact semantic trees, sema
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`agent:allow-agent-act`
+
+</td>
+<td>
+
+Enables the agent_act command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`agent:deny-agent-act`
+
+</td>
+<td>
+
+Denies the agent_act command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

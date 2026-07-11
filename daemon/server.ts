@@ -7,6 +7,7 @@ import {
   parseJsonRpcMessage
 } from '../protocol/json-rpc'
 import type { JsonRpcRequest, JsonRpcResponse } from '../protocol/types'
+import { AgentProtocolError } from '../protocol/error'
 
 export type RpcHandler = (message: string) => Promise<string>
 
@@ -102,6 +103,7 @@ function errorMessage(error: unknown): string {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof AgentProtocolError) return error.code
   const message = errorMessage(error)
   if (message.startsWith('stale ref ')) {
     return 'STALE_REF'

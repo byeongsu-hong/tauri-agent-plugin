@@ -16,18 +16,20 @@ pub use endpoint::{
 };
 pub use error::Error;
 pub use models::{
-    AgentAction, AgentActionRequest, AgentAttachRequest, AgentAttachResponse, AgentBlurRequest,
-    AgentCheckRequest, AgentCookieEntry, AgentCookiesRequest, AgentCookiesResponse,
-    AgentDragRequest, AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest,
-    AgentExpectResponse, AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest,
-    AgentIpcEntry, AgentIpcRequest, AgentLocationRequest, AgentLocationResponse, AgentLogEntry,
-    AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest,
+    AgentActRequest, AgentActResponse, AgentAction, AgentActionRequest, AgentAttachRequest,
+    AgentAttachResponse, AgentBlurRequest, AgentCaptureResponse, AgentCheckRequest,
+    AgentCookieEntry, AgentCookiesRequest, AgentCookiesResponse, AgentDragRequest,
+    AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
+    AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentIpcEntry,
+    AgentIpcRequest, AgentLocationRequest, AgentLocationResponse, AgentLogEntry, AgentLogRequest,
+    AgentNetworkEntry, AgentNetworkRequest, AgentRecordEntry, AgentRecordRequest,
     AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest, AgentSelectRequest,
     AgentSnapshotRequest, AgentStateRequest, AgentStorageEntry, AgentStorageRequest,
     AgentStorageResponse, AgentStreamFrame, AgentStreamRequest, AgentStreamResponse,
     AgentTypeRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, Config,
-    CookieAction, InlineServerConfig, KeyModifier, LocationAction, RecordAction, ScreenshotBackend,
-    SnapshotMode, StorageAction, StorageArea, WindowAction, WindowBounds, WindowInfo,
+    CookieAction, InlineServerConfig, KeyModifier, LocationAction, LocatorAction, RecordAction,
+    ScreenshotBackend, SnapshotMode, StorageAction, StorageArea, WindowAction, WindowBounds,
+    WindowInfo,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -38,6 +40,8 @@ pub struct Agent {
     endpoint: Option<AgentEndpointDescriptor>,
     published: bool,
 }
+
+pub(crate) struct AgentSession(pub String);
 
 impl Agent {
     pub fn config(&self) -> &Config {
@@ -111,6 +115,7 @@ impl Builder {
                 validate_inline_server_config(&config, cfg!(debug_assertions))?;
                 app.manage(bridge::AgentBridge::default());
                 app.manage(registry::WebviewRegistry::<R>::default());
+                app.manage(AgentSession(random::random_hex(16)));
                 let endpoint = if config.inline_server.enabled {
                     let server = server::start_inline_debugger_server(
                         app.clone(),
@@ -173,6 +178,7 @@ impl Builder {
                 commands::agent_attach,
                 commands::agent_snapshot,
                 commands::agent_find,
+                commands::agent_act,
                 commands::agent_action,
                 commands::agent_inspect,
                 commands::agent_eval,

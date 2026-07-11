@@ -14,6 +14,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 }))
 
 import {
+  agentAct,
   agentAction,
   agentBlur,
   agentCheck,
@@ -49,6 +50,7 @@ describe('plugin command helpers', () => {
   it('routes every direct Tauri command helper through the plugin invoke surface', async () => {
     await agentSnapshot({ window: 'main', scope: 'main' })
     await agentFind({ window: 'main', role: 'button', name: 'Forge', limit: 1 })
+    await agentAct({ window: 'main', role: 'button', name: 'Forge', action: 'click' })
     await agentInspect({ window: 'main', ref: '@1' })
     await agentEval({ window: 'main', code: 'document.title' })
     await agentSelect({ window: 'main', ref: '@2', value: 'remote' })
@@ -77,6 +79,7 @@ describe('plugin command helpers', () => {
     expect(invokeMock.mock.calls).toEqual([
       ['plugin:agent|agent_snapshot', { request: { window: 'main', scope: 'main' } }],
       ['plugin:agent|agent_find', { request: { window: 'main', role: 'button', name: 'Forge', limit: 1 } }],
+      ['plugin:agent|agent_act', { request: { window: 'main', role: 'button', name: 'Forge', action: 'click' } }],
       ['plugin:agent|agent_inspect', { request: { window: 'main', ref: '@1' } }],
       ['plugin:agent|agent_eval', { request: { window: 'main', code: 'document.title' } }],
       ['plugin:agent|agent_select', { request: { window: 'main', ref: '@2', value: 'remote' } }],
@@ -107,6 +110,7 @@ describe('plugin command helpers', () => {
   it('defaults direct Tauri command helpers to the current window label', async () => {
     await agentSnapshot({ scope: 'main' })
     await agentFind({ role: 'button', name: 'Forge', limit: 1 })
+    await agentAct({ role: 'button', name: 'Forge', action: 'click' })
     await agentInspect({ ref: '@1' })
     await agentEval({ code: 'document.title' })
     await agentSelect({ ref: '@2', value: 'remote' })
@@ -133,6 +137,7 @@ describe('plugin command helpers', () => {
     expect(invokeMock.mock.calls).toEqual([
       ['plugin:agent|agent_snapshot', { request: { window: 'secondary', scope: 'main' } }],
       ['plugin:agent|agent_find', { request: { window: 'secondary', role: 'button', name: 'Forge', limit: 1 } }],
+      ['plugin:agent|agent_act', { request: { window: 'secondary', role: 'button', name: 'Forge', action: 'click' } }],
       ['plugin:agent|agent_inspect', { request: { window: 'secondary', ref: '@1' } }],
       ['plugin:agent|agent_eval', { request: { window: 'secondary', code: 'document.title' } }],
       ['plugin:agent|agent_select', { request: { window: 'secondary', ref: '@2', value: 'remote' } }],

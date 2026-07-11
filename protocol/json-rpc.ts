@@ -6,6 +6,7 @@ export const AGENT_METHODS = [
   'window',
   'tree',
   'find',
+  'act',
   'click',
   'hover',
   'focus',
@@ -51,6 +52,7 @@ export function isAgentMethod(method: string): method is AgentMethod {
  * captured on one surface replays on any other.
  */
 export const RECORDABLE_METHODS = [
+  'act',
   'click',
   'hover',
   'focus',

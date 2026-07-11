@@ -65,9 +65,10 @@ describe('debugger JSON-RPC transport', () => {
 
     await client.call('tree')
 
-    await expect(client.call('click', { ref: '@404' })).rejects.toThrow(
-      'STALE_REF: stale ref @404; run tree again'
-    )
+    await expect(client.call('click', { ref: '@404' })).rejects.toMatchObject({
+      code: 'STALE_REF',
+      message: 'stale ref @404; run tree again'
+    })
   })
 
   it('retries transient socket resets only for read-only calls', async () => {
