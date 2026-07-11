@@ -29,6 +29,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INVALID_PARAMS` and preserves all supported location actions.
 - MCP tool calls now return `-32602` for malformed params, arguments, and
   typed connection fields instead of silently applying defaults.
+- MCP numeric schemas and request validation now enforce protocol-safe integer
+  bounds for cursors, limits, timeouts, polling intervals, and ports.
 - Live bridge requests now return `INVALID_PARAMS` for malformed scalar,
   enum, upload, and modifier fields; legacy `value` aliases are removed.
 - Typed Tauri commands now omit absent/null bridge fields and canonicalize
