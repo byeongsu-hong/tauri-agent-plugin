@@ -34,5 +34,8 @@ const COMMANDS: &[&str] = &[
 ];
 
 fn main() {
+    // The public crate name does not use Tauri's `tauri-plugin-*` convention,
+    // so give its build helper the stable runtime identity explicitly.
+    std::env::set_var("CARGO_PKG_NAME", "tauri-plugin-agent");
     tauri_plugin::Builder::new(COMMANDS).build();
 }

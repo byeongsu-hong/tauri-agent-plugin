@@ -79,10 +79,10 @@ captures (`--ref`) always use the DOM backend.
 ## Package exports
 
 ```ts
-import { WebviewAgentInstrumentation, agentSnapshot /* … */ } from '@byeongsu-hong/tauri-plugin-agent'
-import { DebuggerClient, SocketTransport } from '@byeongsu-hong/tauri-plugin-agent/daemon'
-import { createMcpRequestHandler } from '@byeongsu-hong/tauri-plugin-agent/mcp'
-import { AGENT_METHODS } from '@byeongsu-hong/tauri-plugin-agent/protocol'
+import { WebviewAgentInstrumentation, agentSnapshot /* … */ } from '@byeongsu-hong/tauri-agent-plugin'
+import { DebuggerClient, SocketTransport } from '@byeongsu-hong/tauri-agent-plugin/daemon'
+import { createMcpRequestHandler } from '@byeongsu-hong/tauri-agent-plugin/mcp'
+import { AGENT_METHODS } from '@byeongsu-hong/tauri-agent-plugin/protocol'
 ```
 
 `jsdom` is an optional peer used only by the static `--from-html` adapter;

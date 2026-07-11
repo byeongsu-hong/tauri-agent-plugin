@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use tauri_plugin_agent::{
+use tauri_agent_plugin::{
     endpoint_registry_path, endpoint_runtime_dir, read_endpoint_registry, remove_endpoint_registry,
     write_endpoint_registry, AgentEndpointDescriptor, VncEndpoint,
 };

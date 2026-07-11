@@ -3,19 +3,25 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@byeongsu-hong/tauri-plugin-agent",
+      "name": "@byeongsu-hong/tauri-agent-plugin",
       "dependencies": {
         "@tauri-apps/api": "^2.11.1",
         "commander": "^14.0.0",
-        "jsdom": "^26.1.0",
       },
       "devDependencies": {
         "@types/jsdom": "^21.1.7",
         "@types/node": "^24.0.0",
+        "jsdom": "^26.1.0",
         "tsup": "^8.5.0",
         "typescript": "^5.8.3",
         "vitest": "^3.2.4",
       },
+      "peerDependencies": {
+        "jsdom": "^26.1.0",
+      },
+      "optionalPeers": [
+        "jsdom",
+      ],
     },
   },
   "packages": {

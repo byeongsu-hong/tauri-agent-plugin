@@ -1,5 +1,5 @@
 {
-  "name": "@byeongsu-hong/tauri-plugin-agent",
+  "name": "@byeongsu-hong/tauri-agent-plugin",
   "version": "0.0.2",
   "description": "Agent-facing control surface for live Tauri apps using compact semantic trees.",
   "type": "module",

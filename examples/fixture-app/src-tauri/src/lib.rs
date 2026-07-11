@@ -10,7 +10,7 @@ const SELF_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_agent::init())
+        .plugin(tauri_agent_plugin::init())
         .on_page_load(|webview, payload| {
             if std::env::var(SELF_TEST_ENV).is_err() || webview.label() != "main" {
                 return;

@@ -22,7 +22,7 @@ import {
   agentState,
   agentStorage,
   agentWait
-} from '@byeongsu-hong/tauri-plugin-agent'
+} from '../../../dist-js/index.js'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import './style.css'
 
