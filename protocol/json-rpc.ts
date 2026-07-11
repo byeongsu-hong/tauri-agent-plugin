@@ -39,6 +39,10 @@ export const AGENT_METHODS = [
 
 const AGENT_METHOD_SET = new Set<string>(AGENT_METHODS)
 
+export function isJsonRpcId(value: unknown): value is JsonRpcId {
+  return typeof value === 'string' || (typeof value === 'number' && Number.isSafeInteger(value))
+}
+
 export class UnknownAgentMethodError extends Error {
   constructor(
     readonly id: JsonRpcId,
@@ -87,6 +91,7 @@ export function createRequest<TParams>(
   method: AgentMethod,
   params?: TParams
 ): JsonRpcRequest<TParams> {
+  assertJsonRpcId(id)
   return params === undefined ? { jsonrpc: '2.0', id, method } : { jsonrpc: '2.0', id, method, params }
 }
 
@@ -94,6 +99,7 @@ export function createSuccessResponse<TResult>(
   id: JsonRpcId,
   result: TResult
 ): JsonRpcSuccess<TResult> {
+  assertJsonRpcId(id)
   return { jsonrpc: '2.0', id, result }
 }
 
@@ -103,6 +109,7 @@ export function createErrorResponse(
   message: string,
   data?: unknown
 ): JsonRpcError {
+  assertJsonRpcId(id)
   return data === undefined
     ? { jsonrpc: '2.0', id, error: { code, message } }
     : { jsonrpc: '2.0', id, error: { code, message, data } }
@@ -121,7 +128,7 @@ export function parseJsonRpcMessage(message: string): JsonRpcRequest {
   }
 
   const id = parsed.id
-  if (typeof id !== 'string' && typeof id !== 'number') {
+  if (!isJsonRpcId(id)) {
     throw new Error('invalid JSON-RPC 2.0 message')
   }
 
@@ -142,4 +149,8 @@ export function parseJsonRpcMessage(message: string): JsonRpcRequest {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function assertJsonRpcId(id: JsonRpcId): void {
+  if (!isJsonRpcId(id)) throw new Error('invalid JSON-RPC id')
 }

@@ -457,6 +457,8 @@ describe('tauri-agent MCP server', () => {
     ['null', -32600],
     [JSON.stringify({ jsonrpc: '2.0', id: null, method: 'tools/list' }), -32600],
     [JSON.stringify({ jsonrpc: '2.0', id: true, method: 'tools/list' }), -32600],
+    ['{"jsonrpc":"2.0","id":1.5,"method":"tools/list"}', -32600],
+    ['{"jsonrpc":"2.0","id":9007199254740992,"method":"tools/list"}', -32600],
     ['{"jsonrpc":"2.0","id":1e400,"method":"tools/list"}', -32600]
   ])('rejects malformed MCP request envelopes %#', async (request, code) => {
     expect(JSON.parse(await requiredResponse(createMcpRequestHandler()(request)))).toMatchObject({

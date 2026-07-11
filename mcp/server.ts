@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 
 import type { DebuggerClient } from '../daemon/client'
 import { collectDiagnosis, connectDebuggerClient, pollFollow, type DebuggerTarget } from '../daemon/connect'
+import { isJsonRpcId } from '../protocol/json-rpc'
 import type { AgentMethod } from '../protocol/types'
 
 const MCP_PROTOCOL_VERSION = '2025-11-25'
@@ -832,11 +833,7 @@ function parseJsonRpcRequest(message: string): JsonRpcRequest {
   ) {
     throw new Error('invalid MCP JSON-RPC request')
   }
-  if (
-    'id' in parsed &&
-    (typeof parsed.id !== 'string' &&
-      (typeof parsed.id !== 'number' || !Number.isFinite(parsed.id)))
-  ) {
+  if ('id' in parsed && !isJsonRpcId(parsed.id)) {
     throw new Error('invalid MCP JSON-RPC request')
   }
   return parsed as unknown as JsonRpcRequest

@@ -6,6 +6,7 @@ import {
   createRequest,
   createSuccessResponse,
   isAgentMethod,
+  isJsonRpcId,
   parseJsonRpcMessage
 } from '../protocol/json-rpc'
 
@@ -77,6 +78,13 @@ describe('agent debug protocol', () => {
         message: 'stale ref @4; run tree again'
       }
     })
+
+    expect(isJsonRpcId('request-7')).toBe(true)
+    expect(isJsonRpcId(Number.MAX_SAFE_INTEGER)).toBe(true)
+    expect(isJsonRpcId(1.5)).toBe(false)
+    expect(isJsonRpcId(Number.MAX_SAFE_INTEGER + 1)).toBe(false)
+    expect(() => createRequest(Number.POSITIVE_INFINITY, 'windows')).toThrow('invalid JSON-RPC id')
+    expect(() => createSuccessResponse(1.5, null)).toThrow('invalid JSON-RPC id')
   })
 
   it('parses valid messages and rejects invalid messages clearly', () => {
@@ -93,5 +101,10 @@ describe('agent debug protocol', () => {
     expect(() => parseJsonRpcMessage('{"jsonrpc":"2.0","id":1,"method":"unknown"}')).toThrow(
       'unknown agent method: unknown'
     )
+    for (const id of ['1.5', '9007199254740992', '1e400']) {
+      expect(() => parseJsonRpcMessage(`{"jsonrpc":"2.0","id":${id},"method":"windows"}`)).toThrow(
+        'invalid JSON-RPC 2.0 message'
+      )
+    }
   })
 })
