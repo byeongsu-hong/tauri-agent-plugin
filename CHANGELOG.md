@@ -64,6 +64,10 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   closing an oversized request connection.
 - TypeScript line servers now match Rust's 30-second idle timeout and 64-client
   concurrent connection cap.
+- TypeScript line servers now process each connection in request order, preserve
+  earlier responses before oversized-line errors, and pause idle timeouts while
+  a request is executing. Socket reads and subsequent requests now wait for
+  response writes to flush instead of growing the writable buffer unchecked.
 - TypeScript JSON-RPC errors now preserve valid request ids for unknown methods,
   matching the Rust inline server.
 - Static `serve` mode now binds only to `127.0.0.1`; its unauthenticated daemon

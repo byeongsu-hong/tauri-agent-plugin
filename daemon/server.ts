@@ -66,8 +66,12 @@ async function handleLineSocket(
 ): Promise<void> {
   let buffer = ''
   let closed = false
+  let accepting = true
+  let queued = 0
+  let processing = Promise.resolve()
   const stop = (): void => {
     closed = true
+    accepting = false
   }
   // Without an error handler a client reset (ECONNRESET) raises an unhandled
   // 'error' event and crashes the daemon process.
@@ -75,15 +79,36 @@ async function handleLineSocket(
   socket.setTimeout(idleTimeoutMs, () => socket.destroy())
   socket.on('error', stop)
   socket.on('close', stop)
+  const enqueue = (work: () => Promise<void> | void): void => {
+    if (queued === 0) socket.pause()
+    queued += 1
+    socket.setTimeout(0)
+    processing = processing
+      .then(async () => {
+        if (!closed) await work()
+      })
+      .catch(() => {})
+      .finally(() => {
+        queued -= 1
+        if (!closed && queued === 0) {
+          socket.setTimeout(idleTimeoutMs)
+          socket.resume()
+        }
+      })
+  }
   const rejectOversizedRequest = (): void => {
-    if (closed) return
-    closed = true
-    const response = createErrorResponse(0, 'INVALID_REQUEST', 'request line exceeds the maximum length')
-    if (socket.writable) socket.end(`${JSON.stringify(response)}\n`)
-    else socket.destroy()
+    if (!accepting) return
+    accepting = false
+    buffer = ''
+    enqueue(() => {
+      closed = true
+      const response = createErrorResponse(0, 'INVALID_REQUEST', 'request line exceeds the maximum length')
+      if (socket.writable) socket.end(`${JSON.stringify(response)}\n`)
+      else socket.destroy()
+    })
   }
   socket.on('data', (chunk) => {
-    if (closed) {
+    if (!accepting) {
       return
     }
     buffer += chunk.toString()
@@ -97,13 +122,12 @@ async function handleLineSocket(
       if (!line.trim()) {
         continue
       }
-      void handler(line)
-        .then((response) => {
-          if (!closed && socket.writable) {
-            socket.write(`${response}\n`)
-          }
-        })
-        .catch(() => {})
+      enqueue(async () => {
+        const response = await handler(line)
+        if (!closed && socket.writable) {
+          await new Promise<void>((resolve) => socket.write(`${response}\n`, () => resolve()))
+        }
+      })
     }
     if (Buffer.byteLength(buffer, 'utf8') > maxRequestLineBytes) {
       // A client that never sends a newline would otherwise grow the buffer
