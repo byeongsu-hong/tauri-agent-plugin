@@ -100,6 +100,22 @@ describe('debugger JSON-RPC transport', () => {
     })
   })
 
+  it('preserves valid request ids when rejecting unknown methods', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' }))
+    const handler = createDebuggerRpcHandler(session)
+
+    expect(JSON.parse(await handler(JSON.stringify({
+      jsonrpc: '2.0', id: 9, method: 'missing'
+    })))).toEqual({
+      jsonrpc: '2.0',
+      id: 9,
+      error: { code: 'INVALID_REQUEST', message: 'unknown agent method: missing' }
+    })
+    expect(JSON.parse(await handler(JSON.stringify({
+      jsonrpc: '2.0', id: null, method: 'missing'
+    })))).toMatchObject({ id: 0, error: { code: 'INVALID_REQUEST' } })
+  })
+
   it('retries transient socket resets only for read-only calls', async () => {
     const readTransport = new FlakyResetTransport({ href: 'http://127.0.0.1:1420/' })
     const readClient = new DebuggerClient(readTransport)
