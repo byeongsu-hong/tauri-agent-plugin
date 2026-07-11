@@ -45,6 +45,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   validation and use atomic owner-only file replacement.
 - MCP requests now reject invalid JSON-RPC ids plus malformed initialize and
   tools/list params instead of accepting or ignoring them.
+- MCP stdio now caps newline-delimited requests by UTF-8 byte length and
+  recovers cleanly after discarding an oversized line.
 
 ## [0.0.2] - 2026-07-11
 
