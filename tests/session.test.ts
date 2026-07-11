@@ -336,6 +336,20 @@ describe('DebuggerSession', () => {
     await expect(session.execute('window', { action: 'setPosition', x: 10 })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
   })
 
+  it('reports the current document title without replacing the window title', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({
+      html: '<title>Document title</title><main>Forge</main>',
+      title: 'Window title'
+    }))
+
+    await expect(session.execute('windows')).resolves.toEqual([
+      expect.objectContaining({ title: 'Window title' })
+    ])
+    await expect(session.execute('state', { key: 'title' })).resolves.toBe('Document title')
+    await session.execute('eval', { code: "document.title = 'Updated title'" })
+    await expect(session.execute('state', { key: 'title' })).resolves.toBe('Updated title')
+  })
+
   it('removes path-scoped cookies visible on the current route', async () => {
     const session = new DebuggerSession(
       await StaticHtmlAppAdapter.create({
