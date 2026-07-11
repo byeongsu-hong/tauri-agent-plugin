@@ -461,18 +461,18 @@ describe('tauri-agent CLI socket mode', () => {
 
   it('forwards network options to protocol calls', async () => {
     const { port, requests } = await startCapturingRpcServer({
-      network: []
+      network: { entries: [], cursor: 0, dropped: false }
     })
 
     expect(
       JSON.parse(await runCliAsync(['network', '--port', String(port), '--window', 'secondary', '--clear']))
-    ).toEqual([])
+    ).toEqual({ entries: [], cursor: 0, dropped: false })
     expect(requests).toEqual([{ method: 'network', params: { window: 'secondary', clear: true } }])
   })
 
   it.each([
-    ['logs', [{ level: 'info', message: 'booted', timestamp: '2026-07-07T00:00:00.000Z' }]],
-    ['events', [{ kind: 'click', timestamp: '2026-07-07T00:00:00.000Z', detail: { ref: '@3' } }]]
+    ['logs', { entries: [{ level: 'info', message: 'booted', timestamp: '2026-07-07T00:00:00.000Z' }], cursor: 1, dropped: false }],
+    ['events', { entries: [{ kind: 'click', timestamp: '2026-07-07T00:00:00.000Z', detail: { ref: '@3' } }], cursor: 1, dropped: false }]
   ])('forwards %s clear options to protocol calls', async (command, response) => {
     const { port, requests } = await startCapturingRpcServer({
       [command]: response
@@ -622,7 +622,11 @@ describe('tauri-agent CLI socket mode', () => {
     }
   ])('streams new $command entries in follow mode', async ({ command, first, second }) => {
     const { port, requests } = await startCapturingRpcServer({
-      [command]: (callIndex: number) => (callIndex === 0 ? [first] : [first, second])
+      [command]: (callIndex: number) => callIndex === 0
+        ? { entries: [first], cursor: 8, dropped: false }
+        : callIndex === 1
+          ? { entries: [second], cursor: 9, dropped: false }
+          : { entries: [], cursor: 9, dropped: false }
     })
 
     const output = await runCliAsync([
@@ -630,6 +634,8 @@ describe('tauri-agent CLI socket mode', () => {
       '--port',
       String(port),
       '--follow',
+      '--since',
+      '7',
       '--poll-ms',
       '10',
       '--timeout-ms',
@@ -639,8 +645,8 @@ describe('tauri-agent CLI socket mode', () => {
     expect(output.split('\n').map((line) => JSON.parse(line))).toEqual([first, second])
     const followRequests = requests.filter((request) => request.method === command)
     expect(followRequests.length).toBeGreaterThanOrEqual(2)
-    expect(followRequests.every((request) => JSON.stringify(request.params) === JSON.stringify({ follow: true }))).toBe(
-      true
-    )
+    expect(followRequests.slice(0, 2).map((request) =>
+      (request.params as { since?: number } | undefined)?.since
+    )).toEqual([7, 8])
   })
 })

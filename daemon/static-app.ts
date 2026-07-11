@@ -36,6 +36,7 @@ import { SemanticStream } from '../guest-js/semantic-stream'
 import { CaptureBuffer } from '../guest-js/capture-buffer'
 import { locateActionable } from '../guest-js/locator-action'
 import { AGENT_METHODS } from '../protocol/json-rpc'
+import { AgentProtocolError } from '../protocol/error'
 import {
   applyCookieAction,
   applyStorageAction,
@@ -64,6 +65,7 @@ import type {
   CookieResult,
   DialogParams,
   DialogResult,
+  DetailResult,
   EvalResult,
   ExpectParams,
   ExpectResult,
@@ -71,6 +73,7 @@ import type {
   FindParams,
   FindResult,
   InspectResult,
+  IpcDetail,
   IpcEntry,
   IpcParams,
   LocationParams,
@@ -79,6 +82,7 @@ import type {
   LogsParams,
   KeyModifier,
   NetworkEntry,
+  NetworkDetail,
   NetworkParams,
   ShotParams,
   ScreenshotResult,
@@ -108,6 +112,8 @@ export class StaticHtmlAppAdapter {
   private events = new CaptureBuffer<AgentEvent>(1000)
   private network = new CaptureBuffer<NetworkEntry>(1000)
   private readonly sessionId = crypto.randomUUID()
+  private actionTraceId = 0
+  private activeTraceId?: string
   private readonly dialogController = new DialogController((entry) =>
     this.pushEvent('dialog', { type: entry.type, message: entry.message, response: entry.response })
   )
@@ -185,12 +191,12 @@ export class StaticHtmlAppAdapter {
     this.pushEvent('attach')
     return {
       attached: true,
-      protocolVersion: 1,
+      protocolVersion: 2,
       sessionId: this.sessionId,
       platform: staticPlatform(),
       runtime: 'unknown',
       methods: [...AGENT_METHODS],
-      features: ['locator-action', 'lean-stream', 'capture-cursors'],
+      features: ['locator-action', 'lean-stream', 'capture-cursors', 'correlated-details'],
       screenshotBackends: ['dom'],
       windows: await this.windows()
     }
@@ -312,19 +318,26 @@ export class StaticHtmlAppAdapter {
       const snapshot = snapshotDocument(this.dom.window.document, { scope: locator.scope })
       return findRefs(locator, snapshot.refs)
     })
-    switch (params.action) {
-      case 'click': await this.click(match!.ref); break
-      case 'hover': await this.hover(match!.ref); break
-      case 'focus': await this.focus(match!.ref); break
-      case 'blur': await this.blur(match!.ref); break
-      case 'fill': await this.fill(match!.ref, stringActionValue(params)); break
-      case 'type': await this.type(match!.ref, stringActionValue(params)); break
-      case 'press': await this.press(stringActionValue(params), { ref: match?.ref }); break
-      case 'scroll': await this.scroll(match!.ref, { x: params.x, y: params.y }); break
-      case 'select': await this.select(match!.ref, stringActionValue(params)); break
-      case 'check': await this.check(match!.ref, typeof params.value === 'boolean' ? params.value : true); break
+    const previousTraceId = this.activeTraceId
+    const traceId = `action-${++this.actionTraceId}`
+    this.activeTraceId = traceId
+    try {
+      switch (params.action) {
+        case 'click': await this.click(match!.ref); break
+        case 'hover': await this.hover(match!.ref); break
+        case 'focus': await this.focus(match!.ref); break
+        case 'blur': await this.blur(match!.ref); break
+        case 'fill': await this.fill(match!.ref, stringActionValue(params)); break
+        case 'type': await this.type(match!.ref, stringActionValue(params)); break
+        case 'press': await this.press(stringActionValue(params), { ref: match?.ref }); break
+        case 'scroll': await this.scroll(match!.ref, { x: params.x, y: params.y }); break
+        case 'select': await this.select(match!.ref, stringActionValue(params)); break
+        case 'check': await this.check(match!.ref, typeof params.value === 'boolean' ? params.value : true); break
+      }
+      return { ok: true, traceId, ...(params.detail && match ? { match } : {}) }
+    } finally {
+      this.activeTraceId = previousTraceId
     }
-    return { ok: true, ...(params.detail && match ? { match } : {}) }
   }
 
   async expect(options: ExpectParams): Promise<ExpectResult> {
@@ -538,24 +551,32 @@ export class StaticHtmlAppAdapter {
     throw new Error(`wait timed out for function: ${fn}`)
   }
 
-  getLogs(params: LogsParams = {}): LogEntry[] | CaptureResult<LogEntry> {
+  getLogs(params: LogsParams = {}): CaptureResult<LogEntry> {
     return this.logs.read(params)
   }
 
-  getEvents(params: EventsParams = {}): AgentEvent[] | CaptureResult<AgentEvent> {
+  getEvents(params: EventsParams = {}): CaptureResult<AgentEvent> {
     return this.events.read(params)
   }
 
-  getNetwork(params: NetworkParams = {}): NetworkEntry[] | CaptureResult<NetworkEntry> {
+  getNetwork(params: NetworkParams & { id: string }): DetailResult<NetworkDetail>
+  getNetwork(params?: NetworkParams): CaptureResult<NetworkEntry>
+  getNetwork(params: NetworkParams = {}): CaptureResult<NetworkEntry> | DetailResult<NetworkDetail> {
+    if (params.id !== undefined) {
+      unavailableDetail(params)
+    }
     return this.network.read(params)
   }
 
   // The static jsdom adapter has no Tauri IPC channel, so it captures nothing;
   // the method exists for surface parity with the live guest instrumentation.
-  async ipc(params: IpcParams = {}): Promise<IpcEntry[] | CaptureResult<IpcEntry>> {
-    return params.since !== undefined || params.limit !== undefined
-      ? { entries: [], cursor: params.since ?? 0, dropped: false }
-      : []
+  async ipc(params: IpcParams & { id: string }): Promise<DetailResult<IpcDetail>>
+  async ipc(params?: IpcParams): Promise<CaptureResult<IpcEntry>>
+  async ipc(params: IpcParams = {}): Promise<CaptureResult<IpcEntry> | DetailResult<IpcDetail>> {
+    if (params.id !== undefined) {
+      unavailableDetail(params)
+    }
+    return { entries: [], cursor: params.since ?? 0, dropped: false }
   }
 
   storage(options: StorageParams = {}): StorageResult {
@@ -589,7 +610,8 @@ export class StaticHtmlAppAdapter {
       kind,
       detail,
       window: this.label,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      ...(this.activeTraceId ? { traceId: this.activeTraceId } : {})
     })
   }
 
@@ -642,6 +664,14 @@ export class StaticHtmlAppAdapter {
       { capture: true }
     )
   }
+}
+
+function unavailableDetail(params: NetworkParams | IpcParams): never {
+  if (!params.id?.trim()) throw new AgentProtocolError('INVALID_PARAMS', 'id must be a non-empty string')
+  if (params.clear || params.since !== undefined || params.limit !== undefined) {
+    throw new AgentProtocolError('INVALID_PARAMS', 'id cannot be combined with capture list options')
+  }
+  throw new AgentProtocolError('CAPTURE_NOT_FOUND', `capture detail not retained: ${params.id}`)
 }
 
 function requiredDataUrlBody(dataUrl: string | undefined): string {

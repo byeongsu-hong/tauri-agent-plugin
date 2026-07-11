@@ -62,8 +62,8 @@ function isReadOnlyCall(method: AgentMethod, params: Record<string, unknown> = {
       return true
     case 'logs':
     case 'events':
-      return params.clear !== true
     case 'network':
+    case 'ipc':
       return params.clear !== true
     case 'storage':
       return params.action === undefined || params.action === 'get'

@@ -111,9 +111,15 @@ describe('tauri-agent CLI', () => {
       Notify: false,
       Worker: 'local'
     })
-    expect(JSON.parse(runCli(['logs', '--from-html', path]))).toEqual([])
-    expect(JSON.parse(runCli(['events', '--from-html', path]))).toEqual([])
-    expect(JSON.parse(runCli(['network', '--from-html', path]))).toEqual([])
+    expect(JSON.parse(runCli(['logs', '--from-html', path]))).toEqual({ entries: [], cursor: 0, dropped: false })
+    expect(JSON.parse(runCli(['events', '--from-html', path]))).toEqual({ entries: [], cursor: 0, dropped: false })
+    expect(JSON.parse(runCli(['network', '--from-html', path]))).toEqual({ entries: [], cursor: 0, dropped: false })
+    expect(JSON.parse(runCli(['diagnose', '--from-html', path]))).toMatchObject({
+      attach: { attached: true },
+      logs: [],
+      network: [],
+      ipc: []
+    })
     expect(
       JSON.parse(runCli(['storage', '--action', 'set', '--key', 'agent.token', '--value', 'ready', '--from-html', path]))
     ).toEqual({

@@ -88,6 +88,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_events',
       'tauri_network',
       'tauri_ipc',
+      'tauri_diagnose',
       'tauri_storage',
       'tauri_cookies',
       'tauri_location',
@@ -166,7 +167,7 @@ describe('tauri-agent MCP server', () => {
     const parsed = JSON.parse(core)
 
     expect(parsed.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      'tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_shot', 'tauri_ipc', 'tauri_expect', 'tauri_state', 'tauri_stream'
+      'tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_shot', 'tauri_ipc', 'tauri_diagnose', 'tauri_expect', 'tauri_state', 'tauri_stream'
     ])
     expect(parsed.result.tools.every((tool: { inputSchema: { properties: Record<string, unknown> } }) =>
       !('app' in tool.inputSchema.properties) && !('port' in tool.inputSchema.properties)
@@ -182,6 +183,73 @@ describe('tauri-agent MCP server', () => {
       jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'tauri_stream', arguments: { since: 0 } }
     }))))
     expect(stream.result.content[0].text).not.toContain('snapshot')
+
+    const diagnosis = JSON.parse(await requiredResponse(createMcpRequestHandler({
+      profile: 'core',
+      target: { resolveHtml: async () => '<main><button>Save</button></main>' }
+    })(JSON.stringify({
+      jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'tauri_diagnose', arguments: {} }
+    }))))
+    expect(JSON.parse(diagnosis.result.content[0].text)).toMatchObject({
+      attach: { attached: true },
+      logs: [],
+      network: [],
+      ipc: []
+    })
+  })
+
+  it('diagnoses one action trace and expands its retained details', async () => {
+    const fakeServer = await startFakeRpcServer({
+      attach: { attached: true },
+      state: { title: 'Agents' },
+      logs: {
+        entries: [
+          { message: 'old', traceId: 'action-1' },
+          { message: 'saving', traceId: 'action-2' }
+        ],
+        cursor: 2,
+        dropped: false
+      },
+      events: {
+        entries: [{ kind: 'click', traceId: 'action-2' }],
+        cursor: 1,
+        dropped: false
+      },
+      network: (callIndex: number) => callIndex === 0
+        ? { entries: [{ id: 'fetch-2', traceId: 'action-2' }], cursor: 1, dropped: false }
+        : { detail: { id: 'fetch-2', traceId: 'action-2', requestBody: { token: '[REDACTED]' } } },
+      ipc: (callIndex: number) => callIndex === 0
+        ? { entries: [{ id: 'ipc-2', command: 'save', traceId: 'action-2' }], cursor: 1, dropped: false }
+        : { detail: { id: 'ipc-2', command: 'save', traceId: 'action-2', args: { token: '[REDACTED]' } } }
+    })
+
+    try {
+      const response = JSON.parse(await requiredResponse(createMcpRequestHandler()(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'tauri_diagnose',
+            arguments: { port: fakeServer.port, traceId: 'action-2' }
+          }
+        })
+      )))
+
+      expect(JSON.parse(response.result.content[0].text)).toMatchObject({
+        traceId: 'action-2',
+        logs: [{ message: 'saving', traceId: 'action-2' }],
+        events: [{ kind: 'click', traceId: 'action-2' }],
+        network: [{ id: 'fetch-2', requestBody: { token: '[REDACTED]' } }],
+        ipc: [{ id: 'ipc-2', args: { token: '[REDACTED]' } }]
+      })
+      expect(fakeServer.requests.filter((request) => request.method === 'network')[1].params)
+        .toEqual({ id: 'fetch-2' })
+      expect(fakeServer.requests.filter((request) => request.method === 'ipc')[1].params)
+        .toEqual({ id: 'ipc-2' })
+    } finally {
+      fakeServer.close()
+    }
   })
 
   it('reports unknown tools as MCP request errors without requiring a debugger connection', async () => {
@@ -228,11 +296,10 @@ describe('tauri-agent MCP server', () => {
     const fakeServer = await startFakeRpcServer({
       logs: (callIndex: number) =>
         callIndex === 0
-          ? [{ level: 'info', message: 'booted' }]
-          : [
-              { level: 'info', message: 'booted' },
-              { level: 'error', message: 'late failure' }
-            ]
+          ? { entries: [{ level: 'info', message: 'booted' }], cursor: 8, dropped: false }
+          : callIndex === 1
+            ? { entries: [{ level: 'error', message: 'late failure' }], cursor: 9, dropped: false }
+            : { entries: [], cursor: 9, dropped: false }
     })
 
     try {
@@ -245,7 +312,7 @@ describe('tauri-agent MCP server', () => {
               method: 'tools/call',
               params: {
                 name: 'tauri_logs',
-                arguments: { port: fakeServer.port, follow: true, pollMs: 1, timeoutMs: 50 }
+                arguments: { port: fakeServer.port, follow: true, since: 7, pollMs: 1, timeoutMs: 50 }
               }
             })
           )
@@ -259,7 +326,7 @@ describe('tauri-agent MCP server', () => {
       ])
       expect(fakeServer.requests.length).toBeGreaterThanOrEqual(2)
       expect(fakeServer.requests.every((request) => request.method === 'logs')).toBe(true)
-      expect(fakeServer.requests.every((request) => request.params?.follow === true)).toBe(true)
+      expect(fakeServer.requests.map((request) => request.params?.since).slice(0, 2)).toEqual([7, 8])
       expect(fakeServer.requests.every((request) => request.params?.clear === undefined)).toBe(true)
     } finally {
       fakeServer.close()
@@ -672,7 +739,7 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(logs.result.structuredContent).toBeUndefined()
-    expect(JSON.parse(logs.result.content[0].text)).toEqual([])
+    expect(JSON.parse(logs.result.content[0].text)).toEqual({ entries: [], cursor: 0, dropped: false })
 
     const events = JSON.parse(
       await requiredResponse(
@@ -691,7 +758,7 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(events.result.structuredContent).toBeUndefined()
-    expect(JSON.parse(events.result.content[0].text)).toEqual([])
+    expect(JSON.parse(events.result.content[0].text)).toEqual({ entries: [], cursor: 0, dropped: false })
 
     const network = JSON.parse(
       await requiredResponse(
@@ -710,7 +777,7 @@ describe('tauri-agent MCP server', () => {
     )
 
     expect(network.result.structuredContent).toBeUndefined()
-    expect(JSON.parse(network.result.content[0].text)).toEqual([])
+    expect(JSON.parse(network.result.content[0].text)).toEqual({ entries: [], cursor: 0, dropped: false })
 
     const wait = JSON.parse(
       await requiredResponse(

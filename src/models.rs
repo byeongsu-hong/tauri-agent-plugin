@@ -184,6 +184,7 @@ pub enum LocatorAction {
 #[serde(rename_all = "camelCase")]
 pub struct AgentActResponse {
     pub ok: bool,
+    pub trace_id: String,
     #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
     pub match_entry: Option<AgentInspectResponse>,
 }
@@ -363,7 +364,6 @@ pub enum ScreenshotBackend {
 #[serde(rename_all = "camelCase")]
 pub struct AgentLogRequest {
     pub window: Option<String>,
-    pub follow: Option<bool>,
     pub clear: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<u64>,
@@ -378,13 +378,14 @@ pub struct AgentLogEntry {
     pub message: String,
     pub timestamp: String,
     pub window: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventsRequest {
     pub window: Option<String>,
-    pub follow: Option<bool>,
     pub clear: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<u64>,
@@ -396,12 +397,13 @@ pub struct AgentEventsRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentNetworkRequest {
     pub window: Option<String>,
-    pub follow: Option<bool>,
     pub clear: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -421,29 +423,57 @@ pub struct AgentNetworkEntry {
     pub response_body_size: Option<u64>,
     pub error: Option<String>,
     pub window: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentNetworkDetail {
+    #[serde(flatten)]
+    pub entry: AgentNetworkEntry,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_headers: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_body: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_headers: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_body: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum AgentNetworkResponse {
+    Capture(AgentCaptureResponse<AgentNetworkEntry>),
+    Detail(Box<AgentDetailResponse<AgentNetworkDetail>>),
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentIpcRequest {
     pub window: Option<String>,
-    pub follow: Option<bool>,
     pub clear: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum AgentCaptureResponse<T> {
-    Legacy(Vec<T>),
-    Cursor {
-        entries: Vec<T>,
-        cursor: u64,
-        dropped: bool,
-    },
+#[serde(rename_all = "camelCase")]
+pub struct AgentCaptureResponse<T> {
+    pub entries: Vec<T>,
+    pub cursor: u64,
+    pub dropped: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDetailResponse<T> {
+    pub detail: T,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -457,6 +487,26 @@ pub struct AgentIpcEntry {
     pub ok: Option<bool>,
     pub error: Option<String>,
     pub window: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentIpcDetail {
+    #[serde(flatten)]
+    pub entry: AgentIpcEntry,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum AgentIpcResponse {
+    Capture(AgentCaptureResponse<AgentIpcEntry>),
+    Detail(Box<AgentDetailResponse<AgentIpcDetail>>),
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -571,6 +621,8 @@ pub struct AgentEventEntry {
     pub timestamp: String,
     pub window: Option<String>,
     pub detail: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1031,38 +1083,36 @@ mod tests {
 
         let logs = AgentLogRequest {
             window: Some("main".into()),
-            follow: Some(true),
             clear: Some(true),
             since: None,
             limit: None,
         };
         assert_eq!(
             serde_json::to_value(logs).unwrap(),
-            serde_json::json!({"window": "main", "follow": true, "clear": true})
+            serde_json::json!({"window": "main", "clear": true})
         );
 
         let events = AgentEventsRequest {
             window: Some("main".into()),
-            follow: Some(true),
             clear: Some(true),
             since: None,
             limit: None,
         };
         assert_eq!(
             serde_json::to_value(events).unwrap(),
-            serde_json::json!({"window": "main", "follow": true, "clear": true})
+            serde_json::json!({"window": "main", "clear": true})
         );
 
         let network = AgentNetworkRequest {
             window: Some("main".into()),
-            follow: Some(true),
             clear: Some(true),
             since: None,
             limit: None,
+            id: None,
         };
         assert_eq!(
             serde_json::to_value(network).unwrap(),
-            serde_json::json!({"window": "main", "follow": true, "clear": true})
+            serde_json::json!({"window": "main", "clear": true})
         );
 
         let network_entry = AgentNetworkEntry {
@@ -1079,9 +1129,10 @@ mod tests {
             response_body_size: Some(11),
             error: None,
             window: Some("main".into()),
+            trace_id: Some("action-1".into()),
         };
         assert_eq!(
-            serde_json::to_value(network_entry).unwrap(),
+            serde_json::to_value(&network_entry).unwrap(),
             serde_json::json!({
                 "id": "fetch-1",
                 "type": "fetch",
@@ -1095,8 +1146,44 @@ mod tests {
                 "requestBodySize": 8,
                 "responseBodySize": 11,
                 "error": null,
-                "window": "main"
+                "window": "main",
+                "traceId": "action-1"
             })
+        );
+
+        let network_detail = AgentNetworkResponse::Detail(Box::new(AgentDetailResponse {
+            detail: AgentNetworkDetail {
+                entry: network_entry,
+                request_headers: Some(std::collections::BTreeMap::from([(
+                    "authorization".into(),
+                    "[REDACTED]".into(),
+                )])),
+                request_body: Some(serde_json::json!({"name": "Ada"})),
+                response_headers: None,
+                response_body: Some(serde_json::json!({"ok": true})),
+            },
+        }));
+        assert_eq!(
+            serde_json::to_value(network_detail).unwrap(),
+            serde_json::json!({"detail": {
+                "id": "fetch-1",
+                "type": "fetch",
+                "method": "POST",
+                "url": "https://example.test/api/agents",
+                "status": 201,
+                "ok": true,
+                "startedAt": "2026-07-07T00:00:00.000Z",
+                "endedAt": "2026-07-07T00:00:00.050Z",
+                "durationMs": 50.0,
+                "requestBodySize": 8,
+                "responseBodySize": 11,
+                "error": null,
+                "window": "main",
+                "traceId": "action-1",
+                "requestHeaders": {"authorization": "[REDACTED]"},
+                "requestBody": {"name": "Ada"},
+                "responseBody": {"ok": true}
+            }})
         );
 
         let storage = AgentStorageRequest {

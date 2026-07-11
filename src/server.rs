@@ -88,12 +88,12 @@ pub(crate) trait InlineDebuggerBackend {
     fn attach_response(&self) -> crate::Result<Value> {
         Ok(json!({
             "attached": true,
-            "protocolVersion": 1,
+            "protocolVersion": 2,
             "sessionId": format!("process-{}", std::process::id()),
             "platform": commands::agent_platform(),
             "runtime": "unknown",
             "methods": AGENT_METHODS,
-            "features": ["locator-action", "lean-stream", "capture-cursors"],
+            "features": ["locator-action", "lean-stream", "capture-cursors", "correlated-details"],
             "screenshotBackends": ["dom"],
             "windows": self.windows()
         }))

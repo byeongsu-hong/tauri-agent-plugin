@@ -6,6 +6,21 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Network/IPC summaries now support retained `id` detail lookup with automatic
+  secret redaction and a 64 KiB value cap.
+- Atomic actions return a `traceId` copied onto synchronous logs, events,
+  network requests, and IPC invokes.
+- `tauri-agent diagnose` and `tauri_diagnose` collect a compact cross-surface
+  report using the existing protocol methods; passing an action `traceId`
+  filters its effects and expands retained network/IPC details.
+
+### Changed
+
+- Agent protocol v2 makes logs/events/network/IPC consistently return
+  `{ entries, cursor, dropped }`; legacy bare-array capture responses are removed.
+
 ## [0.0.2] - 2026-07-11
 
 ### Added

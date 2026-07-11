@@ -12,13 +12,13 @@ use crate::models::{
     AgentCookiesRequest, AgentCookiesResponse, AgentDialogRequest, AgentDragRequest,
     AgentEvalRequest, AgentEventEntry, AgentEventsRequest, AgentExpectRequest, AgentExpectResponse,
     AgentFindRequest, AgentFindResponse, AgentFocusRequest, AgentHoverRequest, AgentInspectRequest,
-    AgentInspectResponse, AgentIpcEntry, AgentIpcRequest, AgentLocationRequest,
-    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkEntry, AgentNetworkRequest,
-    AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest, AgentScrollRequest,
-    AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest, AgentStorageRequest,
-    AgentStorageResponse, AgentStreamRequest, AgentStreamResponse, AgentTypeRequest,
-    AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest, ScreenshotBackend,
-    WindowAction, WindowInfo,
+    AgentInspectResponse, AgentIpcRequest, AgentIpcResponse, AgentLocationRequest,
+    AgentLocationResponse, AgentLogEntry, AgentLogRequest, AgentNetworkRequest,
+    AgentNetworkResponse, AgentRecordRequest, AgentRecordResponse, AgentScreenshotRequest,
+    AgentScrollRequest, AgentSelectRequest, AgentSnapshotRequest, AgentStateRequest,
+    AgentStorageRequest, AgentStorageResponse, AgentStreamRequest, AgentStreamResponse,
+    AgentTypeRequest, AgentUploadRequest, AgentWaitRequest, AgentWaitResponse, AgentWindowRequest,
+    ScreenshotBackend, WindowAction, WindowInfo,
 };
 use crate::registry::WebviewRegistry;
 use crate::screenshot::{capture_native_screenshot, write_data_url_to_path};
@@ -46,7 +46,7 @@ pub async fn agent_attach<R: Runtime>(
 pub(crate) fn attach_response<R: Runtime>(app: &AppHandle<R>) -> AgentAttachResponse {
     AgentAttachResponse {
         attached: true,
-        protocol_version: 1,
+        protocol_version: 2,
         session_id: app.state::<AgentSession>().0.clone(),
         platform: agent_platform().into(),
         runtime: agent_runtime().into(),
@@ -54,9 +54,14 @@ pub(crate) fn attach_response<R: Runtime>(app: &AppHandle<R>) -> AgentAttachResp
             .iter()
             .map(|method| (*method).into())
             .collect(),
-        features: ["locator-action", "lean-stream", "capture-cursors"]
-            .map(String::from)
-            .into(),
+        features: [
+            "locator-action",
+            "lean-stream",
+            "capture-cursors",
+            "correlated-details",
+        ]
+        .map(String::from)
+        .into(),
         screenshot_backends: if cfg!(target_os = "macos") {
             vec![ScreenshotBackend::Dom, ScreenshotBackend::Native]
         } else {
@@ -346,7 +351,7 @@ pub async fn agent_network<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentNetworkRequest,
-) -> Result<AgentCaptureResponse<AgentNetworkEntry>> {
+) -> Result<AgentNetworkResponse> {
     let result = request_bridge(
         &bridge,
         &app,
@@ -362,7 +367,7 @@ pub async fn agent_ipc<R: Runtime>(
     app: AppHandle<R>,
     bridge: State<'_, AgentBridge>,
     request: AgentIpcRequest,
-) -> Result<AgentCaptureResponse<AgentIpcEntry>> {
+) -> Result<AgentIpcResponse> {
     let result = request_bridge(&bridge, &app, request.window.as_deref(), "ipc", &request)?;
     decode_bridge_result(result)
 }
@@ -846,16 +851,18 @@ mod tests {
         );
         let _ = std::fs::remove_file(&screenshot_path);
 
-        let logs = decode_bridge_result::<Vec<AgentLogEntry>>(serde_json::json!([
-            {
+        let logs = decode_bridge_result::<AgentCaptureResponse<AgentLogEntry>>(serde_json::json!({
+            "entries": [{
                 "level": "info",
                 "message": "booted",
                 "timestamp": "2026-07-06T14:00:00.000Z"
-            }
-        ]))
+            }],
+            "cursor": 1,
+            "dropped": false
+        }))
         .unwrap();
-        assert_eq!(logs[0].message, "booted");
-        assert_eq!(logs[0].window, None);
+        assert_eq!(logs.entries[0].message, "booted");
+        assert_eq!(logs.entries[0].window, None);
     }
 
     #[test]
