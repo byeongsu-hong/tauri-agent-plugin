@@ -465,10 +465,12 @@ registerFollowCommand('ipc', 'Print captured Tauri IPC invoke traces.', 'IPC')
 
 withConnectionOptions(program.command('diagnose').description('Collect a compact debugger report.'))
   .option('--limit <count>', 'recent entries per capture surface', parseNumber, 20)
-  .action(async (options: ConnectionOptions & { limit?: number }) => {
+  .option('--trace-id <id>', 'filter one action trace and expand its network/IPC details')
+  .action(async (options: ConnectionOptions & { limit?: number; traceId?: string }) => {
     printJson(await collectDiagnosis(await debuggerClient(options), {
       window: options.window,
-      limit: options.limit
+      limit: options.limit,
+      traceId: options.traceId
     }))
   })
 

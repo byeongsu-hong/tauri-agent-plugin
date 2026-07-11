@@ -63,9 +63,10 @@ export function isProcessAlive(pid: number): boolean {
 /** Collect a compact cross-surface debugger report without adding a protocol method. */
 export async function collectDiagnosis(
   client: DebuggerClient,
-  options: { window?: string; limit?: number } = {}
+  options: { window?: string; limit?: number; traceId?: string } = {}
 ): Promise<Record<string, unknown>> {
   const limit = Math.max(1, Math.min(100, options.limit ?? 20))
+  if (options.traceId !== undefined && !options.traceId.trim()) throw new Error('traceId must be non-empty')
   const target = options.window ? { window: options.window } : {}
   const [attach, state, logs, events, network, ipc] = await Promise.all([
     client.call('attach', target),
@@ -75,20 +76,51 @@ export async function collectDiagnosis(
     client.call('network', target),
     client.call('ipc', target)
   ])
+  const selectedLogs = recentEntries(logs, limit, 'logs', options.traceId)
+  const selectedEvents = recentEntries(events, limit, 'events', options.traceId)
+  const selectedNetwork = recentEntries(network, limit, 'network', options.traceId)
+  const selectedIpc = recentEntries(ipc, limit, 'ipc', options.traceId)
+  const [networkResult, ipcResult] = options.traceId
+    ? await Promise.all([
+        retainedDetails(client, 'network', target, selectedNetwork),
+        retainedDetails(client, 'ipc', target, selectedIpc)
+      ])
+    : [selectedNetwork, selectedIpc]
   return {
     capturedAt: new Date().toISOString(),
+    ...(options.traceId ? { traceId: options.traceId } : {}),
     attach,
     state,
-    logs: recentEntries(logs, limit, 'logs'),
-    events: recentEntries(events, limit, 'events'),
-    network: recentEntries(network, limit, 'network'),
-    ipc: recentEntries(ipc, limit, 'ipc')
+    logs: selectedLogs,
+    events: selectedEvents,
+    network: networkResult,
+    ipc: ipcResult
   }
 }
 
-function recentEntries(value: unknown, limit: number, method: string): unknown[] {
+function recentEntries(value: unknown, limit: number, method: string, traceId?: string): unknown[] {
   if (!isCaptureResult(value)) throw new Error(`${method} expected a capture result`)
-  return value.entries.slice(-limit)
+  return value.entries.filter((entry) => traceId === undefined || (
+    typeof entry === 'object' && entry !== null && (entry as { traceId?: unknown }).traceId === traceId
+  )).slice(-limit)
+}
+
+async function retainedDetails(
+  client: DebuggerClient,
+  method: 'network' | 'ipc',
+  target: Record<string, unknown>,
+  entries: unknown[]
+): Promise<unknown[]> {
+  return Promise.all(entries.map(async (entry) => {
+    if (typeof entry !== 'object' || entry === null || typeof (entry as { id?: unknown }).id !== 'string') {
+      throw new Error(`${method} trace entry expected an id`)
+    }
+    const result = await client.call(method, { ...target, id: (entry as { id: string }).id })
+    if (typeof result !== 'object' || result === null || !('detail' in result)) {
+      throw new Error(`${method} expected a detail result`)
+    }
+    return result.detail
+  }))
 }
 
 /**

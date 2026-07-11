@@ -193,7 +193,8 @@ async function executeTool(
     case 'tauri_diagnose':
       return collectDiagnosis(client, {
         window: stringField(args, 'window') || undefined,
-        limit: numberField(args, 'limit')
+        limit: numberField(args, 'limit'),
+        traceId: stringField(args, 'traceId') || undefined
       })
     case 'tauri_storage':
       return client.call('storage', pick(args, ['window', 'area', 'action', 'key', 'value']))
@@ -292,7 +293,7 @@ function initializeResult(params: unknown): Record<string, unknown> {
       version: '0.1.0'
     },
     instructions:
-      'Call tauri_tree or tauri_find first to obtain @-refs (e.g. @3); a ref is only valid until the next tree/find snapshot. Use tauri_type for realistic per-key input, tauri_ipc to trace the app’s Tauri command invokes, and tauri_stream for a live semantic-tree diff stream.'
+      'Call tauri_tree or tauri_find first to obtain @-refs (e.g. @3); a ref is only valid until the next tree/find snapshot. After tauri_act, pass its traceId to tauri_diagnose for correlated logs/events and expanded network/IPC details. Use tauri_type for realistic per-key input and tauri_stream for live semantic-tree diffs.'
   }
 }
 
@@ -336,6 +337,7 @@ const FIELD_SCHEMAS: Record<string, unknown> = {
   lean: { type: 'boolean', description: 'Omit repeated semantic snapshots except for initial sync or dropped recovery.' },
   detail: { type: 'boolean', description: 'Include optional response detail.' },
   id: { type: 'string', description: 'Retained network/IPC entry id for redacted detail lookup.' },
+  traceId: { type: 'string', description: 'Action trace id returned by tauri_act.' },
   state: {
     type: 'string',
     enum: ['present', 'absent'],
@@ -389,7 +391,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool('tauri_events', 'Events', 'Return captured app events.', schema(['window', 'follow', 'clear', 'since', 'limit', 'pollMs', 'timeoutMs'])),
   tool('tauri_network', 'Network', 'List network summaries or pass id for redacted headers/body detail.', schema(['window', 'follow', 'clear', 'since', 'limit', 'id', 'pollMs', 'timeoutMs'])),
   tool('tauri_ipc', 'IPC', 'List Tauri IPC summaries or pass id for redacted args/result detail.', schema(['window', 'follow', 'clear', 'since', 'limit', 'id', 'pollMs', 'timeoutMs'])),
-  tool('tauri_diagnose', 'Diagnose', 'Collect attach/state plus recent logs, events, network, and IPC in one report.', schema(['window', 'limit'])),
+  tool('tauri_diagnose', 'Diagnose', 'Collect recent debugger state, or pass traceId to correlate one action and expand its network/IPC details.', schema(['window', 'limit', 'traceId'])),
   tool('tauri_storage', 'Storage', 'Inspect or mutate webview storage.', storageSchema()),
   tool('tauri_cookies', 'Cookies', 'Inspect or mutate webview-visible cookies.', cookieSchema()),
   tool('tauri_location', 'Location', 'Inspect or update the webview location.', locationSchema()),

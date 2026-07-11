@@ -50,8 +50,9 @@ This table is the single source for what each does.
 - **Replay.** `tauri-agent replay replay.json --app <id>` validates and runs
   recorded actions sequentially. It is client-side and adds no protocol method.
 - **Diagnosis.** `tauri-agent diagnose --app <id>` / `tauri_diagnose` aggregates
-  attach/state and the most recent logs/events/network/IPC without adding a
-  protocol method. Use the returned ids for focused network/IPC detail calls.
+  attach/state and recent captures without adding a protocol method. Pass an
+  action's `--trace-id` / `traceId` to filter its effects and automatically
+  expand retained network/IPC details.
 - **Scoped MCP.** `tauri-agent-mcp --app <id> --profile core` removes repeated
   connection fields and exposes the nine Fleet-relevant tools. `full` remains
   the default profile.

@@ -198,6 +198,60 @@ describe('tauri-agent MCP server', () => {
     })
   })
 
+  it('diagnoses one action trace and expands its retained details', async () => {
+    const fakeServer = await startFakeRpcServer({
+      attach: { attached: true },
+      state: { title: 'Agents' },
+      logs: {
+        entries: [
+          { message: 'old', traceId: 'action-1' },
+          { message: 'saving', traceId: 'action-2' }
+        ],
+        cursor: 2,
+        dropped: false
+      },
+      events: {
+        entries: [{ kind: 'click', traceId: 'action-2' }],
+        cursor: 1,
+        dropped: false
+      },
+      network: (callIndex: number) => callIndex === 0
+        ? { entries: [{ id: 'fetch-2', traceId: 'action-2' }], cursor: 1, dropped: false }
+        : { detail: { id: 'fetch-2', traceId: 'action-2', requestBody: { token: '[REDACTED]' } } },
+      ipc: (callIndex: number) => callIndex === 0
+        ? { entries: [{ id: 'ipc-2', command: 'save', traceId: 'action-2' }], cursor: 1, dropped: false }
+        : { detail: { id: 'ipc-2', command: 'save', traceId: 'action-2', args: { token: '[REDACTED]' } } }
+    })
+
+    try {
+      const response = JSON.parse(await requiredResponse(createMcpRequestHandler()(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'tauri_diagnose',
+            arguments: { port: fakeServer.port, traceId: 'action-2' }
+          }
+        })
+      )))
+
+      expect(JSON.parse(response.result.content[0].text)).toMatchObject({
+        traceId: 'action-2',
+        logs: [{ message: 'saving', traceId: 'action-2' }],
+        events: [{ kind: 'click', traceId: 'action-2' }],
+        network: [{ id: 'fetch-2', requestBody: { token: '[REDACTED]' } }],
+        ipc: [{ id: 'ipc-2', args: { token: '[REDACTED]' } }]
+      })
+      expect(fakeServer.requests.filter((request) => request.method === 'network')[1].params)
+        .toEqual({ id: 'fetch-2' })
+      expect(fakeServer.requests.filter((request) => request.method === 'ipc')[1].params)
+        .toEqual({ id: 'ipc-2' })
+    } finally {
+      fakeServer.close()
+    }
+  })
+
   it('reports unknown tools as MCP request errors without requiring a debugger connection', async () => {
     const response = JSON.parse(
       await requiredResponse(
