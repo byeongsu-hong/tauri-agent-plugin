@@ -93,9 +93,11 @@ export function parseResponse(message: string): JsonRpcResponse {
 }
 
 function paramRecord(params: unknown): Record<string, unknown> {
-  return typeof params === 'object' && params !== null && !Array.isArray(params)
-    ? (params as Record<string, unknown>)
-    : {}
+  if (params === undefined) return {}
+  if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+    throw new AgentProtocolError('INVALID_PARAMS', 'params must be an object')
+  }
+  return params as Record<string, unknown>
 }
 
 function errorMessage(error: unknown): string {

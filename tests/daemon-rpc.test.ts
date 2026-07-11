@@ -71,6 +71,21 @@ describe('debugger JSON-RPC transport', () => {
     })
   })
 
+  it('rejects malformed params instead of silently applying defaults', async () => {
+    const session = new DebuggerSession(await StaticHtmlAppAdapter.create({ html: '<main></main>' }))
+    const handler = createDebuggerRpcHandler(session)
+    const client = new DebuggerClient(new InProcessTransport(handler))
+
+    expect(JSON.parse(await handler(JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'tree', params: []
+    })))).toMatchObject({ error: { code: 'INVALID_PARAMS', message: 'params must be an object' } })
+    await expect(client.call('find', { limit: '2' })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(client.call('location', { action: 'sideways' })).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    await expect(client.call('location', { action: 'reload' })).resolves.toMatchObject({
+      href: 'tauri-agent://static'
+    })
+  })
+
   it('retries transient socket resets only for read-only calls', async () => {
     const readTransport = new FlakyResetTransport({ href: 'http://127.0.0.1:1420/' })
     const readClient = new DebuggerClient(readTransport)
