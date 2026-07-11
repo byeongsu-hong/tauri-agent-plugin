@@ -9,7 +9,8 @@ import { readEndpointRegistry } from '../daemon/endpoint'
 import { createDebuggerRpcHandler, createLineJsonRpcServer } from '../daemon/server'
 import { DebuggerSession } from '../daemon/session'
 import { StaticHtmlAppAdapter } from '../daemon/static-app'
-import type { AgentMethod, KeyModifier, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
+import { isRecordableMethod } from '../protocol/json-rpc'
+import type { AgentMethod, KeyModifier, LocatorAction, RecordingEntry, ScreenshotBackend, StreamResult, WindowAction } from '../protocol/types'
 
 interface ConnectionOptions {
   app?: string
@@ -26,6 +27,8 @@ interface FollowOptions extends ConnectionOptions {
   clear?: boolean
   pollMs?: number
   timeoutMs?: number
+  since?: number
+  limit?: number
 }
 
 interface TreeOptions extends ConnectionOptions {
@@ -45,6 +48,14 @@ interface FindOptions extends ConnectionOptions {
   name?: string
   text?: string
   limit?: number
+}
+
+interface ActOptions extends FindOptions {
+  value?: string
+  x?: number
+  y?: number
+  timeoutMs?: number
+  detail?: boolean
 }
 
 interface StorageOptions extends ConnectionOptions {
@@ -158,6 +169,8 @@ function registerFollowCommand(
     .option('--clear', `clear captured ${noun} entries after reading`)
     .option('--poll-ms <ms>', 'follow polling interval in milliseconds', parseNumber, 250)
     .option('--timeout-ms <ms>', 'stop following after this many milliseconds', parseNumber)
+    .option('--since <cursor>', 'return entries after this cursor', parseNumber)
+    .option('--limit <count>', 'maximum entries to return', parseNumber)
     .action(async (options: FollowOptions) => {
       if (options.follow) {
         await followEntries(options, name)
@@ -167,7 +180,9 @@ function registerFollowCommand(
         await call(options, name, {
           ...targetParams(options),
           follow: options.follow,
-          clear: options.clear
+          clear: options.clear,
+          since: options.since,
+          limit: options.limit
         })
       )
     })
@@ -254,7 +269,7 @@ withConnectionOptions(
     .command('stream')
     .description('Stream mutation-driven semantic-tree diffs as newline-delimited JSON.')
 )
-  .option('--since <seq>', 'resume from a previous cursor', parseNumber, 0)
+  .option('--since <seq>', 'resume from a previous cursor', parseNumber)
   .option('--wait-ms <ms>', 'long-poll budget per request in milliseconds', parseNumber, 1000)
   .option('--timeout-ms <ms>', 'stop streaming after this many milliseconds', parseNumber)
   .action(async (options: StreamOptions) => {
@@ -270,6 +285,31 @@ withConnectionOptions(
   .option('--text <text>', 'visible text substring to match')
   .option('--limit <count>', 'maximum number of matches', parseNumber)
   .action(async (options: FindOptions) => printJson(await call(options, 'find', findParams(options))))
+
+withConnectionOptions(
+  program.command('act').description('Locate, wait for actionability, and act in one request.')
+    .argument('<action>', 'click, hover, focus, blur, fill, type, press, scroll, select, or check', parseLocatorAction),
+  { scope: true }
+)
+  .option('--role <role>', 'semantic role to match exactly')
+  .option('--name <name>', 'accessible name substring to match')
+  .option('--text <text>', 'visible text substring to match')
+  .option('--value <value>', 'action value')
+  .option('--x <x>', 'horizontal scroll delta', parseNumber)
+  .option('--y <y>', 'vertical scroll delta', parseNumber)
+  .option('--timeout-ms <ms>', 'actionability timeout', parseNumber)
+  .option('--detail', 'include the matched element in the response')
+  .action(async (action: LocatorAction, options: ActOptions) =>
+    printJson(await call(options, 'act', {
+      ...findParams(options),
+      action,
+      value: action === 'check' && options.value !== undefined ? parseBoolean(options.value) : options.value,
+      x: options.x,
+      y: options.y,
+      timeoutMs: options.timeoutMs,
+      detail: options.detail
+    }))
+  )
 
 registerSimpleRefCommand('click', 'Click a snapshot-local ref.', 'snapshot-local ref, for example @3')
 registerSimpleRefCommand('hover', 'Hover a snapshot-local ref.', 'snapshot-local ref, for example @3')
@@ -526,6 +566,26 @@ withConnectionOptions(program.command('record').description('Manage action recor
     printJson(await call(options, 'record', { ...targetParams(options), action: options.action }))
   )
 
+withConnectionOptions(
+  program.command('replay').description('Replay a recording JSON file against an app.')
+    .argument('<path>', 'recording or Fleet replay.json path')
+).action(async (path: string, options: ConnectionOptions) => {
+  const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown
+  const entries = recordingEntries(parsed)
+  const client = await debuggerClient(options)
+  for (const entry of entries) {
+    if (!isRecordableMethod(entry.method)) throw new Error(`recording contains unsupported method: ${entry.method}`)
+    const params = entry.params && typeof entry.params === 'object' && !Array.isArray(entry.params)
+      ? entry.params as Record<string, unknown>
+      : {}
+    if (entry.method !== 'act' && 'ref' in params) {
+      await client.call('tree', { window: options.window ?? params.window, scope: params.scope })
+    }
+    await client.call(entry.method, { ...params, ...(options.window ? { window: options.window } : {}) })
+  }
+  printJson({ replayed: entries.length })
+})
+
 await program.parseAsync()
 
 async function call(
@@ -580,12 +640,12 @@ async function streamDiffs(options: StreamOptions): Promise<void> {
   const client = await debuggerClient(options)
   const startedAt = Date.now()
   const waitMs = Math.max(1, options.waitMs ?? 1000)
-  let cursor = options.since ?? 0
+  let cursor = options.since
 
   // Emit the current full snapshot first so a consumer has a baseline to which
   // subsequent diff frames apply.
-  const base = asStreamResult(await client.call('stream', { ...targetParams(options), since: cursor }))
-  process.stdout.write(`${JSON.stringify({ snapshot: base.snapshot, cursor: base.cursor })}\n`)
+  const base = asStreamResult(await client.call('stream', { ...targetParams(options), since: cursor, lean: true }))
+  if (base.snapshot !== undefined) process.stdout.write(`${JSON.stringify({ snapshot: base.snapshot, cursor: base.cursor })}\n`)
   for (const frame of base.frames) {
     process.stdout.write(`${JSON.stringify(frame)}\n`)
   }
@@ -600,7 +660,7 @@ async function streamDiffs(options: StreamOptions): Promise<void> {
         ? waitMs
         : Math.max(1, Math.min(waitMs, options.timeoutMs - (Date.now() - startedAt)))
     const result = asStreamResult(
-      await client.call('stream', { ...targetParams(options), since: cursor, timeoutMs: budget })
+      await client.call('stream', { ...targetParams(options), since: cursor, timeoutMs: budget, lean: true })
     )
     if (result.dropped) {
       process.stdout.write(
@@ -737,7 +797,7 @@ async function debuggerClient(options: ConnectionOptions): Promise<DebuggerClien
 }
 
 function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`)
+  process.stdout.write(`${JSON.stringify(value)}\n`)
 }
 
 function parseDialogAction(value: string): 'get' | 'set' | 'clear' {
@@ -760,6 +820,28 @@ function parseBoolean(value: string): boolean {
   if (value === 'true') return true
   if (value === 'false') return false
   throw new Error(`expected true or false, got ${value}`)
+}
+
+function parseLocatorAction(value: string): LocatorAction {
+  if (['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'].includes(value)) {
+    return value as LocatorAction
+  }
+  throw new Error(`invalid locator action: ${value}`)
+}
+
+function recordingEntries(value: unknown): RecordingEntry[] {
+  const entries = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as { entries?: unknown }).entries)
+      ? (value as { entries: unknown[] }).entries
+      : undefined
+  if (!entries) throw new Error('recording must be an array or an object with entries')
+  return entries.map((entry) => {
+    if (!entry || typeof entry !== 'object' || typeof (entry as { method?: unknown }).method !== 'string') {
+      throw new Error('recording entry requires a method')
+    }
+    return entry as RecordingEntry
+  })
 }
 
 function parseScreenshotBackend(value: string): ScreenshotBackend {
@@ -871,4 +953,3 @@ function exitBridgePending(): never {
   )
   process.exit(2)
 }
-

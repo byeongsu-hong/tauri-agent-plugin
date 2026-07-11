@@ -6,6 +6,7 @@ export type AgentMethod =
   | 'window'
   | 'tree'
   | 'find'
+  | 'act'
   | 'click'
   | 'hover'
   | 'focus'
@@ -102,6 +103,29 @@ export interface FindParams extends WindowTarget {
   limit?: number
 }
 
+export type LocatorAction =
+  | 'click'
+  | 'hover'
+  | 'focus'
+  | 'blur'
+  | 'fill'
+  | 'type'
+  | 'press'
+  | 'scroll'
+  | 'select'
+  | 'check'
+
+/** Locate, wait for actionability, and act in one guest turn. */
+export interface ActParams extends FindParams {
+  action: LocatorAction
+  value?: string | boolean
+  x?: number
+  y?: number
+  timeoutMs?: number
+  /** Include the matched element in the response. Omitted for compact agent feedback. */
+  detail?: boolean
+}
+
 export interface RefActionParams extends WindowTarget {
   ref: string
 }
@@ -185,25 +209,20 @@ export interface ShotParams extends WindowTarget {
   ref?: string
 }
 
-export interface LogsParams extends WindowTarget {
+export interface CaptureParams extends WindowTarget {
   follow?: boolean
   clear?: boolean
+  since?: number
+  limit?: number
 }
 
-export interface EventsParams extends WindowTarget {
-  follow?: boolean
-  clear?: boolean
-}
+export interface LogsParams extends CaptureParams {}
 
-export interface NetworkParams extends WindowTarget {
-  follow?: boolean
-  clear?: boolean
-}
+export interface EventsParams extends CaptureParams {}
 
-export interface IpcParams extends WindowTarget {
-  follow?: boolean
-  clear?: boolean
-}
+export interface NetworkParams extends CaptureParams {}
+
+export interface IpcParams extends CaptureParams {}
 
 export interface StorageParams extends WindowTarget {
   area?: 'local' | 'session'
@@ -309,6 +328,8 @@ export interface StreamParams extends WindowTarget {
    * returning empty. Omitted or <= 0 returns immediately (a snapshot poll).
    */
   timeoutMs?: number
+  /** Omit repeated full snapshots except for initial sync or dropped recovery. */
+  lean?: boolean
 }
 
 export interface AgentWindow {
@@ -347,6 +368,23 @@ export interface InspectResult {
 
 export interface FindResult {
   matches: InspectResult[]
+}
+
+export interface ActResult {
+  ok: true
+  match?: InspectResult
+}
+
+export interface AttachResult {
+  attached: true
+  protocolVersion: 1
+  sessionId: string
+  platform: 'linux' | 'macos' | 'windows' | 'unknown'
+  runtime: 'wry' | 'cef' | 'unknown'
+  methods: AgentMethod[]
+  features: string[]
+  screenshotBackends: ScreenshotBackend[]
+  windows: AgentWindow[]
 }
 
 export interface EvalResult {
@@ -395,6 +433,12 @@ export interface IpcEntry {
   ok?: boolean
   error?: string
   window?: string
+}
+
+export interface CaptureResult<T> {
+  entries: T[]
+  cursor: number
+  dropped: boolean
 }
 
 export interface StorageEntry {
@@ -461,7 +505,7 @@ export interface StreamResult {
   /** Latest seq; pass back as `since` to continue the stream. */
   cursor: number
   /** The full current compact tree, for initial sync or after `dropped`. */
-  snapshot: string
+  snapshot?: string
   /**
    * True when frames between the requested cursor and the buffer were evicted;
    * the consumer should resync from `snapshot` rather than applying frames.

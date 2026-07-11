@@ -40,6 +40,19 @@ describe('tauri-agent MCP stdio binary', () => {
     expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toContain('tauri_tree')
     expect(responses).toHaveLength(2)
   })
+
+  it('parses scoped core profile options', async () => {
+    server = spawn('bun', ['bin/tauri-agent-mcp.ts', '--from-html', 'README.md', '--profile', 'core'], { cwd: process.cwd() })
+    const responses: string[] = []
+    server.stdout.on('data', (chunk) => responses.push(...chunk.toString('utf8').split('\n').filter(Boolean)))
+    server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`)
+
+    const tools = await waitForResponse(responses, 3)
+    expect(tools.result.tools).toHaveLength(8)
+    expect(tools.result.tools.every((tool: { inputSchema: { properties: Record<string, unknown> } }) =>
+      !('app' in tool.inputSchema.properties)
+    )).toBe(true)
+  })
 })
 
 async function waitForResponse(responses: string[], id: number): Promise<any> {

@@ -29,6 +29,9 @@ import { screenshotDocument, type ScreenshotOptions } from './screenshot'
 import { evalResult, evalResultAsync } from './evaluate'
 import { deferDirectAgentInvokes } from './bridge-gate'
 import { SemanticStream } from './semantic-stream'
+import { CaptureBuffer } from './capture-buffer'
+import { locateActionable } from './locator-action'
+import { AgentProtocolError } from '../protocol/error'
 import {
   applyCookieAction,
   applyStorageAction,
@@ -47,8 +50,11 @@ import {
   type DialogWindow
 } from './dom-actions'
 import type {
+  ActParams,
+  ActResult,
   AgentEvent,
   AgentMethod,
+  CaptureResult,
   CookieParams,
   CookieResult,
   DialogParams,
@@ -68,6 +74,7 @@ import type {
   KeyModifier,
   EventsParams,
   NetworkEntry,
+  NetworkParams,
   RecordingEntry,
   ScreenshotResult,
   StorageParams,
@@ -164,10 +171,10 @@ export class WebviewAgentInstrumentation {
   private installed = false
   private bridgeInstalled = false
   private bridgeUnlisten?: UnlistenFn
-  private capturedLogs: LogEntry[] = []
-  private capturedEvents: AgentEvent[] = []
-  private capturedNetwork: NetworkEntry[] = []
-  private capturedIpc: IpcEntry[] = []
+  private capturedLogs = new CaptureBuffer<LogEntry>(MAX_CAPTURE_ENTRIES)
+  private capturedEvents = new CaptureBuffer<AgentEvent>(MAX_CAPTURE_ENTRIES)
+  private capturedNetwork = new CaptureBuffer<NetworkEntry>(MAX_CAPTURE_ENTRIES)
+  private capturedIpc = new CaptureBuffer<IpcEntry>(MAX_CAPTURE_ENTRIES)
   private ipcEntryId = 0
   private ipcTarget?: TauriInternals
   private originalInvoke?: TauriInternals['invoke']
@@ -266,7 +273,7 @@ export class WebviewAgentInstrumentation {
    * `MutationObserver`, so there is no polling at the source.
    */
   stream(params: StreamParams = {}): Promise<StreamResult> {
-    return this.ensureSemanticStream().wait(params.since ?? 0, params.timeoutMs ?? 0)
+    return this.ensureSemanticStream().wait(params.since, params.timeoutMs ?? 0, params.lean ?? false)
   }
 
   private ensureSemanticStream(): SemanticStream {
@@ -298,6 +305,45 @@ export class WebviewAgentInstrumentation {
     return { matches: findRefs(options, snapshot.refs) }
   }
 
+  async act(params: ActParams): Promise<ActResult> {
+    const match = await locateActionable(
+      params,
+      (locator) => this.find(locator).matches,
+      (candidate) => ['click', 'hover'].includes(params.action) ? this.stable(candidate) : Promise.resolve(true)
+    )
+    const action: InstrumentedAction = {
+      action: params.action,
+      ref: match?.ref,
+      value: typeof params.value === 'string' ? params.value : undefined,
+      checked: typeof params.value === 'boolean' ? params.value : undefined,
+      x: params.x,
+      y: params.y
+    }
+    const result = this.action(action, false)
+    if (this.recording) {
+      pushCapped(this.recordingEntries, {
+        method: 'act',
+        params: { ...params },
+        timestamp: new Date().toISOString()
+      })
+    }
+    return { ...result, ...(params.detail && match ? { match } : {}) }
+  }
+
+  private async stable(match: InspectResult): Promise<boolean> {
+    try {
+      const element = resolveRef(match.ref)
+      const before = element.getBoundingClientRect()
+      await new Promise((resolve) => setTimeout(resolve, 16))
+      const after = element.getBoundingClientRect()
+      return element.isConnected
+        && before.x === after.x && before.y === after.y
+        && before.width === after.width && before.height === after.height
+    } catch {
+      return false
+    }
+  }
+
   expect(options: ExpectParams): ExpectResult {
     const snapshot = this.snapshot({ scope: options.scope })
     const match = findRefs(
@@ -307,7 +353,7 @@ export class WebviewAgentInstrumentation {
     return assertExpectation(match, options)
   }
 
-  action(action: InstrumentedAction): { ok: true } {
+  action(action: InstrumentedAction, record = true): { ok: true } {
     switch (action.action) {
       case 'click':
         clickRef(requiredRef(action.ref))
@@ -330,6 +376,9 @@ export class WebviewAgentInstrumentation {
       case 'fill':
         fillRef(requiredRef(action.ref), action.value ?? '')
         break
+      case 'type':
+        typeRef(requiredRef(action.ref), action.value ?? '')
+        break
       case 'press':
         if (action.ref) {
           focusRef(action.ref)
@@ -345,7 +394,7 @@ export class WebviewAgentInstrumentation {
     }
 
     this.pushEvent(action.action, serializableAction(action))
-    this.recordAction(action)
+    if (record) this.recordAction(action)
     return { ok: true }
   }
 
@@ -532,36 +581,28 @@ export class WebviewAgentInstrumentation {
     return screenshotDocument(document, options)
   }
 
-  logs(options: Pick<LogsParams, 'clear'> = {}): LogEntry[] {
-    const entries = [...this.capturedLogs]
-    if (options.clear) {
-      this.capturedLogs = []
-    }
-    return entries
+  logs(): LogEntry[]
+  logs(options: LogsParams): LogEntry[] | CaptureResult<LogEntry>
+  logs(options: LogsParams = {}): LogEntry[] | CaptureResult<LogEntry> {
+    return this.capturedLogs.read(options)
   }
 
-  events(options: Pick<EventsParams, 'clear'> = {}): AgentEvent[] {
-    const entries = [...this.capturedEvents]
-    if (options.clear) {
-      this.capturedEvents = []
-    }
-    return entries
+  events(): AgentEvent[]
+  events(options: EventsParams): AgentEvent[] | CaptureResult<AgentEvent>
+  events(options: EventsParams = {}): AgentEvent[] | CaptureResult<AgentEvent> {
+    return this.capturedEvents.read(options)
   }
 
-  network(options: { clear?: boolean } = {}): NetworkEntry[] {
-    const entries = this.capturedNetwork.map((entry) => ({ ...entry }))
-    if (options.clear) {
-      this.capturedNetwork = []
-    }
-    return entries
+  network(): NetworkEntry[]
+  network(options: NetworkParams): NetworkEntry[] | CaptureResult<NetworkEntry>
+  network(options: NetworkParams = {}): NetworkEntry[] | CaptureResult<NetworkEntry> {
+    return this.capturedNetwork.read(options)
   }
 
-  ipc(options: { clear?: boolean } = {}): IpcEntry[] {
-    const entries = this.capturedIpc.map((entry) => ({ ...entry }))
-    if (options.clear) {
-      this.capturedIpc = []
-    }
-    return entries
+  ipc(): IpcEntry[]
+  ipc(options: IpcParams): IpcEntry[] | CaptureResult<IpcEntry>
+  ipc(options: IpcParams = {}): IpcEntry[] | CaptureResult<IpcEntry> {
+    return this.capturedIpc.read(options)
   }
 
   storage(options: StorageParams = {}): StorageResult {
@@ -642,7 +683,8 @@ export class WebviewAgentInstrumentation {
       await invoke('plugin:agent|agent_bridge_response', {
         response: {
           id: request.id,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          ...(error instanceof AgentProtocolError ? { errorCode: error.code } : {})
         }
       })
     } finally {
@@ -662,6 +704,19 @@ export class WebviewAgentInstrumentation {
           name: stringParam(params, 'name'),
           text: stringParam(params, 'text'),
           limit: numberParam(params, 'limit')
+        })
+      case 'act':
+        return this.act({
+          scope: stringParam(params, 'scope'),
+          role: stringParam(params, 'role'),
+          name: stringParam(params, 'name'),
+          text: stringParam(params, 'text'),
+          action: locatorActionParam(params),
+          value: stringParam(params, 'value') ?? booleanParam(params, 'value'),
+          x: numberParam(params, 'x'),
+          y: numberParam(params, 'y'),
+          timeoutMs: numberParam(params, 'timeoutMs'),
+          detail: booleanParam(params, 'detail')
         })
       case 'click':
         return this.action({ action: 'click', ref: requiredStringParam(params, 'ref') })
@@ -711,13 +766,13 @@ export class WebviewAgentInstrumentation {
       case 'shot':
         return this.screenshot({ path: stringParam(params, 'path'), ref: stringParam(params, 'ref') })
       case 'logs':
-        return this.logs({ clear: booleanParam(params, 'clear') ?? false })
+        return this.logs(captureParams(params))
       case 'events':
-        return this.events({ clear: booleanParam(params, 'clear') ?? false })
+        return this.events(captureParams(params))
       case 'network':
-        return this.network({ clear: booleanParam(params, 'clear') ?? false })
+        return this.network(captureParams(params))
       case 'ipc':
-        return this.ipc({ clear: booleanParam(params, 'clear') ?? false })
+        return this.ipc(captureParams(params))
       case 'storage':
         return this.storage({
           area: storageAreaParam(params, 'area'),
@@ -771,7 +826,8 @@ export class WebviewAgentInstrumentation {
       case 'stream':
         return this.stream({
           since: numberParam(params, 'since'),
-          timeoutMs: numberParam(params, 'timeoutMs')
+          timeoutMs: numberParam(params, 'timeoutMs'),
+          lean: booleanParam(params, 'lean')
         })
       default:
         throw new Error(`unsupported agent bridge method: ${request.method}`)
@@ -779,7 +835,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private pushLog(level: LogEntry['level'], message: string): void {
-    pushCapped(this.capturedLogs, {
+    this.capturedLogs.push({
       level,
       message,
       timestamp: new Date().toISOString()
@@ -787,7 +843,7 @@ export class WebviewAgentInstrumentation {
   }
 
   private pushEvent(kind: string, detail?: unknown): void {
-    pushCapped(this.capturedEvents, {
+    this.capturedEvents.push({
       kind,
       detail,
       timestamp: new Date().toISOString()
@@ -818,7 +874,7 @@ export class WebviewAgentInstrumentation {
       if (requestBodySize !== undefined) {
         entry.requestBodySize = requestBodySize
       }
-      pushCapped(this.capturedNetwork, entry)
+      this.capturedNetwork.push(entry)
       this.inFlightRequests++
 
       try {
@@ -881,7 +937,7 @@ export class WebviewAgentInstrumentation {
         if (requestBodySize !== undefined) {
           entry.requestBodySize = requestBodySize
         }
-        pushCapped(capture.capturedNetwork, entry)
+        capture.capturedNetwork.push(entry)
         capture.inFlightRequests++
         let settled = false
         const settle = (): void => {
@@ -935,7 +991,7 @@ export class WebviewAgentInstrumentation {
       }
       let sent = 0
       let received = 0
-      pushCapped(capture.capturedNetwork, entry)
+      capture.capturedNetwork.push(entry)
       socket.addEventListener('open', () => {
         entry.status = 101
         entry.ok = true
@@ -991,7 +1047,7 @@ export class WebviewAgentInstrumentation {
           command,
           startedAt: new Date(startedAtMs).toISOString()
         }
-        pushCapped(this.capturedIpc, entry)
+        this.capturedIpc.push(entry)
         Promise.resolve(promise).then(
           () => finishIpcEntry(entry, startedAtMs, true),
           (error: unknown) => {
@@ -1125,6 +1181,22 @@ function numberParam(params: Record<string, unknown>, key: string): number | und
 function booleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
   const value = params[key]
   return typeof value === 'boolean' ? value : undefined
+}
+
+function captureParams(params: Record<string, unknown>): LogsParams {
+  return {
+    clear: booleanParam(params, 'clear'),
+    since: numberParam(params, 'since'),
+    limit: numberParam(params, 'limit')
+  }
+}
+
+function locatorActionParam(params: Record<string, unknown>): ActParams['action'] {
+  const value = stringParam(params, 'action')
+  if (value && ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'].includes(value)) {
+    return value as ActParams['action']
+  }
+  throw new Error(`unknown locator action: ${String(value)}`)
 }
 
 function modifierListParam(params: Record<string, unknown>, key: string): KeyModifier[] | undefined {

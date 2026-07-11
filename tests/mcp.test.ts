@@ -68,6 +68,7 @@ describe('tauri-agent MCP server', () => {
       'tauri_window',
       'tauri_tree',
       'tauri_find',
+      'tauri_act',
       'tauri_click',
       'tauri_hover',
       'tauri_focus',
@@ -155,6 +156,34 @@ describe('tauri-agent MCP server', () => {
     expect(response.result.protocolVersion).toBe('2025-11-25')
   })
 
+  it('keeps the scoped core tool schema below 40% of the full schema', async () => {
+    const request = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+    const full = await requiredResponse(createMcpRequestHandler()(request))
+    const core = await requiredResponse(createMcpRequestHandler({
+      profile: 'core',
+      target: { resolveHtml: async () => '<main></main>' }
+    })(request))
+    const parsed = JSON.parse(core)
+
+    expect(parsed.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'tauri_attach', 'tauri_tree', 'tauri_act', 'tauri_shot', 'tauri_ipc', 'tauri_expect', 'tauri_state', 'tauri_stream'
+    ])
+    expect(parsed.result.tools.every((tool: { inputSchema: { properties: Record<string, unknown> } }) =>
+      !('app' in tool.inputSchema.properties) && !('port' in tool.inputSchema.properties)
+    )).toBe(true)
+    expect(parsed.result.tools.find((tool: { name: string }) => tool.name === 'tauri_act')
+      .inputSchema.properties).not.toHaveProperty('detail')
+    expect(new TextEncoder().encode(core).length).toBeLessThanOrEqual(new TextEncoder().encode(full).length * 0.4)
+
+    const stream = JSON.parse(await requiredResponse(createMcpRequestHandler({
+      profile: 'core',
+      target: { resolveHtml: async () => '<main></main>' }
+    })(JSON.stringify({
+      jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'tauri_stream', arguments: { since: 0 } }
+    }))))
+    expect(stream.result.content[0].text).not.toContain('snapshot')
+  })
+
   it('reports unknown tools as MCP request errors without requiring a debugger connection', async () => {
     const response = JSON.parse(
       await requiredResponse(
@@ -223,12 +252,11 @@ describe('tauri-agent MCP server', () => {
         )
       )
 
-      expect(response.result.structuredContent).toEqual({
-        result: [
-          { level: 'info', message: 'booted' },
-          { level: 'error', message: 'late failure' }
-        ]
-      })
+      expect(response.result.structuredContent).toBeUndefined()
+      expect(JSON.parse(response.result.content[0].text)).toEqual([
+        { level: 'info', message: 'booted' },
+        { level: 'error', message: 'late failure' }
+      ])
       expect(fakeServer.requests.length).toBeGreaterThanOrEqual(2)
       expect(fakeServer.requests.every((request) => request.method === 'logs')).toBe(true)
       expect(fakeServer.requests.every((request) => request.params?.follow === true)).toBe(true)
@@ -340,9 +368,6 @@ describe('tauri-agent MCP server', () => {
             text: 'main "Ducktape"\n@1 textbox "Agent name" empty'
           }
         ],
-        structuredContent: {
-          text: 'main "Ducktape"\n@1 textbox "Agent name" empty'
-        },
         isError: false
       }
     })
@@ -646,7 +671,8 @@ describe('tauri-agent MCP server', () => {
       )
     )
 
-    expect(logs.result.structuredContent).toEqual({ result: [] })
+    expect(logs.result.structuredContent).toBeUndefined()
+    expect(JSON.parse(logs.result.content[0].text)).toEqual([])
 
     const events = JSON.parse(
       await requiredResponse(
@@ -664,7 +690,8 @@ describe('tauri-agent MCP server', () => {
       )
     )
 
-    expect(events.result.structuredContent).toEqual({ result: [] })
+    expect(events.result.structuredContent).toBeUndefined()
+    expect(JSON.parse(events.result.content[0].text)).toEqual([])
 
     const network = JSON.parse(
       await requiredResponse(
@@ -682,7 +709,8 @@ describe('tauri-agent MCP server', () => {
       )
     )
 
-    expect(network.result.structuredContent).toEqual({ result: [] })
+    expect(network.result.structuredContent).toBeUndefined()
+    expect(JSON.parse(network.result.content[0].text)).toEqual([])
 
     const wait = JSON.parse(
       await requiredResponse(

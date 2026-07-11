@@ -43,6 +43,19 @@ export class DebuggerSession {
           text: stringParam(params.text),
           limit: numberParam(params.limit)
         })
+      case 'act':
+        return this.app.act({
+          scope: stringParam(params.scope),
+          role: stringParam(params.role),
+          name: stringParam(params.name),
+          text: stringParam(params.text),
+          action: locatorActionParam(params.action),
+          value: typeof params.value === 'string' || typeof params.value === 'boolean' ? params.value : undefined,
+          x: numberParam(params.x),
+          y: numberParam(params.y),
+          timeoutMs: numberParam(params.timeoutMs),
+          detail: booleanParam(params.detail)
+        })
       case 'click':
         return this.app.click(requiredString(params.ref, 'ref'))
       case 'hover':
@@ -86,13 +99,13 @@ export class DebuggerSession {
           ref: stringParam(params.ref)
         })
       case 'logs':
-        return this.app.getLogs(booleanParam(params.clear) ?? false)
+        return this.app.getLogs(captureParams(params))
       case 'events':
-        return this.app.getEvents(booleanParam(params.clear) ?? false)
+        return this.app.getEvents(captureParams(params))
       case 'network':
-        return this.app.getNetwork(booleanParam(params.clear) ?? false)
+        return this.app.getNetwork(captureParams(params))
       case 'ipc':
-        return this.app.ipc(booleanParam(params.clear) ?? false)
+        return this.app.ipc(captureParams(params))
       case 'storage':
         return this.app.storage({
           area: storageAreaParam(params.area),
@@ -146,7 +159,8 @@ export class DebuggerSession {
       case 'stream':
         return this.app.stream({
           since: numberParam(params.since),
-          timeoutMs: numberParam(params.timeoutMs)
+          timeoutMs: numberParam(params.timeoutMs),
+          lean: booleanParam(params.lean)
         })
     }
   }
@@ -203,6 +217,25 @@ function numberParam(value: unknown): number | undefined {
 
 function booleanParam(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
+}
+
+function captureParams(params: Record<string, unknown>): {
+  clear?: boolean
+  since?: number
+  limit?: number
+} {
+  return {
+    clear: booleanParam(params.clear),
+    since: numberParam(params.since),
+    limit: numberParam(params.limit)
+  }
+}
+
+function locatorActionParam(value: unknown): 'click' | 'hover' | 'focus' | 'blur' | 'fill' | 'type' | 'press' | 'scroll' | 'select' | 'check' {
+  if (typeof value === 'string' && ['click', 'hover', 'focus', 'blur', 'fill', 'type', 'press', 'scroll', 'select', 'check'].includes(value)) {
+    return value as 'click' | 'hover' | 'focus' | 'blur' | 'fill' | 'type' | 'press' | 'scroll' | 'select' | 'check'
+  }
+  throw new Error(`unknown locator action: ${String(value)}`)
 }
 
 function dialogActionParam(value: unknown): 'get' | 'set' | 'clear' | undefined {

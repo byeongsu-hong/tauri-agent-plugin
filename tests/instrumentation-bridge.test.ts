@@ -25,7 +25,7 @@ import { agentFind } from '../guest-js/index'
 interface CapturedEvent {
   payload: {
     id: string
-    method: 'click'
+    method: 'click' | 'act'
     params: Record<string, unknown>
   }
 }
@@ -70,6 +70,57 @@ describe('WebviewAgentInstrumentation bridge handling', () => {
       'plugin:agent|agent_find'
     ])
 
+    instrumentation.dispose()
+  })
+
+  it('returns stable atomic-action error codes through the bridge', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({ payload: { id: 'bridge-2', method: 'act', params: { action: 'click' } } })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-2',
+        error: 'act requires a locator',
+        errorCode: 'INVALID_PARAMS'
+      }
+    })
+    instrumentation.dispose()
+  })
+
+  it('returns requested atomic-action match detail through the bridge', async () => {
+    let bridgeHandler: ((event: CapturedEvent) => void) | undefined
+    listenMock.mockImplementation((_event, handler) => {
+      bridgeHandler = handler
+      return Promise.resolve(() => {})
+    })
+    document.body.innerHTML = '<button>Save</button>'
+    const instrumentation = new WebviewAgentInstrumentation({ windowLabel: 'main' })
+    instrumentation.install()
+
+    bridgeHandler?.({
+      payload: {
+        id: 'bridge-3',
+        method: 'act',
+        params: { role: 'button', name: 'Save', action: 'focus', detail: true }
+      }
+    })
+    await waitForInvoke('plugin:agent|agent_bridge_response')
+    expect(invokeMock).toHaveBeenCalledWith('plugin:agent|agent_bridge_response', {
+      response: {
+        id: 'bridge-3',
+        result: expect.objectContaining({
+          ok: true,
+          match: expect.objectContaining({ role: 'button', name: 'Save' })
+        })
+      }
+    })
     instrumentation.dispose()
   })
 })

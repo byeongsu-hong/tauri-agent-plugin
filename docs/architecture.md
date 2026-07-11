@@ -31,6 +31,10 @@ other method through `bridge_call`, which emits a request event to the target
 webview and awaits the guest's `agent_bridge_response`. In-process app code
 reaches the same bridge through the `agent_<method>` Tauri commands.
 
+`attach` is also capability negotiation: it returns a per-process session id,
+platform/runtime, supported methods, screenshot backends, and feature markers.
+Consumers use those fields instead of guessing from the selected build variant.
+
 ## Transports & endpoint discovery
 
 - No global `/tmp/tauri-mcp.sock`. Each app publishes an app-scoped registry at
@@ -60,6 +64,19 @@ reaches the same bridge through the `agent_<method>` Tauri commands.
   a VNC server; it only **advertises** where the stream lives (in
   `endpoint.json`) so a viewer can discover it. The surrounding harness runs the
   VNC server (e.g. `x11vnc` + `websockify` against the app's virtual display).
+
+## Fleet boundary
+
+`tauri-agent-fleet` imports the published `DebuggerClient` directly; it does not
+use MCP. The plugin owns one app session, atomic locator actions, bounded cursor
+captures, and compact semantic deltas. Fleet owns builds, isolated processes,
+scheduling, models, suites, artifacts, and dashboards. The plugin never depends
+on Fleet.
+
+`act` closes the rerender race by locating, waiting, and acting inside one guest
+request. Logs/events/network/IPC use monotonic `since` cursors, and lean stream
+pulls omit the full snapshot after initial synchronization unless frames were
+dropped and recovery is required.
 
 ## Screenshot backend support matrix
 

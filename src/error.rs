@@ -16,6 +16,8 @@ pub enum Error {
     Io(String),
     #[error("unsupported on this platform: {0}")]
     UnsupportedPlatform(String),
+    #[error("{message}")]
+    Protocol { code: String, message: String },
     #[error("{0}")]
     Tauri(#[from] tauri::Error),
 }

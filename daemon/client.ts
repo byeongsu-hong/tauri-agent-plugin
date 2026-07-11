@@ -3,6 +3,7 @@ import { createConnection } from 'node:net'
 import type { LineTransport } from './server'
 import { createRequest } from '../protocol/json-rpc'
 import type { AgentMethod } from '../protocol/types'
+import { AgentProtocolError } from '../protocol/error'
 
 export class DebuggerClient {
   private nextId = 1
@@ -20,7 +21,7 @@ export class DebuggerClient {
     const response = JSON.parse(await this.sendWithRetry(JSON.stringify(message), method, params))
 
     if ('error' in response) {
-      throw new Error(`${response.error.code}: ${response.error.message}`)
+      throw new AgentProtocolError(response.error.code, response.error.message)
     }
 
     return response.result as TResult

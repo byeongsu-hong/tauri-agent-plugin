@@ -19,9 +19,16 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 /// source for the inline server; `attach`/`windows`/`window`/`shot` are handled
 /// natively and are intentionally not listed here.
 pub(crate) const BRIDGE_METHODS: &[&str] = &[
-    "tree", "find", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type", "select",
-    "check", "upload", "inspect", "eval", "press", "logs", "events", "network", "ipc", "storage",
-    "cookies", "location", "wait", "expect", "state", "dialog", "record", "stream",
+    "tree", "find", "act", "click", "hover", "focus", "blur", "scroll", "drag", "fill", "type",
+    "select", "check", "upload", "inspect", "eval", "press", "logs", "events", "network", "ipc",
+    "storage", "cookies", "location", "wait", "expect", "state", "dialog", "record", "stream",
+];
+
+pub(crate) const AGENT_METHODS: &[&str] = &[
+    "attach", "windows", "window", "tree", "find", "act", "click", "hover", "focus", "blur",
+    "scroll", "drag", "fill", "select", "check", "upload", "inspect", "eval", "press", "type",
+    "shot", "logs", "events", "network", "ipc", "storage", "cookies", "location", "wait", "expect",
+    "state", "record", "stream", "dialog",
 ];
 
 use serde::de::DeserializeOwned;
@@ -78,6 +85,19 @@ impl Drop for InlineDebuggerServer {
 pub(crate) trait InlineDebuggerBackend {
     fn windows(&self) -> Vec<WindowInfo>;
     fn ensure_window(&self, label: Option<&str>) -> crate::Result<()>;
+    fn attach_response(&self) -> crate::Result<Value> {
+        Ok(json!({
+            "attached": true,
+            "protocolVersion": 1,
+            "sessionId": format!("process-{}", std::process::id()),
+            "platform": commands::agent_platform(),
+            "runtime": "unknown",
+            "methods": AGENT_METHODS,
+            "features": ["locator-action", "lean-stream", "capture-cursors"],
+            "screenshotBackends": ["dom"],
+            "windows": self.windows()
+        }))
+    }
     fn window_control(&self, request: AgentWindowRequest) -> crate::Result<WindowInfo> {
         if !matches!(request.action, None | Some(WindowAction::Get)) {
             return Err(Error::BridgeUnavailable(
@@ -225,6 +245,10 @@ impl<R: Runtime> InlineDebuggerBackend for TauriBackend<R> {
 
     fn ensure_window(&self, label: Option<&str>) -> crate::Result<()> {
         commands::ensure_window(&self.app, label)
+    }
+
+    fn attach_response(&self) -> crate::Result<Value> {
+        Ok(json!(commands::attach_response(&self.app)))
     }
 
     fn window_control(&self, request: AgentWindowRequest) -> crate::Result<WindowInfo> {
@@ -395,10 +419,7 @@ fn handle_attach(
 ) -> crate::Result<Value> {
     let request = parse_params::<AgentAttachRequest>(params)?;
     backend.ensure_window(request.window.as_deref())?;
-    Ok(json!({
-        "attached": true,
-        "windows": backend.windows()
-    }))
+    backend.attach_response()
 }
 
 fn handle_window(
@@ -475,7 +496,7 @@ fn error_response(id: Value, code: &str, message: &str) -> String {
     .to_string()
 }
 
-fn error_code(error: &Error) -> &'static str {
+fn error_code(error: &Error) -> &str {
     match error {
         Error::StaleRef(_) => "STALE_REF",
         Error::BridgeUnavailable(_) => "BRIDGE_UNAVAILABLE",
@@ -484,6 +505,7 @@ fn error_code(error: &Error) -> &'static str {
         Error::Timeout(_) => "TIMEOUT",
         Error::Io(_) => "IO_ERROR",
         Error::UnsupportedPlatform(_) => "UNSUPPORTED_PLATFORM",
+        Error::Protocol { code, .. } => code,
         Error::Tauri(_) => "AGENT_ERROR",
     }
 }
@@ -547,6 +569,13 @@ mod tests {
         assert_eq!(
             error_code(&Error::UnsupportedPlatform("x".into())),
             "UNSUPPORTED_PLATFORM"
+        );
+        assert_eq!(
+            error_code(&Error::Protocol {
+                code: "LOCATOR_NOT_FOUND".into(),
+                message: "x".into()
+            }),
+            "LOCATOR_NOT_FOUND"
         );
     }
 
@@ -713,6 +742,14 @@ mod tests {
                 "states": []
             }]
         }))
+    });
+
+    scripted_backend!(FakeActBackend, |method, params| {
+        assert_eq!(method, "act");
+        assert_eq!(params["role"], "button");
+        assert_eq!(params["name"], "Save");
+        assert_eq!(params["action"], "click");
+        Ok(serde_json::json!({"ok": true}))
     });
 
     scripted_backend!(FakeEvalBackend, |method, params| {
@@ -947,6 +984,18 @@ mod tests {
                     }]
                 }
             })
+        );
+    }
+
+    #[test]
+    fn inline_server_proxies_atomic_act_json_rpc_to_bridge() {
+        let response = respond(
+            &FakeActBackend,
+            r#"{"jsonrpc":"2.0","id":131,"method":"act","params":{"role":"button","name":"Save","action":"click"}}"#,
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response).unwrap(),
+            serde_json::json!({"jsonrpc": "2.0", "id": 131, "result": {"ok": true}})
         );
     }
 
