@@ -1,6 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { PassThrough, Writable } from 'node:stream'
 
 import { afterEach, describe, expect, it } from 'vitest'
+
+import { serveMcpStdio } from '../mcp/stdio'
 
 let server: ChildProcessWithoutNullStreams | undefined
 
@@ -53,9 +56,36 @@ describe('tauri-agent MCP stdio binary', () => {
       !('app' in tool.inputSchema.properties)
     )).toBe(true)
   })
+
+  it('bounds oversized lines and resumes at the next request', async () => {
+    const input = new PassThrough()
+    const responses: string[] = []
+    let buffered = ''
+    const output = new Writable({
+      write(chunk, _encoding, callback) {
+        buffered += chunk.toString()
+        const lines = buffered.split('\n')
+        buffered = lines.pop() ?? ''
+        responses.push(...lines.filter(Boolean))
+        callback()
+      }
+    })
+    serveMcpStdio(undefined, input, output, 256)
+
+    input.write('x'.repeat(257))
+    input.write(`\n${JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/list' })}\n`)
+
+    const oversized = await waitForResponse(responses, null)
+    const tools = await waitForResponse(responses, 7)
+    expect(oversized.error).toEqual({
+      code: -32700,
+      message: 'MCP request line exceeds the maximum length'
+    })
+    expect(tools.result.tools).toEqual(expect.any(Array))
+  })
 })
 
-async function waitForResponse(responses: string[], id: number): Promise<any> {
+async function waitForResponse(responses: string[], id: number | null): Promise<any> {
   const startedAt = Date.now()
   while (Date.now() - startedAt < 3000) {
     for (const response of responses) {
