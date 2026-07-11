@@ -27,6 +27,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of depending on replacing the read-only `__TAURI_INTERNALS__.invoke`.
 - Static/serve JSON-RPC now rejects malformed parameter types with
   `INVALID_PARAMS` and preserves all supported location actions.
+- Static state snapshots now report the current `document.title`, matching live
+  webviews after scripts change the page title.
 - MCP tool calls now return `-32602` for malformed params, arguments, and
   typed connection fields instead of silently applying defaults.
 - MCP numeric schemas and request validation now enforce protocol-safe integer

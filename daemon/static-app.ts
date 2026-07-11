@@ -127,7 +127,8 @@ export class StaticHtmlAppAdapter {
 
   private constructor(dom: JSDOM, options: StaticHtmlAppOptions) {
     this.label = options.window ?? 'main'
-    this.title = options.title ?? 'Tauri App'
+    this.title = options.title ?? (dom.window.document.title || 'Tauri App')
+    if (!dom.window.document.title) dom.window.document.title = this.title
     this.url = options.url ?? 'tauri-agent://static'
     this.dom = dom
     this.windowState = this.createInitialWindowState()
@@ -482,7 +483,7 @@ export class StaticHtmlAppAdapter {
 
     const state = {
       url: this.dom.window.location.href,
-      title: this.title,
+      title: this.dom.window.document.title,
       values
     }
     return stateValue(state, key)
